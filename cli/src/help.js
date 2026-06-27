@@ -7,6 +7,25 @@ const TOPICS = {
 
 从零到交付的完整流程。每个阶段有明确的产出和验收标准。
 
+## 第一步：诊断当前阶段
+
+\`\`\`bash
+loom guide
+\`\`\`
+
+guide 检测项目当前在哪个阶段，输出"你在阶段 X，下一步做 Y"。
+Agent 每完成一步都跑 guide 确认下一步。
+
+## AUTO 模式
+
+\`\`\`bash
+loom auto on      # 开启：Agent 自动连续执行，不等确认
+loom auto off     # 关闭：每步需要用户确认
+\`\`\`
+
+AUTO on 时 Agent 一路跑到底，跑完生成 preview 给人看。
+AUTO off 时每步停下等用户说继续。
+
 ## 阶段 1：织造哲学（Weaver）
 
 \`\`\`bash
@@ -57,7 +76,17 @@ loom context            # 当前状态摘要
 每个 Intent 独立走一圈：选 → 实现 → 验证 → 闭合或修正。
 详细流程见 \`loom help loop\`。
 
-## 阶段 5：版本演进（按需）
+## 阶段 5：人类预览
+
+\`\`\`bash
+loom preview
+\`\`\`
+
+输出提示词，Agent 按提示词读 .loom/ 文件、拆解信息、生成 HTML 可视化预览。
+人类用浏览器打开 HTML 看全局——哲学、愿景、架构、Intent 进度、验证历史。
+这是只读投影，修改请编辑源文件后重新生成。
+
+## 阶段 6：版本演进（按需）
 
 当哲学前提/愿景北极星/架构边界变了，需要 Major 升级。
 详细流程见 \`loom help version\`。
