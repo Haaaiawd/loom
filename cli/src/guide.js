@@ -6,6 +6,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { readCurrentPointer } from './version.js';
 import { loadIntentMap } from './intent-map.js';
+import { isAutoOn } from './auto.js';
 
 /**
  * 检测文件是否还是模板（未填充真实内容）。
@@ -29,11 +30,12 @@ function isTemplate(filePath) {
 /**
  * 诊断项目当前阶段。
  * @param {string} projectDir — 项目根目录
- * @returns {{ stage: string, stage_num: number, details: object, next_action: string, next_command: string, message: string }}
+ * @returns {{ stage: string, stage_num: number, details: object, auto: boolean, next_action: string, next_command: string, message: string }}
  */
 export function guideProject(projectDir) {
   const cwd = projectDir || process.cwd();
   const loomRoot = join(cwd, '.loom');
+  const auto = isAutoOn(loomRoot);
 
   // 状态 0: 没有 .loom/
   if (!existsSync(loomRoot)) {
@@ -41,6 +43,7 @@ export function guideProject(projectDir) {
       stage: 'not_initialized',
       stage_num: 0,
       details: {},
+      auto,
       next_action: '初始化 LOOM 项目',
       next_command: 'loom init',
       message: '项目尚未初始化。运行 loom init 创建 .loom/v1/ 骨架。',
@@ -53,6 +56,7 @@ export function guideProject(projectDir) {
       stage: 'no_version',
       stage_num: 0,
       details: {},
+      auto,
       next_action: '初始化第一个版本',
       next_command: 'loom init',
       message: '.loom/ 存在但没有版本目录。运行 loom init 创建 v1。',
@@ -71,6 +75,7 @@ export function guideProject(projectDir) {
       stage: 'need_philosophy',
       stage_num: 1,
       details: { version: current },
+      auto,
       next_action: '织造产品哲学',
       next_command: 'loom activate weaver',
       message: `当前版本 ${current}：哲学还是模板，需要 Weaver 织造。`,
@@ -83,6 +88,7 @@ export function guideProject(projectDir) {
       stage: 'need_vision',
       stage_num: 2,
       details: { version: current },
+      auto,
       next_action: '定义产品愿景',
       next_command: 'loom activate visionary',
       message: `当前版本 ${current}：哲学已织造，愿景还是模板，需要 Visionary 定义。`,
@@ -95,6 +101,7 @@ export function guideProject(projectDir) {
       stage: 'need_architecture',
       stage_num: 3,
       details: { version: current },
+      auto,
       next_action: '设计系统架构 + Intent Map',
       next_command: 'loom activate architect',
       message: `当前版本 ${current}：愿景已定义，Intent Map 还是模板，需要 Architect 设计。`,
@@ -110,6 +117,7 @@ export function guideProject(projectDir) {
       stage: 'intent_map_broken',
       stage_num: 3,
       details: { version: current, error: e.message },
+      auto,
       next_action: '修复 Intent Map',
       next_command: 'loom intent validate',
       message: `Intent Map 格式错误: ${e.message}`,
@@ -133,6 +141,7 @@ export function guideProject(projectDir) {
       stage: 'blocked',
       stage_num: 7,
       details: { version: current, counts, blocked_ids: blockedIds },
+      auto,
       next_action: '人工介入解决阻塞',
       next_command: 'loom intent get ' + blockedIds[0],
       message: `有 ${counts.blocked} 个 Intent 阻塞: ${blockedIds.join(', ')}。需要人工介入。`,
@@ -145,6 +154,7 @@ export function guideProject(projectDir) {
       stage: 'done',
       stage_num: 6,
       details: { version: current, counts, total },
+      auto,
       next_action: '项目阶段完成，考虑版本演进',
       next_command: 'loom version new',
       message: `当前版本 ${current}：全部 ${total} 个 Intent 已完成。可考虑 loom version new 开始新版本。`,
@@ -158,6 +168,7 @@ export function guideProject(projectDir) {
       stage: 'in_loop',
       stage_num: 5,
       details: { version: current, counts, in_progress_ids: inProgressIds },
+      auto,
       next_action: '继续 Intent Loop',
       next_command: 'loom context',
       message: `当前版本 ${current}：Intent Loop 进行中（${inProgressIds.join(', ')}）。运行 loom context 查看状态。`,
@@ -170,6 +181,7 @@ export function guideProject(projectDir) {
       stage: 'ready_for_loop',
       stage_num: 4,
       details: { version: current, counts, total },
+      auto,
       next_action: '进入 Intent Loop',
       next_command: 'loom intent next',
       message: `当前版本 ${current}：${counts.pending} 个 Intent 待执行。运行 loom intent next 开始。`,
@@ -181,6 +193,7 @@ export function guideProject(projectDir) {
     stage: 'unknown',
     stage_num: -1,
     details: { version: current, counts },
+    auto,
     next_action: '运行健康检查',
     next_command: 'loom doctor',
     message: '项目状态不明确，运行 loom doctor 诊断。',

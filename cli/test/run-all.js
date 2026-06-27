@@ -725,6 +725,48 @@ test('guide — init 输出包含 To Agent 和 To Human 引导', () => {
   rmSync(initRoot, { recursive: true, force: true });
 });
 
+console.log('\n测试 auto 命令');
+
+test('auto on/off/status — 开关切换', () => {
+  const autoRoot = join(process.cwd(), 'test', '.tmp-auto-test');
+  rmSync(autoRoot, { recursive: true, force: true });
+  mkdirSync(autoRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: autoRoot, encoding: 'utf-8' });
+  // 默认关闭
+  const off = execSync(`node "${CLI}" auto status`, { cwd: autoRoot, encoding: 'utf-8' });
+  assertContains(off, '关闭');
+  // 开启
+  const on = execSync(`node "${CLI}" auto on`, { cwd: autoRoot, encoding: 'utf-8' });
+  assertContains(on, '开启');
+  assert(existsSync(join(autoRoot, '.loom', 'auto')), 'auto 文件未创建');
+  // 状态
+  const status = execSync(`node "${CLI}" auto status`, { cwd: autoRoot, encoding: 'utf-8' });
+  assertContains(status, '开启');
+  // guide 检测 AUTO
+  const guide = execSync(`node "${CLI}" guide`, { cwd: autoRoot, encoding: 'utf-8' });
+  assertContains(guide, 'AUTO');
+  // 关闭
+  execSync(`node "${CLI}" auto off`, { cwd: autoRoot, encoding: 'utf-8' });
+  assert(!existsSync(join(autoRoot, '.loom', 'auto')), 'auto 文件未删除');
+  rmSync(autoRoot, { recursive: true, force: true });
+});
+
+console.log('\n测试 preview 命令');
+
+test('preview — 生成 HTML 预览', () => {
+  const previewRoot = join(process.cwd(), 'test', '.tmp-preview-test');
+  rmSync(previewRoot, { recursive: true, force: true });
+  mkdirSync(previewRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: previewRoot, encoding: 'utf-8' });
+  const out = execSync(`node "${CLI}" preview`, { cwd: previewRoot, encoding: 'utf-8' });
+  assertContains(out, 'HTML 预览已生成');
+  assert(existsSync(join(previewRoot, 'loom-preview.html')), 'HTML 文件未生成');
+  const html = readFileSync(join(previewRoot, 'loom-preview.html'), 'utf-8');
+  assertContains(html, '<!DOCTYPE html>');
+  assertContains(html, 'LOOM 项目预览');
+  rmSync(previewRoot, { recursive: true, force: true });
+});
+
 // ─── 清理 ──────────────────────────────────────────────
 
 rmSync(TEST_ROOT, { recursive: true, force: true });

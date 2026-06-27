@@ -15,6 +15,8 @@ import { listVersions, readCurrentPointer, newVersion, useVersion, diffVersions 
 import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../src/diagnostics.js';
 import { getHelpTopic, listHelpTopics } from '../src/help.js';
 import { guideProject } from '../src/guide.js';
+import { isAutoOn, autoOn, autoOff, autoStatus } from '../src/auto.js';
+import { generatePreview } from '../src/preview.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // LOOM 项目目录结构: .loom/v{N}/
@@ -339,9 +341,52 @@ try {
     case 'guide': {
       const result = guideProject(cwd());
       console.log(`阶段 ${result.stage_num}: ${result.stage}`);
+      if (result.auto) {
+        console.log(`模式: AUTO（自动执行，不等确认）`);
+      } else {
+        console.log(`模式: 手动（每步需用户确认）`);
+      }
       console.log(`\n${result.message}`);
       console.log(`\n下一步: ${result.next_action}`);
       console.log(`  → ${result.next_command}`);
+      if (!result.auto && result.stage_num > 0 && result.stage_num < 6) {
+        console.log(`\n提示: 开启 AUTO 模式可自动连续执行 — loom auto on`);
+      }
+      break;
+    }
+
+    case 'auto': {
+      const loomRoot = findLoomRoot();
+      switch (sub) {
+        case 'on':
+          autoOn(loomRoot);
+          console.log('AUTO 模式已开启。Agent 将自动连续执行，不等用户确认。');
+          console.log('关闭: loom auto off');
+          break;
+        case 'off':
+          autoOff(loomRoot);
+          console.log('AUTO 模式已关闭。每步需要用户确认。');
+          break;
+        case 'status': {
+          const status = autoStatus(loomRoot);
+          if (status.on) {
+            console.log(`AUTO 模式: 开启（自 ${status.since}）`);
+          } else {
+            console.log('AUTO 模式: 关闭');
+          }
+          break;
+        }
+        default:
+          die(`未知子命令: auto ${sub}\n用法: loom auto [on|off|status]`);
+      }
+      break;
+    }
+
+    case 'preview': {
+      const result = generatePreview(cwd());
+      console.log(`HTML 预览已生成: ${result.filePath}`);
+      console.log(`版本: ${result.version}`);
+      console.log('\n用浏览器打开查看。这是只读投影，修改请编辑源文件后重新生成。');
       break;
     }
 
@@ -369,6 +414,7 @@ To Human:
 用法:
   loom init                     初始化项目（创建 .loom/v1/ 骨架 + 模板）
   loom guide                    诊断当前阶段，输出下一步引导
+  loom auto on|off|status       AUTO 模式开关（on 时 Agent 自动连续执行）
   loom activate <role>          输出角色激活提示词（weaver|visionary|architect|forge|keeper）
 
   loom version list             列出所有版本（* 标记当前）
@@ -390,6 +436,7 @@ To Human:
 
   loom doctor                   项目健康检查（一致性+孤儿引用+循环依赖+僵尸）
   loom context                  上下文摘要（进度+下一步+待验证+风险）
+  loom preview                  生成 HTML 可视化预览（给人类看）
   loom help <topic>             分层指南（workflow|concepts|loop|version|doctor）
 
   loom philosophy get <anchor>  按锚点加载哲学章节
