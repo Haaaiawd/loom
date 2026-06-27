@@ -670,6 +670,61 @@ test('help — 未知 topic 报错', () => {
   }
 });
 
+console.log('\n测试 guide 命令');
+
+test('guide — 未初始化项目引导 loom init', () => {
+  const guideRoot = join(process.cwd(), 'test', '.tmp-guide-test');
+  rmSync(guideRoot, { recursive: true, force: true });
+  mkdirSync(guideRoot, { recursive: true });
+  const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
+  assertContains(out, 'not_initialized');
+  assertContains(out, 'loom init');
+  rmSync(guideRoot, { recursive: true, force: true });
+});
+
+test('guide — 刚 init 完引导 activate weaver', () => {
+  const guideRoot = join(process.cwd(), 'test', '.tmp-guide-test2');
+  rmSync(guideRoot, { recursive: true, force: true });
+  mkdirSync(guideRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: guideRoot, encoding: 'utf-8' });
+  const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
+  assertContains(out, 'need_philosophy');
+  assertContains(out, 'loom activate weaver');
+  rmSync(guideRoot, { recursive: true, force: true });
+});
+
+test('guide — 哲学已织造引导 activate visionary', () => {
+  const guideRoot = join(process.cwd(), 'test', '.tmp-guide-test3');
+  rmSync(guideRoot, { recursive: true, force: true });
+  mkdirSync(guideRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: guideRoot, encoding: 'utf-8' });
+  // 写入真实哲学（去掉模板标记）
+  writeFileSync(join(guideRoot, '.loom', 'v1', '00_PHILOSOPHY', 'PRODUCT_PHILOSOPHY.md'),
+    '# 真实哲学\n\n## Core Belief\n\n我们信简单。', 'utf-8');
+  const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
+  assertContains(out, 'need_vision');
+  assertContains(out, 'loom activate visionary');
+  rmSync(guideRoot, { recursive: true, force: true });
+});
+
+test('guide — --help 包含 To Agent 和 To Human 区块', () => {
+  const out = run('--help');
+  assertContains(out, 'To Agent');
+  assertContains(out, 'To Human');
+  assertContains(out, 'loom guide');
+});
+
+test('guide — init 输出包含 To Agent 和 To Human 引导', () => {
+  const initRoot = join(process.cwd(), 'test', '.tmp-guide-test4');
+  rmSync(initRoot, { recursive: true, force: true });
+  mkdirSync(initRoot, { recursive: true });
+  const out = execSync(`node "${CLI}" init`, { cwd: initRoot, encoding: 'utf-8' });
+  assertContains(out, 'To Agent');
+  assertContains(out, 'To Human');
+  assertContains(out, 'loom guide');
+  rmSync(initRoot, { recursive: true, force: true });
+});
+
 // ─── 清理 ──────────────────────────────────────────────
 
 rmSync(TEST_ROOT, { recursive: true, force: true });

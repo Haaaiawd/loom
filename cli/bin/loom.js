@@ -14,6 +14,7 @@ import { activateRole } from '../src/activate.js';
 import { listVersions, readCurrentPointer, newVersion, useVersion, diffVersions } from '../src/version.js';
 import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../src/diagnostics.js';
 import { getHelpTopic, listHelpTopics } from '../src/help.js';
+import { guideProject } from '../src/guide.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // LOOM 项目目录结构: .loom/v{N}/
@@ -151,7 +152,12 @@ try {
         console.log(`  跳过（已存在）: ${result.skipped.length} 项`);
         for (const s of result.skipped) console.log(`    - ${s}`);
       }
-      console.log('\n下一步: loom activate weaver');
+      console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('To Agent: 运行 loom guide 诊断当前阶段，按引导执行');
+      console.log('To Human: 把以下指令给你的 AI agent:');
+      console.log('  "项目已用 LOOM 初始化。请运行 loom guide 看下一步，');
+      console.log('   然后激活 Weaver 角色织造产品哲学。"');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       break;
     }
 
@@ -330,13 +336,39 @@ try {
       break;
     }
 
+    case 'guide': {
+      const result = guideProject(cwd());
+      console.log(`阶段 ${result.stage_num}: ${result.stage}`);
+      console.log(`\n${result.message}`);
+      console.log(`\n下一步: ${result.next_action}`);
+      console.log(`  → ${result.next_command}`);
+      break;
+    }
+
     case '--help':
     case '-h':
     case undefined:
       console.log(`loom — LOOM 框架 CLI
+哲学驱动开发：哲学 → 愿景 → 架构 → Intent Loop
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+To Agent:
+  你是 AI agent。本项目使用 LOOM 框架。
+  第一步: 运行 loom guide 诊断当前阶段
+  第二步: 按引导执行对应命令
+  学习: loom help <topic> 获取详细指南
+  状态: loom context 获取当前进度
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+To Human:
+  请把以下指令给你的 AI agent:
+  "请用 LOOM 框架初始化并推进这个项目。
+   先运行 loom --help 了解命令，再运行 loom guide 看当前阶段，
+   然后按引导一步步执行。"
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 用法:
   loom init                     初始化项目（创建 .loom/v1/ 骨架 + 模板）
+  loom guide                    诊断当前阶段，输出下一步引导
   loom activate <role>          输出角色激活提示词（weaver|visionary|architect|forge|keeper）
 
   loom version list             列出所有版本（* 标记当前）

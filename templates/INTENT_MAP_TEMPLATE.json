@@ -4,7 +4,8 @@
     "_version": "1.0",
     "_loom_version": "v{N}",
     "_generated_by": "architect",
-    "_generated_at": "ISO 8601 时间戳"
+    "_generated_at": "ISO 8601 时间戳",
+    "_template": true
   },
 
   "intents": {
