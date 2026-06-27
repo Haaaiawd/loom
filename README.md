@@ -20,6 +20,50 @@ LOOM 的核心机制：
 
 ---
 
+## 快速开始
+
+```bash
+# 1. 初始化项目（创建 .loom/v1/ 骨架 + 模板）
+loom init
+
+# 2. 激活 Philosophy Weaver，织造哲学
+loom activate weaver
+# → Weaver 读取项目特征，搜索高质量参考，产出哲学文档到 .loom/v1/00_PHILOSOPHY/
+
+# 3. 激活 Visionary，定义愿景
+loom activate visionary
+# → Visionary 基于哲学定义产品愿景，产出 01_VISION.md（含意图叙事）
+
+# 4. 激活 Architect，设计系统
+loom activate architect
+# → Architect 基于愿景设计系统，产出 02_ARCHITECTURE.md + 04_INTENT_MAP.json
+
+# 5. 进入 Intent Loop
+loom activate keeper   # Keeper 选 Intent、验证
+loom activate forge    # Forge 实现 Intent
+loom intent next       # 查看下一个可执行 Intent
+loom intent status     # 查看整体进度
+```
+
+**核心流程**：Weaver 织造哲学 → Visionary 定义愿景 → Architect 设计系统 → Intent Loop（Keeper 选 Intent → Forge 实现 → Keeper 验证 → 闭合或修正）
+
+**CLI 命令一览**：
+
+| 命令 | 用途 |
+|---|---|
+| `loom init` | 初始化项目 |
+| `loom activate <role>` | 输出角色激活提示词 |
+| `loom intent next` | 下一个可执行 Intent |
+| `loom intent status` | 进度概览 |
+| `loom intent get <id>` | Intent 详情 |
+| `loom intent narrative <id>` | Intent 意图叙事 |
+| `loom intent update <id> --status <s>` | 更新状态（Keeper 用） |
+| `loom philosophy get <anchor>` | 加载哲学章节 |
+| `loom verify contract <id>` | 获取验收契约 |
+| `loom verify write --json-file <path>` | 写入验证记录 |
+
+---
+
 ## 系统结构
 
 ```

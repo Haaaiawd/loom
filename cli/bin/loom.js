@@ -9,6 +9,8 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { getNextIntent, getStatus, getDependencyGraph, getIntent, loadIntentMap, updateIntentStatus, getNarrative } from '../src/intent-map.js';
 import { getPhilosophy, listPhilosophyFiles } from '../src/philosophy.js';
 import { writeVerification, getVerificationHistory, getPendingVerifications, listVerifications, getVerificationContract } from '../src/verify.js';
+import { initProject } from '../src/init.js';
+import { activateRole } from '../src/activate.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // LOOM 项目目录结构: .loom/v{N}/
@@ -110,6 +112,32 @@ try {
       break;
     }
 
+    case 'init': {
+      const result = initProject(cwd());
+      console.log('LOOM 项目已初始化');
+      console.log(`  创建: ${result.created.length} 项`);
+      for (const c of result.created) console.log(`    + ${c}`);
+      if (result.skipped.length) {
+        console.log(`  跳过（已存在）: ${result.skipped.length} 项`);
+        for (const s of result.skipped) console.log(`    - ${s}`);
+      }
+      console.log('\n下一步: loom activate weaver');
+      break;
+    }
+
+    case 'activate': {
+      const role = sub;
+      if (!role) die('用法: loom activate <role>\n角色: weaver | visionary | architect | forge | keeper');
+      // weaver 不需要 loomDir（项目还没初始化时也能激活）
+      let loomDir = null;
+      if (role !== 'weaver') {
+        try { loomDir = findLoomDir(); } catch { /* 项目还没初始化，weaver 之外的角色会缺少项目上下文 */ }
+      }
+      const prompt = activateRole(role, loomDir);
+      output(prompt);
+      break;
+    }
+
     case 'philosophy': {
       const loomDir = findLoomDir();
       switch (sub) {
@@ -184,9 +212,12 @@ try {
     case '--help':
     case '-h':
     case undefined:
-      console.log(`loom — LOOM 框架 CLI 传感器层
+      console.log(`loom — LOOM 框架 CLI
 
 用法:
+  loom init                     初始化项目（创建 .loom/v1/ 骨架 + 模板）
+  loom activate <role>          输出角色激活提示词（weaver|visionary|architect|forge|keeper）
+
   loom intent next              返回下一个可执行 Intent
   loom intent status            返回进度概览
   loom intent graph             输出 Mermaid 依赖图

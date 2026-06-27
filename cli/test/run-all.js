@@ -381,6 +381,53 @@ test('verify list — 列出所有验证记录', () => {
   assert(list.includes('INT-002'), '应包含 INT-002');
 });
 
+console.log('\n测试 init 命令');
+
+test('init — 初始化项目目录', () => {
+  const initRoot = join(process.cwd(), 'test', '.tmp-init-test');
+  rmSync(initRoot, { recursive: true, force: true });
+  mkdirSync(initRoot, { recursive: true });
+  const out = execSync(`node "${CLI}" init`, { cwd: initRoot, encoding: 'utf-8' });
+  assertContains(out, 'LOOM 项目已初始化');
+  assert(existsSync(join(initRoot, '.loom', 'v1', '00_PHILOSOPHY')), '哲学目录未创建');
+  assert(existsSync(join(initRoot, '.loom', 'v1', '04_INTENT_MAP.json')), 'Intent Map 模板未复制');
+  assert(existsSync(join(initRoot, '.loom', 'v1', '01_VISION.md')), '愿景模板未复制');
+  rmSync(initRoot, { recursive: true, force: true });
+});
+
+test('init — 重复初始化跳过已存在文件', () => {
+  const initRoot = join(process.cwd(), 'test', '.tmp-init-test2');
+  rmSync(initRoot, { recursive: true, force: true });
+  mkdirSync(initRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: initRoot, encoding: 'utf-8' });
+  const out2 = execSync(`node "${CLI}" init`, { cwd: initRoot, encoding: 'utf-8' });
+  assertContains(out2, '跳过');
+  rmSync(initRoot, { recursive: true, force: true });
+});
+
+console.log('\n测试 activate 命令');
+
+test('activate weaver — 输出激活提示词', () => {
+  const out = run('activate weaver');
+  assertContains(out, 'Philosophy Weaver');
+  assertContains(out, 'BASELINE');
+});
+
+test('activate keeper — 输出激活提示词', () => {
+  const out = run('activate keeper');
+  assertContains(out, 'Keeper');
+  assertContains(out, 'BASELINE');
+});
+
+test('activate 不存在的角色 — 报错', () => {
+  try {
+    run('activate nonexistent');
+    throw new Error('应该报错但没有');
+  } catch (e) {
+    assertContains(e.stderr || e.message, '未知角色');
+  }
+});
+
 console.log('\n测试错误处理');
 
 test('intent get 不存在的 ID — 报错', () => {
