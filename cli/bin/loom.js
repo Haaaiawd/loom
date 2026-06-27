@@ -383,12 +383,11 @@ try {
     }
 
     case 'preview': {
-      // 输出提示词 + 项目数据，让 Agent 生成定制化 HTML
-      // CLI 不生成固定模板——AI 利用 HTML 优势（SVG/tabs/交互）做得更好
-      const { prompt, data } = generatePreviewPrompt(cwd());
+      // 输出提示词，让 AI 读 .loom/ 文件、重组信息、生成 HTML
+      const prompt = generatePreviewPrompt();
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('To Agent: 按以下提示词生成 loom-preview.html');
-      console.log('To Human: 把以下内容给你的 AI agent 生成可视化预览');
+      console.log('To Agent: 按以下提示词读 .loom/ 文件并生成 loom-preview.html');
+      console.log('To Human: 把以下内容给你的 AI agent');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('');
       console.log(prompt);

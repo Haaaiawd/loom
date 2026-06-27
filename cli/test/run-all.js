@@ -753,19 +753,13 @@ test('auto on/off/status — 开关切换', () => {
 
 console.log('\n测试 preview 命令');
 
-test('preview — 输出提示词 + 项目数据', () => {
-  const previewRoot = join(process.cwd(), 'test', '.tmp-preview-test');
-  rmSync(previewRoot, { recursive: true, force: true });
-  mkdirSync(previewRoot, { recursive: true });
-  execSync(`node "${CLI}" init`, { cwd: previewRoot, encoding: 'utf-8' });
-  const out = execSync(`node "${CLI}" preview`, { cwd: previewRoot, encoding: 'utf-8' });
+test('preview — 输出提示词', () => {
+  const out = run('preview');
   assertContains(out, 'To Agent');
+  assertContains(out, '重新组织');
   assertContains(out, 'SVG');
-  assertContains(out, '暗色主题');
-  // 数据 JSON 应该被注入（包含版本号和 Intent）
-  assertContains(out, '"version": "v1"');
-  assertContains(out, 'INT-001');
-  rmSync(previewRoot, { recursive: true, force: true });
+  assertContains(out, '.loom/');
+  assertContains(out, 'loom-preview.html');
 });
 
 // ─── 清理 ──────────────────────────────────────────────
