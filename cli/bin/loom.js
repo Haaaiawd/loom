@@ -99,7 +99,7 @@ try {
           const id = rest[0];
           const statusFlagIdx = argv.indexOf('--status');
           const newStatus = statusFlagIdx !== -1 ? argv[statusFlagIdx + 1] : null;
-          if (!id || !newStatus) die('用法: loom intent update <id> --status <pending|in_progress|completed|blocked>');
+          if (!id || !newStatus) die('用法: loom intent update <id> --status <pending|in_progress|completed|blocked|needs_review>');
           updateIntentStatus(loomDir, id, newStatus);
           console.log(`${id} status 已更新为 ${newStatus}`);
           break;
@@ -153,6 +153,7 @@ try {
           break;
         case 'write': {
           // 支持两种输入方式：--json-file <path>（推荐）或 --json <string>
+          // verdict 合法值: passed | deviated | blocked | pending_human
           const fileFlagIdx = argv.indexOf('--json-file');
           const jsonFlagIdx = argv.indexOf('--json');
           let record;
