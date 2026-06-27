@@ -541,3 +541,56 @@ Philosophy Weaver 织造哲学时，必须考虑 Intent Loop 的需求：
 | 必须有 CLI 命令 | CLI 的具体实现 |
 
 底线守住 loop 不会崩，自由度留给哲学发挥。
+
+---
+
+## 运行假设与故障恢复
+
+### 执行模型：单 Agent 顺序执行
+
+LOOM 的 Intent Loop 假设**单 Agent 顺序执行**——同一时刻只有一个角色（Keeper 或 Forge）在操作 Intent Map 和验证记录。
+
+**为什么**：Intent Map 和验证记录是单文件 JSON，没有文件锁。多 Agent 并行写入会导致数据损坏。
+
+**多 Agent 并行的场景**：如果需要并行（如多个 Forge 同时实现不同 Intent），必须由外部编排器协调——例如：
+- 每个 Forge 操作独立的代码区域，不交叉
+- Intent Map 的更新由单一协调者串行执行
+- 验证记录按 Intent ID 分文件，不共享
+
+LOOM 不提供内置并发控制。并行是外部编排器的责任。
+
+### 崩溃恢复
+
+Agent 崩溃后可能留下不一致状态。恢复流程：
+
+**场景 A：Forge 崩溃，Intent 留在 in_progress**
+
+1. Keeper 检测到 `in_progress` 但无对应验证记录的 Intent
+2. Keeper 报告用户：`INT-XXX 处于 in_progress 但无验证记录，可能上次执行中断`
+3. 用户决定：
+   - **继续**：重新激活 Forge，从当前代码状态接着做
+   - **重置**：`loom intent update INT-XXX --status pending`，从头来
+4. Keeper 不自动决定——崩溃后的恢复涉及代码状态判断，需要人类介入
+
+**场景 B：Keeper 崩溃，验证记录写了一半**
+
+1. 验证记录是追加模式（数组），半条记录不会污染已有记录
+2. 下次 Keeper 验证时，重新写入完整记录即可
+3. 不需要特殊恢复
+
+**场景 C：Intent Map 文件损坏**
+
+1. `loom intent validate` 会检测到格式错误
+2. 从版本控制（Git）恢复 Intent Map
+3. LOOM 不提供自动备份——版本控制是项目的基本卫生
+
+### 版本控制是前提
+
+LOOM 假设项目使用版本控制（Git）。所有 `.loom/` 下的文件（哲学、愿景、架构、Intent Map、验证记录）都应纳入版本控制。
+
+这解决了：
+- 文件损坏 → 从 Git 恢复
+- 误操作 → 从 Git 回滚
+- 变更追溯 → Git log 就是审计日志
+
+LOOM 不内置备份、审计、回滚——这些是版本控制的职责。

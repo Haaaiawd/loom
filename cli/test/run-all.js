@@ -428,6 +428,49 @@ test('activate 不存在的角色 — 报错', () => {
   }
 });
 
+console.log('\n测试依赖状态一致性校验');
+
+test('intent validate — 检测 completed 依赖 blocked 的不一致', () => {
+  // 备份原 Intent Map
+  const intentMapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const original = readFileSync(intentMapPath, 'utf-8');
+  try {
+    // 构造不一致状态：INT-001 completed 依赖 INT-002 blocked
+    // 但 INT-001 depends_on 是 []，所以需要构造一个有依赖的 completed Intent
+    // 用 INT-002（depends_on INT-001），把 INT-002 标记 completed，INT-001 标记 blocked
+    writeFileSync(intentMapPath, JSON.stringify({
+      _meta: { _version: '1.0', _loom_version: 'v1', _generated_by: 'architect' },
+      intents: {
+        'INT-001': {
+          id: 'INT-001',
+          narrative_ref: '01_VISION.md#int-001',
+          depends_on: [],
+          acceptance: '用户能注册并登录',
+          philosophy_anchors: ['PRODUCT_PHILOSOPHY.md#core-belief'],
+          status: 'blocked',
+        },
+        'INT-002': {
+          id: 'INT-002',
+          narrative_ref: '01_VISION.md#int-002',
+          depends_on: ['INT-001'],
+          acceptance: '用户能创建项目',
+          philosophy_anchors: ['ENGINEERING_CREED.md#simplicity'],
+          status: 'completed',
+        },
+      },
+      topo_order: ['INT-001', 'INT-002'],
+    }, null, 2));
+    run('intent validate');
+    throw new Error('应该检测到不一致但没有');
+  } catch (e) {
+    assertContains(e.stderr || e.message, 'completed');
+    assertContains(e.stderr || e.message, 'blocked');
+  } finally {
+    // 恢复
+    writeFileSync(intentMapPath, original);
+  }
+});
+
 console.log('\n测试错误处理');
 
 test('intent get 不存在的 ID — 报错', () => {

@@ -119,6 +119,11 @@ export function validateIntentMap(data) {
         if (!(dep in data.intents)) {
           errors.push(`intents["${id}"].depends_on 引用了不存在的 Intent: ${dep}`);
         }
+        // 依赖状态一致性：completed 的 Intent 不能依赖 blocked 的 Intent
+        const depIntent = data.intents[dep];
+        if (depIntent && intent.status === 'completed' && depIntent.status === 'blocked') {
+          errors.push(`intents["${id}"] 状态为 completed 但依赖 blocked 的 ${dep}`);
+        }
       }
     }
   }
