@@ -16,7 +16,7 @@ import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../
 import { getHelpTopic, listHelpTopics } from '../src/help.js';
 import { guideProject } from '../src/guide.js';
 import { isAutoOn, autoOn, autoOff, autoStatus } from '../src/auto.js';
-import { generatePreview } from '../src/preview.js';
+import { generatePreviewPrompt } from '../src/preview.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // LOOM 项目目录结构: .loom/v{N}/
@@ -383,10 +383,15 @@ try {
     }
 
     case 'preview': {
-      const result = generatePreview(cwd());
-      console.log(`HTML 预览已生成: ${result.filePath}`);
-      console.log(`版本: ${result.version}`);
-      console.log('\n用浏览器打开查看。这是只读投影，修改请编辑源文件后重新生成。');
+      // 输出提示词 + 项目数据，让 Agent 生成定制化 HTML
+      // CLI 不生成固定模板——AI 利用 HTML 优势（SVG/tabs/交互）做得更好
+      const { prompt, data } = generatePreviewPrompt(cwd());
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('To Agent: 按以下提示词生成 loom-preview.html');
+      console.log('To Human: 把以下内容给你的 AI agent 生成可视化预览');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('');
+      console.log(prompt);
       break;
     }
 
@@ -436,7 +441,7 @@ To Human:
 
   loom doctor                   项目健康检查（一致性+孤儿引用+循环依赖+僵尸）
   loom context                  上下文摘要（进度+下一步+待验证+风险）
-  loom preview                  生成 HTML 可视化预览（给人类看）
+  loom preview                  输出提示词+数据，让 AI 生成 HTML 可视化预览
   loom help <topic>             分层指南（workflow|concepts|loop|version|doctor）
 
   loom philosophy get <anchor>  按锚点加载哲学章节

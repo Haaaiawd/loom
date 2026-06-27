@@ -753,17 +753,18 @@ test('auto on/off/status — 开关切换', () => {
 
 console.log('\n测试 preview 命令');
 
-test('preview — 生成 HTML 预览', () => {
+test('preview — 输出提示词 + 项目数据', () => {
   const previewRoot = join(process.cwd(), 'test', '.tmp-preview-test');
   rmSync(previewRoot, { recursive: true, force: true });
   mkdirSync(previewRoot, { recursive: true });
   execSync(`node "${CLI}" init`, { cwd: previewRoot, encoding: 'utf-8' });
   const out = execSync(`node "${CLI}" preview`, { cwd: previewRoot, encoding: 'utf-8' });
-  assertContains(out, 'HTML 预览已生成');
-  assert(existsSync(join(previewRoot, 'loom-preview.html')), 'HTML 文件未生成');
-  const html = readFileSync(join(previewRoot, 'loom-preview.html'), 'utf-8');
-  assertContains(html, '<!DOCTYPE html>');
-  assertContains(html, 'LOOM 项目预览');
+  assertContains(out, 'To Agent');
+  assertContains(out, 'SVG');
+  assertContains(out, '暗色主题');
+  // 数据 JSON 应该被注入（包含版本号和 Intent）
+  assertContains(out, '"version": "v1"');
+  assertContains(out, 'INT-001');
   rmSync(previewRoot, { recursive: true, force: true });
 });
 
