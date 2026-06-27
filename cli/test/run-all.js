@@ -92,11 +92,23 @@ function setup() {
     '一个人能做的事有限。协作让产品从个人工具变成团队工具。',
     '邀请是协作的起点——必须简单、可靠、可追踪。',
   ].join('\n'));
+
+  // 写入 current 指针
+  writeFileSync(join(TEST_ROOT, '.loom', 'current'), 'v1', 'utf-8');
 }
 
 function run(args) {
   return execSync(`node "${CLI}" ${args} --loom-dir "${LOOM_DIR}"`, {
     encoding: 'utf-8',
+    stdio: ['pipe', 'pipe', 'pipe'],
+  });
+}
+
+// 从项目根目录跑（不带 --loom-dir，测试 findLoomDir 指针逻辑）
+function runFromRoot(args) {
+  return execSync(`node "${CLI}" ${args}`, {
+    encoding: 'utf-8',
+    cwd: TEST_ROOT,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 }
@@ -489,6 +501,109 @@ test('philosophy get 不存在的文件 — 报错', () => {
   } catch (e) {
     assertContains(e.stderr || e.message, '不存在');
   }
+});
+
+console.log('\n测试 version 命令');
+
+test('version list — 列出版本并标记当前', () => {
+  const out = runFromRoot('version list');
+  assertContains(out, 'v1');
+  assertContains(out, '*');
+  assertContains(out, '当前版本: v1');
+});
+
+test('version current — 显示当前版本', () => {
+  const out = runFromRoot('version current');
+  assertContains(out, 'v1');
+});
+
+test('version new — 创建 v2 并切换', () => {
+  const out = runFromRoot('version new');
+  assertContains(out, 'v2');
+  assertContains(out, '当前版本已切换为 v2');
+  // 验证目录创建
+  assert(existsSync(join(TEST_ROOT, '.loom', 'v2', '04_INTENT_MAP.json')), 'v2 模板未创建');
+  // 验证指针切换
+  const pointer = readFileSync(join(TEST_ROOT, '.loom', 'current'), 'utf-8').trim();
+  assert(pointer === 'v2', `指针应为 v2，实际: ${pointer}`);
+  // 切回 v1，不影响后续测试
+  runFromRoot('version use v1');
+});
+
+test('version use — 切换当前版本', () => {
+  runFromRoot('version use v2');
+  let pointer = readFileSync(join(TEST_ROOT, '.loom', 'current'), 'utf-8').trim();
+  assert(pointer === 'v2', `指针应为 v2，实际: ${pointer}`);
+  runFromRoot('version use v1');
+  pointer = readFileSync(join(TEST_ROOT, '.loom', 'current'), 'utf-8').trim();
+  assert(pointer === 'v1', `指针应为 v1，实际: ${pointer}`);
+});
+
+test('version use — 不存在的版本报错', () => {
+  try {
+    runFromRoot('version use v99');
+    throw new Error('应该报错但没有');
+  } catch (e) {
+    assertContains(e.stderr || e.message, '不存在');
+  }
+});
+
+test('version diff — 对比 v1 和 v2', () => {
+  const out = runFromRoot('version diff v1 v2');
+  const data = JSON.parse(out);
+  // v1 有哲学/愿景/Intent Map，v2 只有模板，应该有差异
+  assert(data.only_in_a !== undefined, 'diff 输出缺少 only_in_a');
+  assert(data.only_in_b !== undefined, 'diff 输出缺少 only_in_b');
+});
+
+console.log('\n测试 doctor / context / trace / reverse 命令');
+
+test('doctor — 健康检查（INT-001 completed 无验证记录 → 应报告问题）', () => {
+  const out = run('doctor');
+  // INT-001 是 completed 但无验证记录，应该被检测到
+  assertContains(out, 'completed_no_record');
+  assertContains(out, '问题');
+});
+
+test('context — 上下文摘要', () => {
+  const out = run('context');
+  const data = JSON.parse(out);
+  assert(data.progress !== undefined, '缺少 progress');
+  assert(data.next_intent !== undefined, '缺少 next_intent');
+  assert(data.pending_verifications !== undefined, '缺少 pending_verifications');
+  assert(Array.isArray(data.risks), '缺少 risks 数组');
+});
+
+test('intent trace — 完整追溯链', () => {
+  const out = run('intent trace INT-002');
+  const data = JSON.parse(out);
+  assert(data.intent.id === 'INT-002', '缺少 intent');
+  assert(data.narrative !== undefined, '缺少 narrative');
+  assert(data.acceptance !== undefined, '缺少 acceptance');
+  assert(data.dependency_chain !== undefined, '缺少 dependency_chain');
+  // INT-002 依赖 INT-001
+  assertContains(JSON.stringify(data.dependency_chain), 'INT-001');
+});
+
+test('intent reverse-dep — 反向依赖', () => {
+  // INT-002 和 INT-003 都依赖 INT-001
+  const out = run('intent reverse-dep INT-001');
+  const data = JSON.parse(out);
+  assert(data.includes('INT-002'), `应包含 INT-002，实际: ${JSON.stringify(data)}`);
+  assert(data.includes('INT-003'), `应包含 INT-003，实际: ${JSON.stringify(data)}`);
+});
+
+test('intent reverse-ref — 反向哲学引用', () => {
+  // INT-001 引用 PRODUCT_PHILOSOPHY.md#core-belief
+  const out = run('intent reverse-ref PRODUCT_PHILOSOPHY.md#core-belief');
+  const data = JSON.parse(out);
+  assert(data.includes('INT-001'), `应包含 INT-001，实际: ${JSON.stringify(data)}`);
+});
+
+test('intent reverse-dep — 不存在的 Intent 返回空数组', () => {
+  const out = run('intent reverse-dep INT-999');
+  const data = JSON.parse(out);
+  assert(Array.isArray(data) && data.length === 0, `应返回空数组，实际: ${out}`);
 });
 
 // ─── 清理 ──────────────────────────────────────────────

@@ -133,14 +133,23 @@ loom intent status
 |---|---|
 | `loom init` | 初始化项目 |
 | `loom activate <role>` | 输出角色激活提示词 |
+| `loom version list` | 列出所有版本（* 标记当前） |
+| `loom version new` | 创建新版本 + 自动切换（Major 升级） |
+| `loom version use <v>` | 切换当前版本 |
+| `loom version diff <v1> <v2>` | 对比两个版本的文件差异 |
 | `loom intent next` | 下一个可执行 Intent |
 | `loom intent status` | 进度概览 |
 | `loom intent get <id>` | Intent 详情 |
 | `loom intent narrative <id>` | Intent 意图叙事 |
+| `loom intent trace <id>` | Intent 完整追溯链（依赖+验证+哲学+叙事） |
+| `loom intent reverse-dep <id>` | 反向依赖（谁依赖这个 Intent） |
+| `loom intent reverse-ref <anchor>` | 反向哲学引用（哪些 Intent 引用这个锚点） |
 | `loom intent update <id> --status <s>` | 更新状态（Keeper 用） |
 | `loom philosophy get <anchor>` | 加载哲学章节 |
 | `loom verify contract <id>` | 获取验收契约 |
 | `loom verify write --json-file <path>` | 写入验证记录 |
+| `loom doctor` | 项目健康检查 |
+| `loom context` | 上下文摘要（Agent 重启后一条命令获取状态） |
 
 ---
 

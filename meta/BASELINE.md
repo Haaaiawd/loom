@@ -190,36 +190,75 @@ LOOM 是元规范，不是固定流程。Agent 根据项目规模自主调整复
 
 ## 版本演进
 
-LOOM 用 `.loom/v{N}/` 目录支持多版本共存。当前规范定义了**共存机制**，但**演进协议待定义**。
+LOOM 用 `.loom/v{N}/` 目录支持多版本共存与演进。
 
-### 已定义
+### 版本指针
 
-- `loom init` 创建 `.loom/v1/`
-- CLI 自动探测最新版本目录（`findLoomDir` 取最大版本号）
-- 旧版本保留，不删除
+- `.loom/current` 文件记录当前版本号（如 `v1`）
+- CLI 优先读指针；指针缺失时回退到自动探测最新版本（向后兼容）
+- `loom version list` 列出所有版本并标记当前
+- `loom version use <v>` 切换当前版本
 
-### 待定义（未来版本）
+### 旧版本只读
 
-版本演进需要解决以下问题，当前规范未覆盖：
+**旧版本是只读的——最新版本（current 指针指向的）是当前真相。**
 
-1. **触发条件**：什么情况下必须升级版本？什么情况下可以在当前版本内调整？
-2. **角色版本感知**：Weaver/Visionary/Architect 在 v2 时是否需要加载 v1 的哲学/愿景/架构？怎么参考？
-3. **代码迁移**：v1 已完成的代码在 v2 怎么处理？全部保留？部分重写？
-4. **Intent ID 延续**：v2 的 Intent ID 是延续 v1 还是重新编号？
-5. **验证记录迁移**：v1 的验证记录在 v2 还有效吗？相似的 Intent 需要重新验证吗？
-6. **版本对比**：怎么对比 v1 和 v2 的哲学/架构差异？
+- 角色激活时只加载当前版本
+- CLI 写操作（intent update、verify write）只作用于当前版本
+- 旧版本保留作为历史参考，不修改
 
-### 当前建议
+### 演进分级
 
-在演进协议定义之前，版本升级的实践方式：
+变更分两级，判定由用户 + Agent 对话完成，CLI 不做决策：
 
-1. 手动创建 `.loom/v2/` 目录
-2. 手动复制需要继承的文件（哲学、PROJECT_BASELINE 等）到 v2
-3. 在 v2 的哲学文档中记录"相对 v1 变了什么、为什么变"
-4. v1 的代码保留在项目代码库中，v2 的 Intent Map 引用已有代码时标记为 `status: completed`
-5. 版本对比通过 Git diff 完成
+| 级别 | 判定标准 | 处理方式 |
+|---|---|---|
+| **Minor** | 不改哲学前提、不改愿景北极星、不改架构边界 | 当前版本内改（LOOM 已有的变更回流机制） |
+| **Major** | 哲学前提变了、愿景北极星变了、架构边界变了 | 创建新版本 |
 
-这是临时方案。完整的版本演进协议将在未来版本规范中定义。
+### Major 升级流程
+
+```
+[Agent / 用户判断需要 Major 升级]
+  ↓
+loom version new              → 创建 v{N+1}（空目录 + 模板），自动切换为当前
+  ↓
+loom version diff v{N} v{N+1} → 看看旧版本有什么（Agent 决定参考什么）
+  ↓
+Weaver  读 .loom/v{N}/00_PHILOSOPHY/ → 织造 v{N+1} 哲学，记录"相对 v{N} 变了什么"
+  ↓
+Visionary 读 .loom/v{N}/01_VISION.md → 定义 v{N+1} 愿景
+  ↓
+Architect 读 .loom/v{N}/02_ARCHITECTURE.md + 04_INTENT_MAP.json → 设计 v{N+1}
+  ↓
+进入 v{N+1} 的 Intent Loop
+```
+
+**关键设计**：`loom version new` 创建空目录 + 模板，**不自动复制旧版本内容**。强制 Agent 重新思考——参考 ≠ 复制。如果直接复制 v1 哲学到 v2，Agent 可能懒得重织造，版本演进就变成"在旧版本上打补丁"了。
+
+### 代码迁移
+
+v1 已完成的代码保留在项目代码库中。v2 的 Intent Map 引用已有代码时：
+- 如果代码仍适用 → Intent 状态直接设为 `completed`，验收契约引用已有代码
+- 如果代码需要调整 → 新建 Intent，depends_on 可以引用 v1 的 Intent ID（通过 `loom intent trace` 追溯历史）
+
+### Intent ID 延续
+
+v2 的 Intent ID **重新编号**（INT-001, INT-002...），不延续 v1。原因：
+- v2 的 Intent 语义可能和 v1 不同，延续 ID 会造成混淆
+- 追溯通过 Git history 和 `loom version diff` 完成，不靠 ID 延续
+
+### 版本对比
+
+- `loom version diff <v1> <v2>` 对比文件存在性和大小差异
+- 内容差异用 Git diff（`.loom/` 纳入版本控制）
+
+### 不做的
+
+- CLI 不判断 Minor/Major（决策由 Agent + 用户对话完成）
+- CLI 不自动复制旧版本内容到新版本（强制重新思考）
+- CLI 不强制旧版本只读（规范声明 + Git 保护，不靠代码强制）
+- CLI 不迁移验证记录（v2 的 Intent 是新 ID，v1 验证记录通过 Git history 追溯）
 
 ---
 

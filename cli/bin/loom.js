@@ -11,10 +11,23 @@ import { getPhilosophy, listPhilosophyFiles } from '../src/philosophy.js';
 import { writeVerification, getVerificationHistory, getPendingVerifications, listVerifications, getVerificationContract } from '../src/verify.js';
 import { initProject } from '../src/init.js';
 import { activateRole } from '../src/activate.js';
+import { listVersions, readCurrentPointer, newVersion, useVersion, diffVersions } from '../src/version.js';
+import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../src/diagnostics.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // LOOM 项目目录结构: .loom/v{N}/
-// CLI 自动探测最新版本目录，或接受 --loom-dir 参数。
+// 优先读 .loom/current 指针；不存在则回退到自动探测最新版本。
+// 也接受 --loom-dir 参数直接指定版本目录。
+
+function findLoomRoot() {
+  const flagIdx = argv.indexOf('--loom-dir');
+  if (flagIdx !== -1 && argv[flagIdx + 1]) {
+    // --loom-dir 直接指向版本目录，反推 .loom root
+    const dir = resolve(argv[flagIdx + 1]);
+    return resolve(dir, '..');
+  }
+  return join(cwd(), '.loom');
+}
 
 function findLoomDir() {
   const flagIdx = argv.indexOf('--loom-dir');
@@ -25,13 +38,11 @@ function findLoomDir() {
   if (!existsSync(loomRoot)) {
     die(`找不到 .loom 目录: ${loomRoot}`);
   }
-  const versions = readdirSync(loomRoot)
-    .filter((d) => /^v\d+$/.test(d))
-    .sort((a, b) => parseInt(b.slice(1)) - parseInt(a.slice(1)));
-  if (versions.length === 0) {
+  const current = readCurrentPointer(loomRoot);
+  if (!current) {
     die(`.loom 下没有版本目录 (v1, v2, ...)`);
   }
-  return join(loomRoot, versions[0]);
+  return join(loomRoot, current);
 }
 
 function getPhilosophyDir(loomDir) {
@@ -97,6 +108,24 @@ try {
           loadIntentMap(loomDir);
           console.log('Intent Map 校验通过');
           break;
+        case 'trace': {
+          const id = rest[0];
+          if (!id) die('用法: loom intent trace <id>');
+          output(traceIntent(loomDir, getVerificationsDir(loomDir), getPhilosophyDir(loomDir), id));
+          break;
+        }
+        case 'reverse-dep': {
+          const id = rest[0];
+          if (!id) die('用法: loom intent reverse-dep <id>');
+          output(reverseDep(loomDir, id));
+          break;
+        }
+        case 'reverse-ref': {
+          const anchor = rest[0];
+          if (!anchor) die('用法: loom intent reverse-ref <anchor>\n例: loom intent reverse-ref PRODUCT_PHILOSOPHY.md#core-belief');
+          output(reverseRef(loomDir, anchor));
+          break;
+        }
         case 'update': {
           const id = rest[0];
           const statusFlagIdx = argv.indexOf('--status');
@@ -107,7 +136,7 @@ try {
           break;
         }
         default:
-          die(`未知子命令: intent ${sub}\n用法: loom intent [next|status|graph|get <id>|narrative <id>|validate|update <id> --status <...>]`);
+          die(`未知子命令: intent ${sub}\n用法: loom intent [next|status|graph|get <id>|narrative <id>|validate|trace <id>|reverse-dep <id>|reverse-ref <anchor>|update <id> --status <...>]`);
       }
       break;
     }
@@ -209,6 +238,77 @@ try {
       break;
     }
 
+    case 'version': {
+      const loomRoot = findLoomRoot();
+      switch (sub) {
+        case 'list': {
+          const { versions, current } = listVersions(loomRoot);
+          for (const v of versions) {
+            const mark = v === current ? ' *' : '  ';
+            console.log(`${mark}${v}`);
+          }
+          if (current) console.log(`\n当前版本: ${current}`);
+          break;
+        }
+        case 'current': {
+          const current = readCurrentPointer(loomRoot);
+          output(current ?? '没有版本目录');
+          break;
+        }
+        case 'new': {
+          const result = newVersion(cwd());
+          console.log(`已创建新版本: ${result.version}`);
+          console.log(`  创建: ${result.created.length} 项`);
+          for (const c of result.created) console.log(`    + ${c}`);
+          if (result.skipped.length) {
+            console.log(`  跳过（已存在）: ${result.skipped.length} 项`);
+            for (const s of result.skipped) console.log(`    - ${s}`);
+          }
+          console.log(`\n当前版本已切换为 ${result.version}`);
+          console.log('下一步: loom activate weaver（参考上一版本哲学织造新哲学）');
+          break;
+        }
+        case 'use': {
+          const v = rest[0];
+          if (!v) die('用法: loom version use <v1|v2|...>');
+          const switched = useVersion(loomRoot, v);
+          console.log(`当前版本已切换为 ${switched}`);
+          break;
+        }
+        case 'diff': {
+          const v1 = rest[0];
+          const v2 = rest[1];
+          if (!v1 || !v2) die('用法: loom version diff <v1> <v2>');
+          output(diffVersions(loomRoot, v1, v2));
+          break;
+        }
+        default:
+          die(`未知子命令: version ${sub}\n用法: loom version [list|current|new|use <v>|diff <v1> <v2>]`);
+      }
+      break;
+    }
+
+    case 'doctor': {
+      const loomDir = findLoomDir();
+      const { issues, summary } = doctor(loomDir, getVerificationsDir(loomDir), getPhilosophyDir(loomDir));
+      if (summary.healthy) {
+        console.log('✓ 项目健康，未发现问题');
+      } else {
+        console.log(`发现 ${summary.total_issues} 个问题（fatal: ${summary.fatal}, high: ${summary.high}, medium: ${summary.medium}）`);
+        for (const issue of issues) {
+          const icon = issue.severity === 'fatal' ? '☠' : issue.severity === 'high' ? '⚠' : '·';
+          console.log(`  ${icon} [${issue.severity}] ${issue.type}: ${issue.msg}`);
+        }
+      }
+      break;
+    }
+
+    case 'context': {
+      const loomDir = findLoomDir();
+      output(contextSummary(loomDir, getVerificationsDir(loomDir), getPhilosophyDir(loomDir)));
+      break;
+    }
+
     case '--help':
     case '-h':
     case undefined:
@@ -218,13 +318,25 @@ try {
   loom init                     初始化项目（创建 .loom/v1/ 骨架 + 模板）
   loom activate <role>          输出角色激活提示词（weaver|visionary|architect|forge|keeper）
 
+  loom version list             列出所有版本（* 标记当前）
+  loom version current          显示当前版本
+  loom version new              创建 v{N+1} + 自动切换为当前
+  loom version use <v>          切换当前版本
+  loom version diff <v1> <v2>   对比两个版本的文件差异
+
   loom intent next              返回下一个可执行 Intent
   loom intent status            返回进度概览
   loom intent graph             输出 Mermaid 依赖图
   loom intent get <id>          返回某 Intent 完整信息
   loom intent narrative <id>    返回某 Intent 的意图叙事（解析 narrative_ref）
   loom intent validate          校验 Intent Map 结构
+  loom intent trace <id>        返回某 Intent 的完整追溯链（依赖+验证+哲学+叙事）
+  loom intent reverse-dep <id>  返回依赖某 Intent 的所有 Intent（变更影响评估）
+  loom intent reverse-ref <anchor>  返回引用某哲学锚点的所有 Intent
   loom intent update <id> --status <s>  更新 Intent 状态（Keeper 用）
+
+  loom doctor                   项目健康检查（一致性+孤儿引用+循环依赖+僵尸）
+  loom context                  上下文摘要（进度+下一步+待验证+风险）
 
   loom philosophy get <anchor>  按锚点加载哲学章节
   loom philosophy list          列出哲学文档文件
@@ -237,7 +349,7 @@ try {
   loom verify write --json <string>     从命令行字符串写入验证记录
 
 参数:
-  --loom-dir <path>  指定 .loom/v{N} 目录（默认自动探测最新版本）`);
+  --loom-dir <path>  指定 .loom/v{N} 目录（默认读 .loom/current 指针）`);
       break;
 
     default:
