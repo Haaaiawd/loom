@@ -756,7 +756,7 @@ console.log('\n测试 preview 命令');
 test('preview — 输出提示词', () => {
   const out = run('preview');
   assertContains(out, 'To Agent');
-  assertContains(out, '重新组织');
+  assertContains(out, 'PPT');
   assertContains(out, 'SVG');
   assertContains(out, '.loom/');
   assertContains(out, 'loom-preview.html');
