@@ -13,6 +13,7 @@ import { initProject } from '../src/init.js';
 import { activateRole } from '../src/activate.js';
 import { listVersions, readCurrentPointer, newVersion, useVersion, diffVersions } from '../src/version.js';
 import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../src/diagnostics.js';
+import { getHelpTopic, listHelpTopics } from '../src/help.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // LOOM 项目目录结构: .loom/v{N}/
@@ -309,6 +310,26 @@ try {
       break;
     }
 
+    case 'help': {
+      // sub 是 topic（loom help workflow → sub='workflow'）
+      // 过滤掉 --help/-h 这种被路由进来的情况
+      const topic = (sub && !sub.startsWith('-')) ? sub : null;
+      if (!topic) {
+        console.log('LOOM 指南 topics:');
+        for (const t of listHelpTopics()) {
+          console.log(`  loom help ${t}`);
+        }
+        console.log('\n运行 loom --help 查看所有命令。');
+      } else {
+        const content = getHelpTopic(topic);
+        if (!content) {
+          die(`未知 topic: ${topic}\n可用 topics: ${listHelpTopics().join(', ')}`);
+        }
+        console.log(content);
+      }
+      break;
+    }
+
     case '--help':
     case '-h':
     case undefined:
@@ -337,6 +358,7 @@ try {
 
   loom doctor                   项目健康检查（一致性+孤儿引用+循环依赖+僵尸）
   loom context                  上下文摘要（进度+下一步+待验证+风险）
+  loom help <topic>             分层指南（workflow|concepts|loop|version|doctor）
 
   loom philosophy get <anchor>  按锚点加载哲学章节
   loom philosophy list          列出哲学文档文件

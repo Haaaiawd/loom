@@ -101,5 +101,25 @@ export function initProject(projectDir) {
   } else {
     result.skipped.push('.loom/current');
   }
+  // 生成极简 AGENTS.md（项目级锚点，让 agent 发现 LOOM）
+  const agentsMdPath = join(cwd, 'AGENTS.md');
+  if (!existsSync(agentsMdPath)) {
+    writeFileSync(agentsMdPath, [
+      '# AGENTS.md',
+      '',
+      '本项目使用 LOOM 框架（哲学驱动开发）。',
+      '',
+      '快速上手：',
+      '- `loom --help` — 查看所有命令',
+      '- `loom help workflow` — 工作流指南',
+      '- `loom help concepts` — 核心概念',
+      '- `loom context` — 当前项目状态',
+      '- `loom doctor` — 项目健康检查',
+      '',
+    ].join('\n'), 'utf-8');
+    result.created.push('AGENTS.md');
+  } else {
+    result.skipped.push('AGENTS.md');
+  }
   return result;
 }

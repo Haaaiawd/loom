@@ -404,6 +404,9 @@ test('init — 初始化项目目录', () => {
   assert(existsSync(join(initRoot, '.loom', 'v1', '00_PHILOSOPHY')), '哲学目录未创建');
   assert(existsSync(join(initRoot, '.loom', 'v1', '04_INTENT_MAP.json')), 'Intent Map 模板未复制');
   assert(existsSync(join(initRoot, '.loom', 'v1', '01_VISION.md')), '愿景模板未复制');
+  assert(existsSync(join(initRoot, '.loom', 'current')), 'current 指针未创建');
+  assert(existsSync(join(initRoot, 'AGENTS.md')), 'AGENTS.md 未创建');
+  assertContains(readFileSync(join(initRoot, 'AGENTS.md'), 'utf-8'), 'LOOM');
   rmSync(initRoot, { recursive: true, force: true });
 });
 
@@ -604,6 +607,67 @@ test('intent reverse-dep — 不存在的 Intent 返回空数组', () => {
   const out = run('intent reverse-dep INT-999');
   const data = JSON.parse(out);
   assert(Array.isArray(data) && data.length === 0, `应返回空数组，实际: ${out}`);
+});
+
+console.log('\n测试 help 命令');
+
+test('help — 无参数列出所有 topic', () => {
+  const out = run('help');
+  assertContains(out, 'workflow');
+  assertContains(out, 'concepts');
+  assertContains(out, 'loop');
+  assertContains(out, 'version');
+  assertContains(out, 'doctor');
+});
+
+test('help workflow — 输出工作流指南', () => {
+  const out = run('help workflow');
+  assertContains(out, 'Weaver');
+  assertContains(out, 'Visionary');
+  assertContains(out, 'Architect');
+  assertContains(out, 'Intent Loop');
+});
+
+test('help concepts — 输出核心概念', () => {
+  const out = run('help concepts');
+  assertContains(out, '哲学');
+  assertContains(out, 'Intent');
+  assertContains(out, 'Keeper');
+  assertContains(out, '底线');
+});
+
+test('help loop — 输出 Loop 详细流程', () => {
+  const out = run('help loop');
+  assertContains(out, 'Step 1');
+  assertContains(out, 'Keeper');
+  assertContains(out, 'Forge');
+  assertContains(out, 'passed');
+  assertContains(out, 'deviated');
+});
+
+test('help version — 输出版本演进指南', () => {
+  const out = run('help version');
+  assertContains(out, 'Major');
+  assertContains(out, 'Minor');
+  assertContains(out, 'version new');
+  assertContains(out, 'version diff');
+});
+
+test('help doctor — 输出诊断指南', () => {
+  const out = run('help doctor');
+  assertContains(out, 'doctor');
+  assertContains(out, 'context');
+  assertContains(out, '崩溃恢复');
+  assertContains(out, 'trace');
+});
+
+test('help — 未知 topic 报错', () => {
+  try {
+    run('help nonexistent');
+    throw new Error('应该报错但没有');
+  } catch (e) {
+    assertContains(e.stderr || e.message, '未知 topic');
+  }
 });
 
 // ─── 清理 ──────────────────────────────────────────────
