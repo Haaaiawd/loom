@@ -1,0 +1,55 @@
+{
+  "_meta": {
+    "_description": "MiniTodo Intent Map — 意图依赖图",
+    "_version": "1.0",
+    "_loom_version": "v1",
+    "_generated_by": "architect",
+    "_generated_at": "2026-06-26T22:00:00Z"
+  },
+  "intents": {
+    "INT-001": {
+      "id": "INT-001",
+      "narrative_ref": "01_VISION.md#int-001-user-authentication",
+      "depends_on": [],
+      "acceptance": "用户可以通过用户名+密码注册新账户；注册后可以通过用户名+密码登录；登录状态在会话内持久化；登录后用户只能看到自己的待办项；错误的凭证产生明确的错误提示",
+      "philosophy_anchors": [
+        "PRODUCT_PHILOSOPHY.md#non-negotiable-values",
+        "ENGINEERING_CREED.md#anti-patterns"
+      ],
+      "status": "completed"
+    },
+    "INT-002": {
+      "id": "INT-002",
+      "narrative_ref": "01_VISION.md#int-002-create-todo",
+      "depends_on": [
+        "INT-001"
+      ],
+      "acceptance": "see 05_VERIFICATION.md#int-002",
+      "philosophy_anchors": [
+        "PRODUCT_PHILOSOPHY.md#core-belief",
+        "PRODUCT_PHILOSOPHY.md#non-negotiable-values",
+        "ENGINEERING_CREED.md#anti-patterns"
+      ],
+      "status": "completed"
+    },
+    "INT-003": {
+      "id": "INT-003",
+      "narrative_ref": "01_VISION.md#int-003-list-display",
+      "depends_on": [
+        "INT-001"
+      ],
+      "acceptance": "see 05_VERIFICATION.md#int-003",
+      "philosophy_anchors": [
+        "PRODUCT_PHILOSOPHY.md#non-negotiable-values",
+        "PRODUCT_PHILOSOPHY.md#anti-patterns",
+        "DECISION_RUBRIC.md#conflict-resolution-rules"
+      ],
+      "status": "completed"
+    }
+  },
+  "topo_order": [
+    "INT-001",
+    "INT-002",
+    "INT-003"
+  ]
+}
