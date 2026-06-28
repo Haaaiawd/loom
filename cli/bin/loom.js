@@ -182,7 +182,12 @@ try {
       // weaver 不需要 loomDir（项目还没初始化时也能激活）
       let loomDir = null;
       if (role !== 'weaver') {
-        try { loomDir = findLoomDir(); } catch { /* 项目还没初始化，weaver 之外的角色会缺少项目上下文 */ }
+        try {
+          loomDir = findLoomDir();
+        } catch (e) {
+          // 只吞"找不到 .loom 目录"——其他错误（权限、磁盘）向上抛
+          if (!String(e.message).includes('找不到 .loom')) throw e;
+        }
       }
       const prompt = activateRole(role, loomDir);
       output(prompt);
@@ -237,9 +242,17 @@ try {
           const jsonFlagIdx = argv.indexOf('--json');
           let record;
           if (fileFlagIdx !== -1 && argv[fileFlagIdx + 1]) {
-            record = JSON.parse(readFileSync(argv[fileFlagIdx + 1], 'utf-8'));
+            try {
+              record = JSON.parse(readFileSync(argv[fileFlagIdx + 1], 'utf-8'));
+            } catch (e) {
+              die(`JSON 文件解析失败: ${argv[fileFlagIdx + 1]}\n原因: ${e.message}`);
+            }
           } else if (jsonFlagIdx !== -1 && argv[jsonFlagIdx + 1]) {
-            record = JSON.parse(argv[jsonFlagIdx + 1]);
+            try {
+              record = JSON.parse(argv[jsonFlagIdx + 1]);
+            } catch (e) {
+              die(`JSON 字符串解析失败: ${e.message}`);
+            }
           } else {
             die('用法: loom verify write --json-file <path> | --json <json-string>');
           }

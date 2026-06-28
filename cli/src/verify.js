@@ -3,6 +3,7 @@
 
 import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { extractMdSection, readJsonFile } from './shared/md-utils.js';
 
 /** 合法判定结果 */
 const VALID_VERDICTS = ['passed', 'deviated', 'blocked', 'pending_human'];
@@ -54,6 +55,16 @@ export function writeVerification(verificationsDir, record) {
         }
         if (!v.evidence || typeof v.evidence !== 'string' || v.evidence.trim() === '') {
           errors.push(`dimensions.${dim}.evidence 缺失——必须给出具体证据，不能只写"合规"`);
+        } else {
+          // evidence 质量校验：长度 + 废话检测
+          const ev = v.evidence.trim();
+          if (ev.length < 10) {
+            errors.push(`dimensions.${dim}.evidence 太短（${ev.length}字符 < 10）——必须给出具体证据，不能只写"合规"`);
+          }
+          const NONSENSE = ['合规', '通过', 'OK', 'ok', '没问题', '符合要求', '已检查', 'pass', 'passed', 'done'];
+          if (NONSENSE.includes(ev)) {
+            errors.push(`dimensions.${dim}.evidence "${ev}" 是通用评价而非具体证据——必须写"对照了什么 + 在代码哪里看到/没看到"`);
+          }
         }
       }
     }
@@ -67,7 +78,7 @@ export function writeVerification(verificationsDir, record) {
   // 读取已有记录（如果有）
   let data;
   if (existsSync(filePath)) {
-    data = JSON.parse(readFileSync(filePath, 'utf-8'));
+    data = readJsonFile(filePath, '验证记录');
     // 结构校验：已有文件必须是 { intent_id, records: [] } 格式
     if (!data || typeof data !== 'object' || !Array.isArray(data.records)) {
       throw new Error(
@@ -116,8 +127,7 @@ export function getVerificationHistory(verificationsDir, intentId) {
   if (!existsSync(filePath)) {
     return null;
   }
-  const raw = readFileSync(filePath, 'utf-8');
-  return JSON.parse(raw);
+  return readJsonFile(filePath, '验证记录');
 }
 
 /**
@@ -125,9 +135,7 @@ export function getVerificationHistory(verificationsDir, intentId) {
  * 需要传入 Intent Map 来判断哪些 Intent 是 in_progress。
  */
 export function getPendingVerifications(loomDir, verificationsDir) {
-  const intentMap = JSON.parse(
-    readFileSync(join(loomDir, '04_INTENT_MAP.json'), 'utf-8')
-  );
+  const intentMap = readJsonFile(join(loomDir, '04_INTENT_MAP.json'), 'Intent Map');
   const pending = [];
   for (const [id, intent] of Object.entries(intentMap.intents)) {
     if (intent.status === 'in_progress') {
@@ -160,7 +168,7 @@ export function listVerifications(verificationsDir) {
  * @returns {string} 验收契约内容
  */
 export function getVerificationContract(loomDir, intentId) {
-  const intentMap = JSON.parse(readFileSync(join(loomDir, '04_INTENT_MAP.json'), 'utf-8'));
+  const intentMap = readJsonFile(join(loomDir, '04_INTENT_MAP.json'), 'Intent Map');
   if (!(intentId in intentMap.intents)) {
     throw new Error(`Intent 不存在: ${intentId}`);
   }
@@ -175,67 +183,9 @@ export function getVerificationContract(loomDir, intentId) {
       throw new Error(`验证契约引用的文件不存在: ${filePath}`);
     }
     const content = readFileSync(filePath, 'utf-8');
-    return extractMdSection(content, section);
+    return extractMdSection(content, section, '验证契约');
   }
 
   // 内联定义，直接返回
   return acceptance;
-}
-
-/**
- * 从 heading 文本中提取显式锚点。
- * 支持 Pandoc/MDX 风格语法: "## INT-003 {#int-003}"
- */
-function extractExplicitAnchor(headingText) {
-  const match = headingText.match(/\{#([\w-]+)\}\s*$/);
-  return match ? match[1] : null;
-}
-
-/**
- * slugify — 和 philosophy.js 保持一致的逻辑。
- */
-function slugify(text) {
-  return text
-    .replace(/\r/g, '')
-    .replace(/\{#[\w-]+\}\s*$/, '')
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .trim();
-}
-
-/**
- * 从 MD 内容中按 heading slug 提取章节。
- * 支持显式锚点 {#slug} 和自动 slugify。
- */
-function extractMdSection(content, sectionSlug) {
-  const lines = content.split('\n');
-  let capturing = false;
-  let targetLevel = 0;
-  const captured = [];
-
-  for (const line of lines) {
-    const cleanLine = line.replace(/\r$/, '');
-    const headingMatch = cleanLine.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const headingText = headingMatch[2];
-      const slug = extractExplicitAnchor(headingText) || slugify(headingText);
-      if (capturing && level <= targetLevel) break;
-      if (slug === sectionSlug) {
-        capturing = true;
-        targetLevel = level;
-        captured.push(cleanLine);
-        continue;
-      }
-    }
-    if (capturing) captured.push(cleanLine);
-  }
-
-  if (captured.length === 0) {
-    throw new Error(`验证契约章节未找到: #${sectionSlug}`);
-  }
-  return captured.join('\n').trim();
 }

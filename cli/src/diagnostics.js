@@ -226,11 +226,15 @@ export function traceIntent(loomDir, verificationsDir, philosophyDir, intentId) 
 
   // 意图叙事
   let narrative = null;
-  try { narrative = getNarrative(loomDir, intentId); } catch { /* narrative_ref 可能缺失 */ }
+  let narrativeError = null;
+  try { narrative = getNarrative(loomDir, intentId); }
+  catch (e) { narrativeError = e.message; /* narrative_ref 可能缺失或解析失败 */ }
 
   // 验收契约
   let acceptance = null;
-  try { acceptance = getVerificationContract(loomDir, intentId); } catch { /* 可能缺失 */ }
+  let acceptanceError = null;
+  try { acceptance = getVerificationContract(loomDir, intentId); }
+  catch (e) { acceptanceError = e.message; /* 引用可能缺失或解析失败 */ }
 
   // 验证历史
   const verificationHistory = getVerificationHistory(verificationsDir, intentId);
@@ -263,7 +267,9 @@ export function traceIntent(loomDir, verificationsDir, philosophyDir, intentId) 
   return {
     intent,
     narrative,
+    narrative_error: narrativeError,
     acceptance,
+    acceptance_error: acceptanceError,
     verification_history: verificationHistory,
     philosophy_anchors_content: philosophyContent,
     dependency_chain: dependencyChain,

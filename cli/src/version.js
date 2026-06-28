@@ -122,7 +122,7 @@ function listFilesRelative(dir, base = '') {
   if (!existsSync(dir)) return result;
   for (const entry of readdirSync(dir)) {
     const full = join(dir, entry);
-    const rel = base ? `${base}/${entry}` : entry;
+    const rel = base ? join(base, entry) : entry;
     if (statSync(full).isDirectory()) {
       result.push(...listFilesRelative(full, rel));
     } else {

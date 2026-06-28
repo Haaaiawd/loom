@@ -28,7 +28,7 @@ function setup() {
         title: '用户注册与登录',
         narrative_ref: '01_VISION.md#int-001',
         depends_on: [],
-        acceptance: '用户能注册并登录',
+        acceptance: '功能承诺：用户能用邮箱注册并登录，返回 session token。防御承诺：密码不明文存储，登录失败不泄露用户是否存在。',
         philosophy_anchors: ['PRODUCT_PHILOSOPHY.md#core-belief'],
         status: 'completed',
       },
@@ -37,7 +37,7 @@ function setup() {
         title: '项目创建',
         narrative_ref: '01_VISION.md#int-002',
         depends_on: ['INT-001'],
-        acceptance: '用户能创建项目',
+        acceptance: '功能承诺：用户能创建项目并设置名称。防御承诺：项目名不硬编码，空名称被拒绝。',
         philosophy_anchors: ['ENGINEERING_CREED.md#simplicity'],
         status: 'in_progress',
       },
@@ -46,7 +46,7 @@ function setup() {
         title: '协作者邀请',
         narrative_ref: '01_VISION.md#int-003',
         depends_on: ['INT-001', 'INT-002'],
-        acceptance: '用户能邀请协作者',
+        acceptance: '功能承诺：项目所有者能邀请其他用户协作。防御承诺：不能邀请自己，不能重复邀请已协作成员。',
         philosophy_anchors: ['PRODUCT_PHILOSOPHY.md#collaboration'],
         status: 'pending',
       },
@@ -323,10 +323,10 @@ test('verify write — 写入验证记录（追加模式）', () => {
     summary: '实现忠实于意图',
     reproduction_command: 'npm test',
     dimensions: {
-      intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事，实现忠实' },
-      philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照合规' },
-      baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 合规' },
-      acceptance_achievement: { verdict: 'passed', evidence: '契约全部达成' },
+      intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事第 2 段，实现忠实于原始意图' },
+      philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2/AP3 均未违反' },
+      baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 逐条合规，无硬编码无隐式契约' },
+      acceptance_achievement: { verdict: 'passed', evidence: '6 条契约全部达成，npm test 6/6 pass' },
     },
   };
   const tmpFile = join(LOOM_DIR, '_tmp_verify.json');
@@ -347,10 +347,10 @@ test('verify write — deviated 轮次追踪和升级提示', () => {
       timestamp: `2026-06-26T12:0${i}:00Z`,
       summary: `第 ${i} 轮偏离`,
       dimensions: {
-        intent_fidelity: { verdict: 'deviated', evidence: '偏离意图叙事第 2 段' },
-        philosophy_consistency: { verdict: 'passed', evidence: '反模式对照合规' },
-        baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 合规' },
-        acceptance_achievement: { verdict: 'deviated', evidence: '契约#3 未达成' },
+        intent_fidelity: { verdict: 'deviated', evidence: '偏离意图叙事第 2 段，实现多了个副作用' },
+        philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2 均未违反' },
+        baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 逐条合规，无硬编码无隐式契约' },
+        acceptance_achievement: { verdict: 'deviated', evidence: '契约#3 未达成，缺少错误边界处理' },
       },
       deviation_detail: '偏离了原始意图',
     };
@@ -375,10 +375,10 @@ test('verify write — pending_human verdict（L3 人类反馈）', () => {
     timestamp: '2026-06-26T14:00:00Z',
     summary: '静态维度通过，体验维度需人类验证',
     dimensions: {
-      intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事合规' },
-      philosophy_consistency: { verdict: 'passed', evidence: '反模式对照合规' },
-      baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 合规' },
-      acceptance_achievement: { verdict: 'pending_human', evidence: '体验维度需人类验证' },
+      intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事第 2 段，实现忠实于原始意图' },
+      philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2/AP3 均未违反' },
+      baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 逐条合规，无硬编码无隐式契约' },
+      acceptance_achievement: { verdict: 'pending_human', evidence: '体验维度需人类验证，自动化测试无法覆盖' },
     },
   };
   const tmpFile = join(LOOM_DIR, '_tmp_verify_ph.json');
@@ -511,17 +511,19 @@ test('intent validate — 检测 completed 依赖 blocked 的不一致', () => {
       intents: {
         'INT-001': {
           id: 'INT-001',
+          title: '用户注册与登录',
           narrative_ref: '01_VISION.md#int-001',
           depends_on: [],
-          acceptance: '用户能注册并登录',
+          acceptance: '功能承诺：用户能注册并登录。防御承诺：密码不明文存储。',
           philosophy_anchors: ['PRODUCT_PHILOSOPHY.md#core-belief'],
           status: 'blocked',
         },
         'INT-002': {
           id: 'INT-002',
+          title: '项目创建',
           narrative_ref: '01_VISION.md#int-002',
           depends_on: ['INT-001'],
-          acceptance: '用户能创建项目',
+          acceptance: '功能承诺：用户能创建项目。防御承诺：项目名不硬编码。',
           philosophy_anchors: ['ENGINEERING_CREED.md#simplicity'],
           status: 'completed',
         },
@@ -556,6 +558,90 @@ test('philosophy get 不存在的文件 — 报错', () => {
     throw new Error('应该报错但没有');
   } catch (e) {
     assertContains(e.stderr || e.message, '不存在');
+  }
+});
+
+test('intent map JSON 损坏 — 报错含文件路径和解析失败', () => {
+  const intentMapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const original = readFileSync(intentMapPath, 'utf-8');
+  try {
+    writeFileSync(intentMapPath, '{ "intents": broken json }', 'utf-8');
+    run('intent next');
+    throw new Error('应该报错但没有');
+  } catch (e) {
+    const msg = e.stderr || e.message;
+    assertContains(msg, 'JSON 解析失败');
+  } finally {
+    writeFileSync(intentMapPath, original, 'utf-8');
+  }
+});
+
+test('verify write evidence 废话被拒绝（"合规"）', () => {
+  const record = {
+    intent_id: 'INT-002',
+    verdict: 'passed',
+    timestamp: '2026-06-26T12:00:00Z',
+    summary: '废话测试',
+    dimensions: {
+      intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事第 2 段，实现忠实于原始意图' },
+      philosophy_consistency: { verdict: 'passed', evidence: '合规' },
+      baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 逐条合规，无硬编码无隐式契约' },
+      acceptance_achievement: { verdict: 'passed', evidence: '6 条契约全部达成，npm test 6/6 pass' },
+    },
+  };
+  const tmpFile = join(LOOM_DIR, '_tmp_verify_nonsense.json');
+  writeFileSync(tmpFile, JSON.stringify(record));
+  try {
+    const out = run(`verify write --json-file "${tmpFile}"`, true);
+    assertContains(out, '通用评价');
+  } finally {
+    rmSync(tmpFile, { force: true });
+  }
+});
+
+test('verify write evidence 太短被拒绝（<10字符）', () => {
+  const record = {
+    intent_id: 'INT-002',
+    verdict: 'passed',
+    timestamp: '2026-06-26T12:00:00Z',
+    summary: '太短测试',
+    dimensions: {
+      intent_fidelity: { verdict: 'passed', evidence: 'OK' },
+      philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2/AP3 均未违反' },
+      baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 逐条合规，无硬编码无隐式契约' },
+      acceptance_achievement: { verdict: 'passed', evidence: '6 条契约全部达成，npm test 6/6 pass' },
+    },
+  };
+  const tmpFile = join(LOOM_DIR, '_tmp_verify_short.json');
+  writeFileSync(tmpFile, JSON.stringify(record));
+  try {
+    const out = run(`verify write --json-file "${tmpFile}"`, true);
+    assertContains(out, '太短');
+  } finally {
+    rmSync(tmpFile, { force: true });
+  }
+});
+
+test('philosophy get 中文标题无显式锚点 — 报错含提示', () => {
+  // 构造一个中文标题无显式锚点的临时哲学文件
+  const tmpFile = join(PHILOSOPHY_DIR, '_TMP_NO_ANCHOR.md');
+  writeFileSync(tmpFile, [
+    '# 临时哲学',
+    '',
+    '## 核心信念',
+    '',
+    '这是中文标题但没有显式锚点。',
+    '',
+  ].join('\n'), 'utf-8');
+  try {
+    run('philosophy get _TMP_NO_ANCHOR.md#core-belief');
+    throw new Error('应该报错但没有');
+  } catch (e) {
+    const msg = e.stderr || e.message;
+    // slugify 中文标题返回空，匹配不上 #core-belief，应该报"章节未找到"
+    assertContains(msg, '章节未找到');
+  } finally {
+    rmSync(tmpFile, { force: true });
   }
 });
 

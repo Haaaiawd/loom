@@ -3,61 +3,7 @@
 
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
-
-/**
- * 从 heading 文本中提取显式锚点（和 philosophy.js 一致的逻辑）。
- */
-function extractExplicitAnchor(headingText) {
-  const match = headingText.match(/\{#([\w-]+)\}\s*$/);
-  return match ? match[1] : null;
-}
-
-/**
- * slugify — strip \r、支持显式锚点、ASCII fallback。
- */
-function slugify(text) {
-  return text
-    .replace(/\r/g, '')
-    .replace(/\{#[\w-]+\}\s*$/, '')
-    .toLowerCase()
-    .replace(/[^\w\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .trim();
-}
-
-/**
- * 从 MD 内容中提取指定 section（和 philosophy.js 一致的逻辑）。
- */
-function extractMdSection(content, sectionSlug) {
-  if (!sectionSlug) return content;
-  const lines = content.split('\n');
-  let capturing = false;
-  let targetLevel = 0;
-  const captured = [];
-  for (const line of lines) {
-    const cleanLine = line.replace(/\r$/, '');
-    const headingMatch = cleanLine.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const headingText = headingMatch[2];
-      const slug = extractExplicitAnchor(headingText) || slugify(headingText);
-      if (capturing && level <= targetLevel) break;
-      if (slug === sectionSlug) {
-        capturing = true;
-        targetLevel = level;
-        captured.push(cleanLine);
-        continue;
-      }
-    }
-    if (capturing) captured.push(cleanLine);
-  }
-  if (captured.length === 0) {
-    throw new Error(`意图叙事章节未找到: #${sectionSlug}`);
-  }
-  return captured.join('\n').trim();
-}
+import { extractMdSection, readJsonFile } from './shared/md-utils.js';
 
 /** 必填字段（INTENT_LOOP.md 底线） */
 const REQUIRED_FIELDS = ['id', 'title', 'narrative_ref', 'depends_on', 'acceptance', 'philosophy_anchors', 'status'];
@@ -72,16 +18,7 @@ const VALID_STATUS = ['pending', 'in_progress', 'completed', 'blocked', 'needs_r
  */
 export function loadIntentMap(loomDir) {
   const filePath = join(loomDir, '04_INTENT_MAP.json');
-  if (!existsSync(filePath)) {
-    throw new Error(`Intent Map 不存在: ${filePath}`);
-  }
-  const raw = readFileSync(filePath, 'utf-8');
-  let data;
-  try {
-    data = JSON.parse(raw);
-  } catch (e) {
-    throw new Error(`Intent Map JSON 解析失败: ${e.message}`);
-  }
+  const data = readJsonFile(filePath, 'Intent Map');
   validateIntentMap(data);
   return data;
 }
@@ -124,6 +61,16 @@ export function validateIntentMap(data) {
         if (depIntent && intent.status === 'completed' && depIntent.status === 'blocked') {
           errors.push(`intents["${id}"] 状态为 completed 但依赖 blocked 的 ${dep}`);
         }
+      }
+    }
+    // acceptance 质量底线（IM-2）：必须具体到可验证，不能是占位符
+    if (intent.acceptance && typeof intent.acceptance === 'string') {
+      const acc = intent.acceptance.trim();
+      if (acc === '...' || acc === '' || acc.length < 20) {
+        errors.push(
+          `intents["${id}"].acceptance 太短（${acc.length}字符）——必须是具体可验证的契约，不能是占位符。\n` +
+          `    acceptance 应包含功能承诺 + 防御承诺（见 INTENT_LOOP.md IM-2 "acceptance 承诺分层"）。`
+        );
       }
     }
   }
@@ -234,7 +181,7 @@ export function updateIntentStatus(loomDir, intentId, newStatus) {
   }
 
   const filePath = join(loomDir, '04_INTENT_MAP.json');
-  const data = JSON.parse(readFileSync(filePath, 'utf-8'));
+  const data = readJsonFile(filePath, 'Intent Map');
 
   if (!(intentId in data.intents)) {
     throw new Error(`Intent 不存在: ${intentId}`);
@@ -283,5 +230,5 @@ export function getNarrative(loomDir, intentId) {
     throw new Error(`愿景文档不存在: ${filePath}`);
   }
   const content = readFileSync(filePath, 'utf-8');
-  return extractMdSection(content, section ? section.trim() : null);
+  return extractMdSection(content, section ? section.trim() : null, '意图叙事');
 }
