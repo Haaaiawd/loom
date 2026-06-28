@@ -9,7 +9,7 @@ const TEST_ROOT = join(process.cwd(), 'test', '.tmp-loom-test');
 const LOOM_DIR = join(TEST_ROOT, '.loom', 'v1');
 const PHILOSOPHY_DIR = join(LOOM_DIR, '00_PHILOSOPHY');
 const VERIFICATIONS_DIR = join(LOOM_DIR, 'verifications');
-const CLI = join(process.cwd(), 'bin', 'loom.js');
+const CLI = join(process.cwd(), 'cli', 'bin', 'loom.js');
 
 let passed = 0;
 let failed = 0;

@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "_description": "Intent Map 起点骨架。由 Architect 产出。这是 JSON 结构定义——Architect 填充实际内容，可增减字段，但必须保留标注 [必须] 的字段。",
+    "_version": "1.0",
+    "_loom_version": "v{N}",
+    "_generated_by": "architect",
+    "_generated_at": "ISO 8601 时间戳",
+    "_template": true
+  },
+
+  "intents": {
+    "INT-001": {
+      "id": "INT-001",
+      "narrative_ref": "01_VISION.md#int-001",
+      "depends_on": [],
+      "acceptance": "[必须] 什么算忠实实现。这是 Keeper 验证的唯一真相源。可以内联定义，也可以引用 05_VERIFICATION.md 的章节（如 'see 05_VERIFICATION.md#int-001'），但引用时 Keeper 通过 CLI `verify contract <id>` 命令解析引用获取实际内容。",
+      "philosophy_anchors": ["PRODUCT_PHILOSOPHY.md#core-belief", "ENGINEERING_CREED.md#anti-patterns"],
+      "status": "pending",
+      "_optional": {
+        "estimated_effort": "2h-2d",
+        "priority": "high|medium|low",
+        "sprint": "S1",
+        "system_id": "引用 02_ARCHITECTURE.md 中的系统 ID",
+        "verification_method": "[可选] L2 运行时验证的验证方式。如 'run tests/perf/test-001.js' 或 'exec scripts/eval.py --intent INT-001'。未定义时 Keeper 默认用 L1 静态审查。L3 人类反馈时填 'human_review'。"
+      }
+    },
+    "INT-002": {
+      "id": "INT-002",
+      "narrative_ref": "01_VISION.md#int-002",
+      "depends_on": ["INT-001"],
+      "acceptance": "...",
+      "philosophy_anchors": ["..."],
+      "status": "pending"
+    }
+  },
+
+  "topo_order": ["INT-001", "INT-002"],
+
+  "_field_reference": {
+    "id": "[必须] 稳定标识，项目生命周期内不变",
+    "narrative_ref": "[必须] 指向愿景文档中意图叙事的章节锚点",
+    "depends_on": "[必须] 前置 Intent ID 列表。空数组表示无依赖。",
+    "acceptance": "[必须] 验收契约，Keeper 判定 passed/deviated/blocked 的唯一真相源。内联或引用 05_VERIFICATION.md。",
+    "philosophy_anchors": "[必须] 哲学文档引用列表。Forge 加载哲学的指引。",
+    "status": "[必须] pending | in_progress | completed | blocked",
+    "_optional.verification_method": "[可选] L2 运行时验证方式（如 'run tests/...'）或 L3 'human_review'。未定义时默认 L1 静态审查。",
+    "_optional": "[自由] Architect 可根据项目需要增加字段"
+  },
+
+  "_status_reference": {
+    "pending": "未开始。依赖满足后可被 Keeper 选中。",
+    "in_progress": "Forge 正在实现。",
+    "completed": "Keeper 验证通过，已闭合。",
+    "blocked": "无法推进。需要外部介入。",
+    "needs_review": "已完成但受变更回流影响，需要重新验证。由 Architect 在变更回流时标记。"
+  },
+
+  "_cli_interface": {
+    "_note": "CLI 工具读取此文件提供查询能力。Agent 通过 CLI 访问，不直接读文件。",
+    "intent_next": "返回 topo_order 中第一个 status=pending 且 depends_on 全部 completed 的 Intent",
+    "intent_status": "统计各状态数量",
+    "intent_graph": "输出依赖图（Mermaid 或 ASCII）",
+    "intent_get": "按 ID 返回完整 Intent 信息"
+  }
+}

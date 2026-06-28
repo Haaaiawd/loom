@@ -1,0 +1,41 @@
+{
+  "name": "@haaaiawd/loom",
+  "version": "0.1.0",
+  "description": "LOOM — 哲学驱动开发框架。Agent 通过 CLI 访问 Intent Map / 哲学 / 验证记录，不直接读文件",
+  "type": "module",
+  "bin": {
+    "loom": "./cli/bin/loom.js"
+  },
+  "files": [
+    "cli/bin",
+    "cli/src",
+    "meta",
+    "roles",
+    "templates",
+    "dimensions",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node cli/test/run-all.js"
+  },
+  "keywords": [
+    "loom",
+    "agent",
+    "ai",
+    "philosophy",
+    "intent-driven",
+    "framework",
+    "cli",
+    "specification-driven"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/haaaiawd/loom.git"
+  },
+  "homepage": "https://github.com/haaaiawd/loom#readme",
+  "author": "haaaiawd"
+}
