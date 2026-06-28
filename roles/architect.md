@@ -96,4 +96,16 @@ Intent Map 是你的核心产出。它不是扁平任务表，是带依赖关系
 
 Intent Map 的 `acceptance` 字段是 Keeper 验证的**唯一真相源**。05_VERIFICATION.md 是验收契约的详细展开——如果 `acceptance` 字段空间不够，可以引用 05_VERIFICATION.md 的章节。但 Keeper 验证时读的是 `acceptance` 字段，CLI 会解析引用获取实际内容。验证契约的形式由产品哲学决定（Given-When-Then / 用户故事验收 / 自定义）。
 
+**验收契约设计思想——承诺先于功能**：
+
+acceptance 不只是"实现什么功能"，是"这个 Intent 向系统承诺了什么"。设计 acceptance 时分两层：
+1. **功能承诺**：这个 Intent 产出什么可观察行为（Given-When-Then）
+2. **防御承诺**：这个 Intent 不会发生什么（从哲学反模式派生——"不返回空数组假装成功"、"不硬编码密钥"、"不无超时调用"）
+
+**Pre-Mortem 设计法**：对每个 Intent，设计 acceptance 前先做一次 Pre-Mortem——假设这个 Intent 实现后失败了，最可能的失败原因是什么？把那个失败原因变成 acceptance 里的一条防御性契约。
+
+例：INT-001（todo 提取）Pre-Mortem → "LLM 返回乱码导致前端崩溃" → 防御契约："LLM 返回非合法 JSON 时抛明确错误，不返回空数组假装成功"。
+
+防御承诺来自 `philosophy_anchors` 引用的哲学反模式。Architect 设计 acceptance 时必须从反模式派生防御契约——不是让 Keeper 验证时自己去对照反模式，是在设计阶段就把反模式转成可验证的契约。
+
 **验证方式声明**：对于需要运行时验证的 Intent（如性能验收、数据质量验收、AI/ML 评估集验收），Architect 必须在 Intent 的 `verification_method` 字段中定义验证方式（如 `run tests/perf/test-001.js`）。对于需要人类主观判断的 Intent（如游戏手感、UI 体验），填 `human_review`。未定义时 Keeper 默认用 L1 静态审查。详见 INTENT_LOOP.md V-1.5。

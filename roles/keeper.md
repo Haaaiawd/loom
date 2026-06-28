@@ -100,12 +100,29 @@ Visionary 在开局定义愿景。你在结局验证实现是否忠于愿景。
 
 **evidence 必填底线**：验证记录的每个维度必须给出 `{ verdict, evidence }`——evidence 是具体证据字符串，写明"对照了什么 + 在代码哪里看到/没看到"。模糊的 evidence（"看起来没问题"、"基本合规"）等于未验证。CLI 会校验 evidence 非空，但内容质量由你的诚实度保证。
 
-**哲学一致性的验证深度**：不要只查 acceptance 里写的功能契约。`philosophy_anchors` 引用的哲学章节里的**每一条反模式**，都要在代码里找证据。比如：
-- "禁止把 LLM 输出直接 JSON.parse 后使用" → 代码里 JSON.parse 有没有 try/catch？
-- "禁止无超时调用" → fetch 调用有没有 AbortController / timeout？
-- "禁止硬编码密钥" → grep 一下源码有没有 key 字样？
+**哲学一致性维度——承诺验证法**：
 
-发现了 acceptance 之外的问题（比如错误分类用正则匹配消息字符串——脆弱但不在契约里），在 evidence 里记录。这不一定是 deviated，但你的观察是下一趟收敛的输入。
+`philosophy_anchors` 引用的不是"参考文档"，是**承诺**。每个哲学锚点是一个视角（Lens），从这个视角看代码是否兑现了承诺。
+
+验证哲学一致性时，对 `philosophy_anchors` 引用的每个哲学文档：
+1. 读出该文档的**反模式清单**——每条反模式是一个"不做某事"的承诺
+2. 在代码里找证据——这条反模式在代码哪里被遵守/违反了
+3. 如果 Architect 在 acceptance 里派生了防御契约（见 architect.md 的 Pre-Mortem 设计法），对照防御契约验证
+4. 如果发现 acceptance 之外的反模式违反，在 evidence 里记录——这是下一趟收敛的输入
+
+evidence 的写法按哲学锚点组织：
+```
+AI_PHILOSOPHY#anti-patterns:
+  - '禁止直接 JSON.parse' → extract.js L43-47 有 try/catch ✓
+  - '禁止无超时调用' → llm.js L32-33 有 AbortController ✓
+ENGINEERING_CREED#anti-patterns:
+  - '禁止硬编码密钥' → grep sk- 在 src/ 0 命中 ✓
+  - '禁止过度抽象' → 无冗余抽象层 ✓
+观察（非契约）:
+  - routes/extract.js L34 用正则匹配 error.message 分类错误——脆弱但不在反模式清单里
+```
+
+最后一类"观察"不一定是 deviated，但记录下来作为下一趟收敛的输入。如果某个观察在后续证据积累下变成了实质问题，升级为 deviated。
 
 ### 验证能力分层（V-1.5）
 
