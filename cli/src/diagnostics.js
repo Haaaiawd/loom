@@ -13,13 +13,13 @@ import { getVerificationHistory, getPendingVerifications, getVerificationContrac
 
 /**
  * 项目健康检查。
- * @param {string} loomDir — 当前版本目录
+ * @param {string} versionDir — 当前版本目录
  * @param {string} verificationsDir — 验证记录目录
  * @param {string} philosophyDir — 哲学目录
  * @returns {{ issues: object[], summary: object }}
  */
-export function doctor(loomDir, verificationsDir, philosophyDir) {
-  const { intents, topo_order } = loadIntentMap(loomDir);
+export function doctor(versionDir, verificationsDir, philosophyDir) {
+  const { intents, topo_order } = loadIntentMap(versionDir);
   const issues = [];
 
   // 1. 状态一致性：in_progress/completed 但无验证记录
@@ -67,8 +67,8 @@ export function doctor(loomDir, verificationsDir, philosophyDir) {
   for (const [id, intent] of Object.entries(intents)) {
     if (intent.status !== 'in_progress' && intent.status !== 'blocked') continue;
     const recordPath = join(verificationsDir, `${id}.json`);
-    let lastActivity = existsSync(join(loomDir, '04_INTENT_MAP.json'))
-      ? statSync(join(loomDir, '04_INTENT_MAP.json')).mtimeMs
+    let lastActivity = existsSync(join(versionDir, '04_INTENT_MAP.json'))
+      ? statSync(join(versionDir, '04_INTENT_MAP.json')).mtimeMs
       : now;
     if (existsSync(recordPath)) {
       lastActivity = Math.max(lastActivity, statSync(recordPath).mtimeMs);
@@ -91,7 +91,7 @@ export function doctor(loomDir, verificationsDir, philosophyDir) {
   }
 
   // 7. 验证脚本可执行性：检查 verification_method 引用的脚本/目录是否存在
-  const projectDir = join(loomDir, '..', '..');
+  const projectDir = join(versionDir, '..', '..');
   for (const [id, intent] of Object.entries(intents)) {
     if (!intent.verification_method) continue;
     const vm = intent.verification_method;
@@ -177,16 +177,16 @@ function detectCycles(intents) {
 
 /**
  * 项目上下文摘要——Agent 重启后一条命令获取"我在哪"。
- * @param {string} loomDir
+ * @param {string} versionDir
  * @param {string} verificationsDir
  * @param {string} philosophyDir
  * @returns {object}
  */
-export function contextSummary(loomDir, verificationsDir, philosophyDir) {
-  const status = getStatus(loomDir);
-  const next = getNextIntent(loomDir);
-  const pending = getPendingVerifications(loomDir, verificationsDir);
-  const { issues } = doctor(loomDir, verificationsDir, philosophyDir);
+export function contextSummary(versionDir, verificationsDir, philosophyDir) {
+  const status = getStatus(versionDir);
+  const next = getNextIntent(versionDir);
+  const pending = getPendingVerifications(versionDir, verificationsDir);
+  const { issues } = doctor(versionDir, verificationsDir, philosophyDir);
 
   const risks = [];
   const fatalCount = issues.filter((i) => i.severity === 'fatal').length;
@@ -214,26 +214,26 @@ export function contextSummary(loomDir, verificationsDir, philosophyDir) {
 
 /**
  * 返回某个 Intent 的完整追溯链。
- * @param {string} loomDir
+ * @param {string} versionDir
  * @param {string} verificationsDir
  * @param {string} philosophyDir
  * @param {string} intentId
  * @returns {object}
  */
-export function traceIntent(loomDir, verificationsDir, philosophyDir, intentId) {
-  const intent = getIntent(loomDir, intentId);
+export function traceIntent(versionDir, verificationsDir, philosophyDir, intentId) {
+  const intent = getIntent(versionDir, intentId);
   if (!intent) throw new Error(`Intent 不存在: ${intentId}`);
 
   // 意图叙事
   let narrative = null;
   let narrativeError = null;
-  try { narrative = getNarrative(loomDir, intentId); }
+  try { narrative = getNarrative(versionDir, intentId); }
   catch (e) { narrativeError = e.message; /* narrative_ref 可能缺失或解析失败 */ }
 
   // 验收契约
   let acceptance = null;
   let acceptanceError = null;
-  try { acceptance = getVerificationContract(loomDir, intentId); }
+  try { acceptance = getVerificationContract(versionDir, intentId); }
   catch (e) { acceptanceError = e.message; /* 引用可能缺失或解析失败 */ }
 
   // 验证历史
@@ -252,7 +252,7 @@ export function traceIntent(loomDir, verificationsDir, philosophyDir, intentId) 
   }
 
   // 依赖链（递归向上）
-  const { intents } = loadIntentMap(loomDir);
+  const { intents } = loadIntentMap(versionDir);
   const dependencyChain = [];
   function walkDeps(id, depth) {
     const node = intents[id];
@@ -281,12 +281,12 @@ export function traceIntent(loomDir, verificationsDir, philosophyDir, intentId) 
 
 /**
  * 返回依赖指定 Intent 的所有 Intent。
- * @param {string} loomDir
+ * @param {string} versionDir
  * @param {string} intentId
  * @returns {string[]}
  */
-export function reverseDep(loomDir, intentId) {
-  const { intents } = loadIntentMap(loomDir);
+export function reverseDep(versionDir, intentId) {
+  const { intents } = loadIntentMap(versionDir);
   const result = [];
   for (const [id, intent] of Object.entries(intents)) {
     if (intent.depends_on?.includes(intentId)) {
@@ -301,12 +301,12 @@ export function reverseDep(loomDir, intentId) {
 
 /**
  * 返回引用指定哲学锚点的所有 Intent。
- * @param {string} loomDir
+ * @param {string} versionDir
  * @param {string} anchor — 如 "PRODUCT_PHILOSOPHY.md#core-belief"
  * @returns {string[]}
  */
-export function reverseRef(loomDir, anchor) {
-  const { intents } = loadIntentMap(loomDir);
+export function reverseRef(versionDir, anchor) {
+  const { intents } = loadIntentMap(versionDir);
   const result = [];
   for (const [id, intent] of Object.entries(intents)) {
     if (intent.philosophy_anchors?.includes(anchor)) {

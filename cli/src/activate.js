@@ -4,12 +4,9 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getLoomRoot } from './shared/paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function getLoomRoot() {
-  return resolve(__dirname, '..', '..');
-}
 
 /** 合法角色名 */
 const VALID_ROLES = ['weaver', 'visionary', 'architect', 'forge', 'keeper'];
@@ -26,10 +23,10 @@ const ROLE_FILES = {
 /**
  * 输出角色激活提示词。
  * @param {string} role — 角色名
- * @param {string} loomDir — .loom/v{N} 目录（可选，weaver 不需要）
+ * @param {string} versionDir — .loom/v{N} 目录（可选，weaver 不需要）
  * @returns {string} 激活提示词
  */
-export function activateRole(role, loomDir) {
+export function activateRole(role, versionDir) {
   if (!VALID_ROLES.includes(role)) {
     throw new Error(`未知角色: ${role}\n合法角色: ${VALID_ROLES.join(', ')}`);
   }
@@ -60,9 +57,9 @@ export function activateRole(role, loomDir) {
   parts.push('| B5 | 意图必须可回溯 | 每个实现单元有意图叙事（"为什么存在"），可被 Keeper 引用对照 |\n');
   parts.push('\n> 底线不可被哲学覆盖。如果织造的哲学与底线冲突，底线优先。\n');
 
-  // 3. 项目特定底线（如果有 loomDir）
-  if (loomDir) {
-    const projectBaseline = join(loomDir, '00_PHILOSOPHY/PROJECT_BASELINE.md');
+  // 3. 项目特定底线（如果有 versionDir）
+  if (versionDir) {
+    const projectBaseline = join(versionDir, '00_PHILOSOPHY/PROJECT_BASELINE.md');
     if (existsSync(projectBaseline)) {
       parts.push('\n---\n\n## 强制加载：项目特定底线\n\n' + readFileSync(projectBaseline, 'utf-8'));
     }

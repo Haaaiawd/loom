@@ -13,11 +13,11 @@ const VALID_STATUS = ['pending', 'in_progress', 'completed', 'blocked', 'needs_r
 
 /**
  * 加载 Intent Map 文件。
- * @param {string} loomDir — .loom/v{N}/ 目录的绝对路径
+ * @param {string} versionDir — .loom/v{N}/ 目录的绝对路径
  * @returns {{ _meta: object, intents: Record<string, object>, topo_order: string[] }}
  */
-export function loadIntentMap(loomDir) {
-  const filePath = join(loomDir, '04_INTENT_MAP.json');
+export function loadIntentMap(versionDir) {
+  const filePath = join(versionDir, '04_INTENT_MAP.json');
   const data = readJsonFile(filePath, 'Intent Map');
   validateIntentMap(data);
   return data;
@@ -95,8 +95,8 @@ export function validateIntentMap(data) {
  * status=pending 且 depends_on 全部 completed，按 topo_order 取第一个。
  * @returns {object|null} Intent 对象，或 null（没有可执行的）
  */
-export function getNextIntent(loomDir) {
-  const { intents, topo_order } = loadIntentMap(loomDir);
+export function getNextIntent(versionDir) {
+  const { intents, topo_order } = loadIntentMap(versionDir);
   for (const id of topo_order) {
     const intent = intents[id];
     if (intent.status !== 'pending') continue;
@@ -111,8 +111,8 @@ export function getNextIntent(loomDir) {
 /**
  * 返回进度概览：各状态的 Intent 数量 + ID 列表。
  */
-export function getStatus(loomDir) {
-  const { intents } = loadIntentMap(loomDir);
+export function getStatus(versionDir) {
+  const { intents } = loadIntentMap(versionDir);
   const summary = { pending: [], in_progress: [], completed: [], blocked: [] };
   const titles = {};
   for (const [id, intent] of Object.entries(intents)) {
@@ -136,8 +136,8 @@ export function getStatus(loomDir) {
 /**
  * 输出 Mermaid 依赖图。
  */
-export function getDependencyGraph(loomDir) {
-  const { intents, topo_order } = loadIntentMap(loomDir);
+export function getDependencyGraph(versionDir) {
+  const { intents, topo_order } = loadIntentMap(versionDir);
   const lines = ['```mermaid', 'graph TD'];
   for (const id of topo_order) {
     const intent = intents[id];
@@ -159,8 +159,8 @@ export function getDependencyGraph(loomDir) {
 /**
  * 按 ID 返回单个 Intent 的完整信息。
  */
-export function getIntent(loomDir, intentId) {
-  const { intents } = loadIntentMap(loomDir);
+export function getIntent(versionDir, intentId) {
+  const { intents } = loadIntentMap(versionDir);
   if (!(intentId in intents)) {
     throw new Error(`Intent 不存在: ${intentId}`);
   }
@@ -170,17 +170,17 @@ export function getIntent(loomDir, intentId) {
 /**
  * 更新 Intent 的运行时 status。
  * 只允许合法的状态转换，防止跳变（如 completed→pending）。
- * @param {string} loomDir — .loom/v{N}/ 目录
+ * @param {string} versionDir — .loom/v{N}/ 目录
  * @param {string} intentId — Intent ID
  * @param {string} newStatus — pending | in_progress | completed | blocked
  * @returns {object} 更新后的 Intent
  */
-export function updateIntentStatus(loomDir, intentId, newStatus) {
+export function updateIntentStatus(versionDir, intentId, newStatus) {
   if (!VALID_STATUS.includes(newStatus)) {
     throw new Error(`非法 status: "${newStatus}" (合法: ${VALID_STATUS.join('|')})`);
   }
 
-  const filePath = join(loomDir, '04_INTENT_MAP.json');
+  const filePath = join(versionDir, '04_INTENT_MAP.json');
   const data = readJsonFile(filePath, 'Intent Map');
 
   if (!(intentId in data.intents)) {
@@ -203,6 +203,13 @@ export function updateIntentStatus(loomDir, intentId, newStatus) {
     );
   }
 
+  // 收敛趟计数：completed → needs_review 时 _meta.pass_count++
+  // 这是变更回流的信号——一个已完成 Intent 需要重新验证，进入新一轮收敛
+  if (oldStatus === 'completed' && newStatus === 'needs_review') {
+    if (!data._meta) data._meta = {};
+    data._meta.pass_count = (data._meta.pass_count || 0) + 1;
+  }
+
   data.intents[intentId].status = newStatus;
   writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
   return data.intents[intentId];
@@ -213,8 +220,8 @@ export function updateIntentStatus(loomDir, intentId, newStatus) {
  * narrative_ref 格式: "01_VISION.md#int-001" 或 "01_VISION.md#int-001"
  * @returns {string} 意图叙事内容
  */
-export function getNarrative(loomDir, intentId) {
-  const { intents } = loadIntentMap(loomDir);
+export function getNarrative(versionDir, intentId) {
+  const { intents } = loadIntentMap(versionDir);
   if (!(intentId in intents)) {
     throw new Error(`Intent 不存在: ${intentId}`);
   }
@@ -225,7 +232,7 @@ export function getNarrative(loomDir, intentId) {
 
   // 解析 "FILE.md#section" 格式
   const [file, section] = ref.split('#');
-  const filePath = join(loomDir, file.trim());
+  const filePath = join(versionDir, file.trim());
   if (!existsSync(filePath)) {
     throw new Error(`愿景文档不存在: ${filePath}`);
   }

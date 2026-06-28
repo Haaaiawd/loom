@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { readCurrentPointer } from './version.js';
 import { loadIntentMap } from './intent-map.js';
-import { isAutoOn } from './auto.js';
+import { isAutoOn, writeHeartbeat, needsHumanReview } from './auto.js';
 
 /**
  * 检测文件是否还是模板（未填充真实内容）。
@@ -36,12 +36,42 @@ function isTemplate(filePath) {
 /**
  * 诊断项目当前阶段。
  * @param {string} projectDir — 项目根目录
- * @returns {{ stage: string, stage_num: number, details: object, auto: boolean, next_action: string, next_command: string, message: string }}
+ * @returns {{ stage: string, stage_num: number, details: object, auto: boolean, next_action: string, next_command: string, message: string, needs_human_review: boolean }}
  */
 export function guideProject(projectDir) {
   const cwd = projectDir || process.cwd();
   const loomRoot = join(cwd, '.loom');
   const auto = isAutoOn(loomRoot);
+  const result = diagnoseStage(cwd, loomRoot, auto);
+  // 统一后处理：写心跳 + 加 AUTO 提示词 + 判断是否需要人类 review
+  if (existsSync(loomRoot)) {
+    try {
+      writeHeartbeat(loomRoot, {
+        stage: result.stage,
+        stage_num: result.stage_num,
+        next_command: result.next_command,
+        next_action: result.next_action,
+      });
+    } catch { /* 心跳写入失败不阻塞 guide */ }
+  }
+  result.needs_human_review = needsHumanReview(loomRoot, result.stage_num);
+  // 在 message 末尾加 AUTO 提示
+  if (result.stage_num > 0 && result.stage_num < 4) {
+    result.message += auto
+      ? '\n\n> ⚠ 这是设计阶段（哲学/愿景/架构），即使 AUTO 模式开启也需要人类 review 后再继续。'
+      : '\n\n> ⚠ AUTO 模式关闭——每步都需要人类确认后再继续。';
+  } else if (result.stage_num >= 4 && !auto) {
+    result.message += '\n\n> ⚠ AUTO 模式关闭——执行 next_command 后等人类确认再继续。';
+  } else if (result.stage_num >= 4 && auto) {
+    result.message += '\n\n> AUTO 模式开启——直接执行 next_command，无需人类确认。';
+  }
+  return result;
+}
+
+/**
+ * 内部函数：诊断阶段（不含心跳和 AUTO 提示词）。
+ */
+function diagnoseStage(cwd, loomRoot, auto) {
 
   // 状态 0: 没有 .loom/
   if (!existsSync(loomRoot)) {
@@ -187,14 +217,30 @@ export function guideProject(projectDir) {
   // 状态 5.5: 有 needs_review（收敛趟）——已完成但需要重新验证的 Intent
   if (counts.needs_review > 0) {
     const reviewIds = allIntents.filter((i) => i.status === 'needs_review').map((i) => i.id);
+    // 读 _meta.pass_count 收敛趟计数（最大 3 趟）
+    const passCount = intents._meta?.pass_count || 1;
+    const MAX_PASSES = 3;
+    const isOverLimit = passCount > MAX_PASSES;
+    const passMsg = ` [Pass ${passCount}/${MAX_PASSES}]`;
+    if (isOverLimit) {
+      return {
+        stage: 'cannot_converge',
+        stage_num: 7,
+        details: { version: current, counts, needs_review_ids: reviewIds, pass_count: passCount },
+        auto,
+        next_action: '收敛失败——超过最大趟数，需 Architect 介入',
+        next_command: 'loom intent update ' + reviewIds[0] + ' --status blocked',
+        message: `当前版本 ${current}：收敛失败，已超过最大 ${MAX_PASSES} 趟限制（当前 Pass ${passCount}）。${counts.needs_review} 个 Intent 仍需重新验证（${reviewIds.join(', ')}）。这是系统性问题——需 Architect 介入重新设计。`,
+      };
+    }
     return {
       stage: 'converging',
       stage_num: 5.5,
-      details: { version: current, counts, needs_review_ids: reviewIds },
+      details: { version: current, counts, needs_review_ids: reviewIds, pass_count: passCount },
       auto,
-      next_action: '进入收敛趟——重验 needs_review 的 Intent',
+      next_action: `进入收敛趟 Pass ${passCount}——重验 needs_review 的 Intent`,
       next_command: 'loom intent update ' + reviewIds[0] + ' --status in_progress',
-      message: `当前版本 ${current}：${counts.needs_review} 个 Intent 需要重新验证（${reviewIds.join(', ')}）。这是不动点收敛的一趟——重验这些 Intent，通过则 completed，偏离则修正。一趟无新 needs_review 即收敛达成。`,
+      message: `当前版本 ${current}${passMsg}：${counts.needs_review} 个 Intent 需要重新验证（${reviewIds.join(', ')}）。这是不动点收敛的第 ${passCount} 趟——重验这些 Intent，通过则 completed，偏离则修正。一趟无新 needs_review 即收敛达成。最大 ${MAX_PASSES} 趟，超过判定为系统性问题。`,
     };
   }
 

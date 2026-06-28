@@ -134,8 +134,8 @@ export function getVerificationHistory(verificationsDir, intentId) {
  * 返回所有待验证的 Intent（有实现产物但还没验证记录的）。
  * 需要传入 Intent Map 来判断哪些 Intent 是 in_progress。
  */
-export function getPendingVerifications(loomDir, verificationsDir) {
-  const intentMap = readJsonFile(join(loomDir, '04_INTENT_MAP.json'), 'Intent Map');
+export function getPendingVerifications(versionDir, verificationsDir) {
+  const intentMap = readJsonFile(join(versionDir, '04_INTENT_MAP.json'), 'Intent Map');
   const pending = [];
   for (const [id, intent] of Object.entries(intentMap.intents)) {
     if (intent.status === 'in_progress') {
@@ -163,12 +163,12 @@ export function listVerifications(verificationsDir) {
  * 获取某 Intent 的验证契约（acceptance 字段的解析结果）。
  * 如果 acceptance 是内联定义，直接返回。
  * 如果是引用（如 "see 05_VERIFICATION.md#int-001"），解析引用并返回对应章节内容。
- * @param {string} loomDir — .loom/v{N}/ 目录
+ * @param {string} versionDir — .loom/v{N}/ 目录
  * @param {string} intentId — Intent ID
  * @returns {string} 验收契约内容
  */
-export function getVerificationContract(loomDir, intentId) {
-  const intentMap = readJsonFile(join(loomDir, '04_INTENT_MAP.json'), 'Intent Map');
+export function getVerificationContract(versionDir, intentId) {
+  const intentMap = readJsonFile(join(versionDir, '04_INTENT_MAP.json'), 'Intent Map');
   if (!(intentId in intentMap.intents)) {
     throw new Error(`Intent 不存在: ${intentId}`);
   }
@@ -178,7 +178,7 @@ export function getVerificationContract(loomDir, intentId) {
   const refMatch = acceptance.match(/(?:see\s+)?(\w+\.md)#([\w-]+)/i);
   if (refMatch) {
     const [, file, section] = refMatch;
-    const filePath = join(loomDir, file);
+    const filePath = join(versionDir, file);
     if (!existsSync(filePath)) {
       throw new Error(`验证契约引用的文件不存在: ${filePath}`);
     }

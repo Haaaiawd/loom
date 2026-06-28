@@ -4,16 +4,9 @@
 import { mkdirSync, existsSync, copyFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { getLoomRoot } from './shared/paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/**
- * 获取 LOOM 框架根目录（cli/src 的上上级）
- */
-function getLoomRoot() {
-  // cli/src/init.js -> cli/src -> cli -> LOOM root
-  return resolve(__dirname, '..', '..');
-}
 
 /**
  * 递归复制目录

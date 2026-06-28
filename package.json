@@ -1,6 +1,6 @@
 {
   "name": "@haaaiawd/loom",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "LOOM — 哲学驱动开发框架。Agent 通过 CLI 访问 Intent Map / 哲学 / 验证记录，不直接读文件",
   "type": "module",
   "bin": {
@@ -9,6 +9,7 @@
   "files": [
     "cli/bin",
     "cli/src",
+    "cli/help",
     "meta",
     "roles",
     "templates",

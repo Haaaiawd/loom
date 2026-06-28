@@ -6,6 +6,7 @@ import { argv, cwd, exit } from 'node:process';
 import { resolve, join, dirname } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { findLoomRoot, findVersionDir, readCurrentPointer } from '../src/shared/paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -14,7 +15,7 @@ import { getPhilosophy, listPhilosophyFiles } from '../src/philosophy.js';
 import { writeVerification, getVerificationHistory, getPendingVerifications, listVerifications, getVerificationContract } from '../src/verify.js';
 import { initProject } from '../src/init.js';
 import { activateRole } from '../src/activate.js';
-import { listVersions, readCurrentPointer, newVersion, useVersion, diffVersions } from '../src/version.js';
+import { listVersions, newVersion, useVersion, diffVersions } from '../src/version.js';
 import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../src/diagnostics.js';
 import { getHelpTopic, listHelpTopics } from '../src/help.js';
 import { guideProject } from '../src/guide.js';
@@ -22,42 +23,15 @@ import { isAutoOn, autoOn, autoOff, autoStatus } from '../src/auto.js';
 import { generatePreviewPrompt } from '../src/preview.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
-// LOOM 项目目录结构: .loom/v{N}/
-// 优先读 .loom/current 指针；不存在则回退到自动探测最新版本。
-// 也接受 --loom-dir 参数直接指定版本目录。
+// findLoomRoot / findVersionDir / readCurrentPointer 已提取到 shared/paths.js
+// 这里只保留目录辅助函数。
 
-function findLoomRoot() {
-  const flagIdx = argv.indexOf('--loom-dir');
-  if (flagIdx !== -1 && argv[flagIdx + 1]) {
-    // --loom-dir 直接指向版本目录，反推 .loom root
-    const dir = resolve(argv[flagIdx + 1]);
-    return resolve(dir, '..');
-  }
-  return join(cwd(), '.loom');
+function getPhilosophyDir(versionDir) {
+  return join(versionDir, '00_PHILOSOPHY');
 }
 
-function findLoomDir() {
-  const flagIdx = argv.indexOf('--loom-dir');
-  if (flagIdx !== -1 && argv[flagIdx + 1]) {
-    return resolve(argv[flagIdx + 1]);
-  }
-  const loomRoot = join(cwd(), '.loom');
-  if (!existsSync(loomRoot)) {
-    die(`找不到 .loom 目录: ${loomRoot}`);
-  }
-  const current = readCurrentPointer(loomRoot);
-  if (!current) {
-    die(`.loom 下没有版本目录 (v1, v2, ...)`);
-  }
-  return join(loomRoot, current);
-}
-
-function getPhilosophyDir(loomDir) {
-  return join(loomDir, '00_PHILOSOPHY');
-}
-
-function getVerificationsDir(loomDir) {
-  return join(loomDir, 'verifications');
+function getVerificationsDir(versionDir) {
+  return join(versionDir, 'verifications');
 }
 
 // ─── 输出工具 ──────────────────────────────────────────
@@ -91,13 +65,13 @@ try {
     }
 
     case 'intent': {
-      const loomDir = findLoomDir();
+      const versionDir = findVersionDir();
       switch (sub) {
         case 'next':
-          output(getNextIntent(loomDir) ?? '没有可执行的 Intent');
+          output(getNextIntent(versionDir) ?? '没有可执行的 Intent');
           break;
         case 'status': {
-          const s = getStatus(loomDir);
+          const s = getStatus(versionDir);
           const fmt = (ids) => ids.map((id) => s.titles[id] ? `${id}(${s.titles[id]})` : id).join(', ') || '-';
           console.log(`进度: ${s.counts.completed}/${s.counts.total} 完成`);
           console.log(`  pending:     ${s.counts.pending}    ${fmt(s.ids.pending)}`);
@@ -107,40 +81,40 @@ try {
           break;
         }
         case 'graph':
-          output(getDependencyGraph(loomDir));
+          output(getDependencyGraph(versionDir));
           break;
         case 'get': {
           const id = rest[0];
           if (!id) die('用法: loom intent get <id>');
-          output(getIntent(loomDir, id));
+          output(getIntent(versionDir, id));
           break;
         }
         case 'narrative': {
           const id = rest[0];
           if (!id) die('用法: loom intent narrative <id>');
-          output(getNarrative(loomDir, id));
+          output(getNarrative(versionDir, id));
           break;
         }
         case 'validate':
-          loadIntentMap(loomDir);
+          loadIntentMap(versionDir);
           console.log('Intent Map 校验通过');
           break;
         case 'trace': {
           const id = rest[0];
           if (!id) die('用法: loom intent trace <id>');
-          output(traceIntent(loomDir, getVerificationsDir(loomDir), getPhilosophyDir(loomDir), id));
+          output(traceIntent(versionDir, getVerificationsDir(versionDir), getPhilosophyDir(versionDir), id));
           break;
         }
         case 'reverse-dep': {
           const id = rest[0];
           if (!id) die('用法: loom intent reverse-dep <id>');
-          output(reverseDep(loomDir, id));
+          output(reverseDep(versionDir, id));
           break;
         }
         case 'reverse-ref': {
           const anchor = rest[0];
           if (!anchor) die('用法: loom intent reverse-ref <anchor>\n例: loom intent reverse-ref PRODUCT_PHILOSOPHY.md#core-belief');
-          output(reverseRef(loomDir, anchor));
+          output(reverseRef(versionDir, anchor));
           break;
         }
         case 'update': {
@@ -148,7 +122,7 @@ try {
           const statusFlagIdx = argv.indexOf('--status');
           const newStatus = statusFlagIdx !== -1 ? argv[statusFlagIdx + 1] : null;
           if (!id || !newStatus) die('用法: loom intent update <id> --status <pending|in_progress|completed|blocked|needs_review>');
-          updateIntentStatus(loomDir, id, newStatus);
+          updateIntentStatus(versionDir, id, newStatus);
           console.log(`${id} status 已更新为 ${newStatus}`);
           break;
         }
@@ -179,32 +153,32 @@ try {
     case 'activate': {
       const role = sub;
       if (!role) die('用法: loom activate <role>\n角色: weaver | visionary | architect | forge | keeper');
-      // weaver 不需要 loomDir（项目还没初始化时也能激活）
-      let loomDir = null;
+      // weaver 不需要 versionDir（项目还没初始化时也能激活）
+      let versionDir = null;
       if (role !== 'weaver') {
         try {
-          loomDir = findLoomDir();
+          versionDir = findVersionDir();
         } catch (e) {
           // 只吞"找不到 .loom 目录"——其他错误（权限、磁盘）向上抛
           if (!String(e.message).includes('找不到 .loom')) throw e;
         }
       }
-      const prompt = activateRole(role, loomDir);
+      const prompt = activateRole(role, versionDir);
       output(prompt);
       break;
     }
 
     case 'philosophy': {
-      const loomDir = findLoomDir();
+      const versionDir = findVersionDir();
       switch (sub) {
         case 'get': {
           const anchor = rest[0];
           if (!anchor) die('用法: loom philosophy get <anchor>\n例: loom philosophy get PRODUCT_PHILOSOPHY.md#core-belief');
-          output(getPhilosophy(getPhilosophyDir(loomDir), anchor));
+          output(getPhilosophy(getPhilosophyDir(versionDir), anchor));
           break;
         }
         case 'list':
-          output(listPhilosophyFiles(getPhilosophyDir(loomDir)));
+          output(listPhilosophyFiles(getPhilosophyDir(versionDir)));
           break;
         default:
           die(`未知子命令: philosophy ${sub}\n用法: loom philosophy [get <anchor>|list]`);
@@ -213,13 +187,13 @@ try {
     }
 
     case 'verify': {
-      const loomDir = findLoomDir();
-      const verificationsDir = getVerificationsDir(loomDir);
+      const versionDir = findVersionDir();
+      const verificationsDir = getVerificationsDir(versionDir);
       switch (sub) {
         case 'contract': {
           const id = rest[0];
           if (!id) die('用法: loom verify contract <id>');
-          output(getVerificationContract(loomDir, id));
+          output(getVerificationContract(versionDir, id));
           break;
         }
         case 'history': {
@@ -230,7 +204,7 @@ try {
           break;
         }
         case 'pending':
-          output(getPendingVerifications(loomDir, verificationsDir));
+          output(getPendingVerifications(versionDir, verificationsDir));
           break;
         case 'list':
           output(listVerifications(verificationsDir));
@@ -324,8 +298,8 @@ try {
     }
 
     case 'doctor': {
-      const loomDir = findLoomDir();
-      const { issues, summary } = doctor(loomDir, getVerificationsDir(loomDir), getPhilosophyDir(loomDir));
+      const versionDir = findVersionDir();
+      const { issues, summary } = doctor(versionDir, getVerificationsDir(versionDir), getPhilosophyDir(versionDir));
       if (summary.healthy) {
         console.log('✓ 项目健康，未发现问题');
       } else {
@@ -339,8 +313,8 @@ try {
     }
 
     case 'context': {
-      const loomDir = findLoomDir();
-      output(contextSummary(loomDir, getVerificationsDir(loomDir), getPhilosophyDir(loomDir)));
+      const versionDir = findVersionDir();
+      output(contextSummary(versionDir, getVerificationsDir(versionDir), getPhilosophyDir(versionDir)));
       break;
     }
 
@@ -400,8 +374,18 @@ try {
           const status = autoStatus(loomRoot);
           if (status.on) {
             console.log(`AUTO 模式: 开启（自 ${status.since}）`);
+            console.log('  规则: stage 1-3（哲学/愿景/架构）需人类 review，stage 4+（Intent Loop）自动执行');
+            if (status.heartbeat) {
+              const hb = status.heartbeat;
+              console.log(`  心跳: ${hb.timestamp}`);
+              console.log(`    阶段: ${hb.stage} (stage ${hb.stage_num})`);
+              console.log(`    下一步: ${hb.next_action}`);
+              console.log(`    命令: ${hb.next_command}`);
+            } else {
+              console.log('  心跳: 尚未记录（运行 loom guide 后生成）');
+            }
           } else {
-            console.log('AUTO 模式: 关闭');
+            console.log('AUTO 模式: 关闭（所有阶段都需人类确认）');
           }
           break;
         }
