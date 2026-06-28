@@ -178,6 +178,20 @@ export function guideProject(projectDir) {
     };
   }
 
+  // 状态 5.5: 有 needs_review（收敛趟）——已完成但需要重新验证的 Intent
+  if (counts.needs_review > 0) {
+    const reviewIds = allIntents.filter((i) => i.status === 'needs_review').map((i) => i.id);
+    return {
+      stage: 'converging',
+      stage_num: 5.5,
+      details: { version: current, counts, needs_review_ids: reviewIds },
+      auto,
+      next_action: '进入收敛趟——重验 needs_review 的 Intent',
+      next_command: 'loom intent update ' + reviewIds[0] + ' --status in_progress',
+      message: `当前版本 ${current}：${counts.needs_review} 个 Intent 需要重新验证（${reviewIds.join(', ')}）。这是不动点收敛的一趟——重验这些 Intent，通过则 completed，偏离则修正。一趟无新 needs_review 即收敛达成。`,
+    };
+  }
+
   // 状态 4: 有 pending，进入 Intent Loop
   if (counts.pending > 0) {
     return {

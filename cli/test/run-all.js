@@ -97,11 +97,18 @@ function setup() {
   writeFileSync(join(TEST_ROOT, '.loom', 'current'), 'v1', 'utf-8');
 }
 
-function run(args) {
-  return execSync(`node "${CLI}" ${args} --loom-dir "${LOOM_DIR}"`, {
-    encoding: 'utf-8',
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+function run(args, allowFailure = false) {
+  try {
+    return execSync(`node "${CLI}" ${args} --loom-dir "${LOOM_DIR}"`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    if (allowFailure) {
+      return (e.stdout || '') + (e.stderr || '');
+    }
+    throw e;
+  }
 }
 
 // 从项目根目录跑（不带 --loom-dir，测试 findLoomDir 指针逻辑）
@@ -311,11 +318,12 @@ test('verify write — 写入验证记录（追加模式）', () => {
     verdict: 'passed',
     timestamp: '2026-06-26T12:00:00Z',
     summary: '实现忠实于意图',
+    reproduction_command: 'npm test',
     dimensions: {
-      intent_fidelity: 'passed',
-      philosophy_consistency: 'passed',
-      baseline_compliance: 'passed',
-      acceptance: 'passed',
+      intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事，实现忠实' },
+      philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照合规' },
+      baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 合规' },
+      acceptance_achievement: { verdict: 'passed', evidence: '契约全部达成' },
     },
   };
   const tmpFile = join(LOOM_DIR, '_tmp_verify.json');
@@ -336,10 +344,10 @@ test('verify write — deviated 轮次追踪和升级提示', () => {
       timestamp: `2026-06-26T12:0${i}:00Z`,
       summary: `第 ${i} 轮偏离`,
       dimensions: {
-        intent_fidelity: 'deviated',
-        philosophy_consistency: 'passed',
-        baseline_compliance: 'passed',
-        acceptance: 'deviated',
+        intent_fidelity: { verdict: 'deviated', evidence: '偏离意图叙事第 2 段' },
+        philosophy_consistency: { verdict: 'passed', evidence: '反模式对照合规' },
+        baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 合规' },
+        acceptance_achievement: { verdict: 'deviated', evidence: '契约#3 未达成' },
       },
       deviation_detail: '偏离了原始意图',
     };
@@ -364,10 +372,10 @@ test('verify write — pending_human verdict（L3 人类反馈）', () => {
     timestamp: '2026-06-26T14:00:00Z',
     summary: '静态维度通过，体验维度需人类验证',
     dimensions: {
-      intent_fidelity: 'passed',
-      philosophy_consistency: 'passed',
-      baseline_compliance: 'passed',
-      acceptance: 'pending_human',
+      intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事合规' },
+      philosophy_consistency: { verdict: 'passed', evidence: '反模式对照合规' },
+      baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 合规' },
+      acceptance_achievement: { verdict: 'pending_human', evidence: '体验维度需人类验证' },
     },
   };
   const tmpFile = join(LOOM_DIR, '_tmp_verify_ph.json');
@@ -375,6 +383,46 @@ test('verify write — pending_human verdict（L3 人类反馈）', () => {
   const out = run(`verify write --json-file "${tmpFile}"`);
   assertContains(out, '验证记录已写入');
   assertContains(out, 'pending_human');
+  rmSync(tmpFile, { force: true });
+});
+
+test('verify write — 旧格式 dimensions（枚举值）被拒绝', () => {
+  const record = {
+    intent_id: 'INT-002',
+    verdict: 'passed',
+    timestamp: '2026-06-26T12:00:00Z',
+    summary: '旧格式测试',
+    dimensions: {
+      intent_fidelity: 'passed',
+      philosophy_consistency: 'passed',
+      baseline_compliance: 'passed',
+      acceptance_achievement: 'passed',
+    },
+  };
+  const tmpFile = join(LOOM_DIR, '_tmp_verify_old.json');
+  writeFileSync(tmpFile, JSON.stringify(record));
+  const out = run(`verify write --json-file "${tmpFile}"`, true);
+  assertContains(out, '旧格式');
+  rmSync(tmpFile, { force: true });
+});
+
+test('verify write — evidence 缺失被拒绝', () => {
+  const record = {
+    intent_id: 'INT-002',
+    verdict: 'passed',
+    timestamp: '2026-06-26T12:00:00Z',
+    summary: 'evidence 缺失测试',
+    dimensions: {
+      intent_fidelity: { verdict: 'passed', evidence: '' },
+      philosophy_consistency: { verdict: 'passed', evidence: '有证据' },
+      baseline_compliance: { verdict: 'passed', evidence: '有证据' },
+      acceptance_achievement: { verdict: 'passed', evidence: '有证据' },
+    },
+  };
+  const tmpFile = join(LOOM_DIR, '_tmp_verify_no_evidence.json');
+  writeFileSync(tmpFile, JSON.stringify(record));
+  const out = run(`verify write --json-file "${tmpFile}"`, true);
+  assertContains(out, 'evidence 缺失');
   rmSync(tmpFile, { force: true });
 });
 

@@ -7,6 +7,14 @@ import { join } from 'node:path';
 /** 合法判定结果 */
 const VALID_VERDICTS = ['passed', 'deviated', 'blocked', 'pending_human'];
 
+/** 四个必须覆盖的验证维度 */
+const REQUIRED_DIMENSIONS = [
+  'intent_fidelity',
+  'philosophy_consistency',
+  'baseline_compliance',
+  'acceptance_achievement',
+];
+
 /**
  * 写入一条验证记录（追加模式——同一 Intent 多次验证保留完整历史）。
  * 文件格式: { intent_id, records: [{ round, verdict, timestamp, ... }] }
@@ -30,6 +38,26 @@ export function writeVerification(verificationsDir, record) {
   }
   if (!record.timestamp) errors.push('缺少 timestamp');
   if (!record.dimensions) errors.push('缺少 dimensions（四个维度结果）');
+  // dimensions 结构校验：每个维度必须是 { verdict, evidence } 对象
+  if (record.dimensions) {
+    for (const dim of REQUIRED_DIMENSIONS) {
+      const v = record.dimensions[dim];
+      if (v === undefined) {
+        errors.push(`dimensions.${dim} 缺失（四个维度必须全覆盖）`);
+      } else if (typeof v === 'string') {
+        errors.push(`dimensions.${dim} 是旧格式（枚举值），必须改成 { verdict, evidence } 对象`);
+      } else if (typeof v !== 'object' || v === null) {
+        errors.push(`dimensions.${dim} 必须是 { verdict, evidence } 对象`);
+      } else {
+        if (!VALID_VERDICTS.includes(v.verdict)) {
+          errors.push(`dimensions.${dim}.verdict 非法: "${v.verdict}" (合法: ${VALID_VERDICTS.join('|')})`);
+        }
+        if (!v.evidence || typeof v.evidence !== 'string' || v.evidence.trim() === '') {
+          errors.push(`dimensions.${dim}.evidence 缺失——必须给出具体证据，不能只写"合规"`);
+        }
+      }
+    }
+  }
   if (errors.length > 0) {
     throw new Error(`验证记录校验失败:\n  - ${errors.join('\n  - ')}`);
   }

@@ -173,7 +173,7 @@ deviated 连续 3 轮升级 blocked。pending_human 默认 7 天超时升级 blo
 
   loop: `# Intent Loop 详细流程
 
-每个 Intent 独立走一圈。Loop 终止条件：所有 Intent 为 completed。
+每个 Intent 独立走一圈。Loop 终止条件：所有 Intent 为 completed 且无 needs_review（不动点达成）。
 
 ## Step 1：Keeper 选 Intent
 
@@ -233,14 +233,27 @@ loom verify write --json-file verification.json
   "summary": "具体证据描述——不是'看起来没问题'",
   "reproduction_command": "LLM_API_KEY=mock npm test",
   "dimensions": {
-    "intent_fidelity": "passed",
-    "philosophy_consistency": "passed",
-    "baseline_compliance": "passed",
-    "acceptance_achievement": "passed"
+    "intent_fidelity": {
+      "verdict": "passed",
+      "evidence": "对照意图叙事第 2 段，extract.js 实现了完整编排"
+    },
+    "philosophy_consistency": {
+      "verdict": "passed",
+      "evidence": "AI_PHILOSOPHY 反模式逐条对照：JSON.parse 有 try/catch、fetch 有超时、无硬编码密钥"
+    },
+    "baseline_compliance": {
+      "verdict": "passed",
+      "evidence": "B1-B5 逐条合规"
+    },
+    "acceptance_achievement": {
+      "verdict": "passed",
+      "evidence": "6 条契约全部达成，npm test 6/6 pass"
+    }
   }
 }
 \`\`\`
 CLI 自动包装成 \`{ intent_id, records: [{ round, ... }] }\` 追加到验证文件。
+\`dimensions\` 每个维度必须是 \`{ verdict, evidence }\` 对象——不允许只写"合规"，必须写具体证据。
 \`reproduction_command\` 是复现验证的命令——别人跑这个命令能复现你的验证结果。L2 必填。
 
 ## Step 5：根据判定结果
@@ -266,6 +279,21 @@ CLI 自动包装成 \`{ intent_id, records: [{ round, ... }] }\` 追加到验证
 2. 微调（验收措辞、验证方式）→ Keeper 直接改
 3. 结构性变更（增减 Intent、改依赖）→ 重新激活 Architect
 4. 受影响的已完成 Intent 标记为 needs_review
+
+## 不动点收敛
+
+默认单趟：所有 Intent 按拓扑序验证完毕且全 passed → done。
+
+触发收敛：Pass 1 结束后还有 needs_review 的 Intent → 自动进入 Pass 2。
+- Pass 2: 重验所有 needs_review 的 Intent
+  - deviated → 修 → 重验
+  - 修的时候又影响别的 → 标记 needs_review
+  - passed → completed
+- Pass 2 结束还有 needs_review → Pass 3
+- Pass 3 结束还有 needs_review → blocked，报告"无法收敛"
+
+收敛达成 = 一趟完整 pass 没有产生任何新的 needs_review（不动点）。
+最大 3 趟，超过判定为系统性问题，需 Architect 介入。
 
 详细规则见 .loom/v{N}/ 下的 INTENT_LOOP.md。`,
 
