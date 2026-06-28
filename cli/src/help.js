@@ -224,21 +224,22 @@ Keeper 独立验证四维度：
 loom verify write --json-file verification.json
 \`\`\`
 
-验证记录格式：
+验证记录格式（\`loom verify write\` 的输入）：
 \`\`\`json
 {
   "intent_id": "INT-001",
-  "round": 1,
   "verdict": "passed",
+  "timestamp": "2026-06-28T12:00:00.000Z",
+  "summary": "具体证据描述——不是'看起来没问题'",
   "dimensions": {
     "intent_fidelity": "passed",
     "philosophy_consistency": "passed",
     "baseline_compliance": "passed",
     "acceptance_achievement": "passed"
-  },
-  "evidence": "具体证据描述"
+  }
 }
 \`\`\`
+CLI 自动包装成 \`{ intent_id, records: [{ round, ... }] }\` 追加到验证文件。
 
 ## Step 5：根据判定结果
 
@@ -247,7 +248,14 @@ loom verify write --json-file verification.json
 | passed | \`loom intent update <id> --status completed\`，回到 Step 1 |
 | deviated | 与 Forge 对话修正，重新实现重新验证。连续 3 轮升级 blocked |
 | blocked | \`loom intent update <id> --status blocked\`，停下报告用户 |
-| pending_human | 等用户补充判定（L3 人类反馈，如游戏手感）。7 天超时升级 blocked |
+| pending_human | **手动模式**：等用户补充判定（L3 人类反馈）。7 天超时升级 blocked |
+
+**AUTO 模式下的判定规则**（关键差异）：
+- AUTO 模式开启时（\`loom auto on\`），**不允许 pending_human**
+- Keeper 遇到 L3 verification_method 时，用 L1+L2 能耐自主判定所有维度
+- 要么 passed（有证据），要么 deviated（有偏离说明），不停下等人类
+- **持续运行，除非出意外否则不允许私自停止**
+- "出意外" = blocked（依赖阻塞/契约无法判定/连续 3 轮 deviated 升级）、fatal 错误
 
 ## 变更回流
 

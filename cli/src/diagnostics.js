@@ -90,6 +90,40 @@ export function doctor(loomDir, verificationsDir, philosophyDir) {
     }
   }
 
+  // 7. 验证脚本可执行性：检查 verification_method 引用的脚本/目录是否存在
+  const projectDir = join(loomDir, '..', '..');
+  for (const [id, intent] of Object.entries(intents)) {
+    if (!intent.verification_method) continue;
+    const vm = intent.verification_method;
+    // 检测 npm test 引用
+    if (vm.includes('npm test') || vm.includes('npm run test')) {
+      const pkgPath = join(projectDir, 'package.json');
+      if (!existsSync(pkgPath)) {
+        issues.push({ id, type: 'test_script_missing', severity: 'medium', msg: `${id} verification_method 要求 npm test 但项目根没有 package.json` });
+      } else {
+        try {
+          const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+          const testScript = pkg.scripts && pkg.scripts.test;
+          if (!testScript) {
+            issues.push({ id, type: 'test_script_missing', severity: 'medium', msg: `${id} verification_method 要求 npm test 但 package.json 没有 test 脚本` });
+          } else {
+            // 检查 test 脚本引用的目录/文件是否存在
+            // 常见模式: "node --test test/" / "mocha test/" / "jest" 等
+            const testDirMatch = testScript.match(/(?:--test|test)\s+(\S+)/);
+            if (testDirMatch) {
+              const testTarget = testDirMatch[1].replace(/['"]/g, '');
+              if (!existsSync(join(projectDir, testTarget))) {
+                issues.push({ id, type: 'test_script_missing', severity: 'medium', msg: `${id} verification_method 要求 npm test 但 test 脚本引用的 ${testTarget} 不存在` });
+              }
+            }
+          }
+        } catch {
+          // package.json 解析失败，不报——不是 doctor 的职责
+        }
+      }
+    }
+  }
+
   const summary = {
     total_issues: issues.length,
     fatal: issues.filter((i) => i.severity === 'fatal').length,

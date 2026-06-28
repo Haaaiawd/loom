@@ -361,6 +361,9 @@ try {
         case 'on':
           autoOn(loomRoot);
           console.log('AUTO 模式已开启。Agent 将自动连续执行，不等用户确认。');
+          console.log('核心契约: 持续运行，除非出意外否则不允许私自停止。');
+          console.log('  - L3 human_review 由 Keeper 自主判定，不停下等人类');
+          console.log('  - 唯一允许停下的情况: blocked（依赖阻塞/契约无法判定/连续 3 轮 deviated 升级）');
           console.log('关闭: loom auto off');
           break;
         case 'off':

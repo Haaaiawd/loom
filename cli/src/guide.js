@@ -137,6 +137,9 @@ export function guideProject(projectDir) {
   // 状态 7: 有 blocked（优先报告）
   if (counts.blocked > 0) {
     const blockedIds = allIntents.filter((i) => i.status === 'blocked').map((i) => i.id);
+    const msg = auto
+      ? `有 ${counts.blocked} 个 Intent 阻塞: ${blockedIds.join(', ')}。AUTO 模式下这是唯一允许停下的情况——需要人工介入解决阻塞后才能继续。`
+      : `有 ${counts.blocked} 个 Intent 阻塞: ${blockedIds.join(', ')}。需要人工介入。`;
     return {
       stage: 'blocked',
       stage_num: 7,
@@ -144,7 +147,7 @@ export function guideProject(projectDir) {
       auto,
       next_action: '人工介入解决阻塞',
       next_command: 'loom intent get ' + blockedIds[0],
-      message: `有 ${counts.blocked} 个 Intent 阻塞: ${blockedIds.join(', ')}。需要人工介入。`,
+      message: msg,
     };
   }
 

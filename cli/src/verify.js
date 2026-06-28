@@ -39,6 +39,15 @@ export function writeVerification(verificationsDir, record) {
   let data;
   if (existsSync(filePath)) {
     data = JSON.parse(readFileSync(filePath, 'utf-8'));
+    // 结构校验：已有文件必须是 { intent_id, records: [] } 格式
+    if (!data || typeof data !== 'object' || !Array.isArray(data.records)) {
+      throw new Error(
+        `已有验证记录格式错误: ${filePath}\n` +
+        `期望格式: { intent_id, records: [...] }\n` +
+        `实际格式: ${JSON.stringify(data).slice(0, 200)}\n` +
+        `修复: 删除或修正该文件后重试。`
+      );
+    }
   } else {
     data = { intent_id: record.intent_id, records: [] };
   }
