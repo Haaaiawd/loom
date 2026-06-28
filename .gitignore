@@ -18,3 +18,4 @@ desktop.ini
 # LOOM 项目产物（loom init 生成的，不是框架本身）
 .loom/
 AGENTS.md
+test_out.txt
