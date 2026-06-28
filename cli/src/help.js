@@ -200,11 +200,11 @@ loom activate forge
 \`\`\`
 
 Forge 加载：意图叙事 + 哲学锚点 + 验收契约，在约束下自主实现代码。
-辅助命令：
-- \`loom intent narrative <id>\` — 读意图叙事
-- \`loom intent trace <id>\` — 完整追溯链（含哲学锚点内容）
-- \`loom verify contract <id>\` — 读验收契约
-- \`loom philosophy get <anchor>\` — 读哲学原则
+辅助命令（三个命令的分工）：
+- \`loom intent narrative <id>\` — 读意图叙事（"为什么做"）
+- \`loom verify contract <id>\` — 读验收契约（"做成什么样才算数"）
+- \`loom intent trace <id>\` — 完整追溯链（叙事+契约+哲学锚点一次性加载，最常用）
+- \`loom philosophy get <anchor>\` — 读哲学原则（遇到取舍时查）
 
 ## Step 4：Keeper 验证
 
@@ -255,6 +255,16 @@ loom verify write --json-file verification.json
 CLI 自动包装成 \`{ intent_id, records: [{ round, ... }] }\` 追加到验证文件。
 \`dimensions\` 每个维度必须是 \`{ verdict, evidence }\` 对象——不允许只写"合规"，必须写具体证据。
 \`reproduction_command\` 是复现验证的命令——别人跑这个命令能复现你的验证结果。L2 必填。
+
+**evidence 写法参考**：
+- 长度：每条 evidence 50-300 字符为宜。太短（"合规"）不达标，太长难读。
+- 哲学一致性维度：按哲学锚点逐条对照反模式（见 keeper.md 的"承诺验证法"）
+- 其他维度：写"对照了什么 + 在代码哪里看到/没看到"
+- \`reproduction_command\` 注意平台差异：
+  - Unix/Mac: \`LLM_API_KEY=mock npm test\`
+  - Windows PowerShell: \`$env:LLM_API_KEY='mock'; npm test\`
+  - Windows cmd: \`set LLM_API_KEY=mock && npm test\`
+- \`node --test\` 在 Windows 上不能用目录路径（\`node --test test/\` 会报错），用 glob：\`node --test test/*.test.js\`
 
 ## Step 5：根据判定结果
 

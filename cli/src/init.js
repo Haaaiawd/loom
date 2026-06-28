@@ -71,6 +71,47 @@ export function createVersionStructure(projectDir, version) {
     ['templates/VISION_TEMPLATE.md', `.loom/${v}/01_VISION.md`],
   ];
 
+  // 02_ARCHITECTURE.md 和 05_VERIFICATION.md 没有"填空模板"——
+  // 它们由 Architect 自由设计。但 init 时 scaffold 空文件 + LOOM_TEMPLATE 标记，
+  // 让 guide 能检测到"还没设计"，且 Agent 知道该往哪写。
+  const scaffoldFiles = [
+    [`.loom/${v}/02_ARCHITECTURE.md`, [
+      '<!-- LOOM_TEMPLATE -->',
+      `# 02_ARCHITECTURE.md — 系统架构`,
+      '',
+      `> 版本: ${v}`,
+      '> 产出自: Architect 角色激活',
+      '',
+      'Architect 设计系统架构后替换本文件。',
+      '内容要求：模块边界、接口契约、目录结构、依赖关系。',
+      '设计完成后删除顶部的 `<!-- LOOM_TEMPLATE -->` 标记。',
+      '',
+    ].join('\n')],
+    [`.loom/${v}/05_VERIFICATION.md`, [
+      '<!-- LOOM_TEMPLATE -->',
+      `# 05_VERIFICATION.md — 验证契约`,
+      '',
+      `> 版本: ${v}`,
+      '> 产出自: Architect 角色激活',
+      '',
+      'Architect 设计验证契约后替换本文件。',
+      '内容要求：每个 Intent 的功能承诺 + 防御承诺 + Pre-Mortem 推演。',
+      'Intent Map 的 acceptance 字段可引用本文件章节（如 "see 05_VERIFICATION.md#int-001"）。',
+      '设计完成后删除顶部的 `<!-- LOOM_TEMPLATE -->` 标记。',
+      '',
+    ].join('\n')],
+  ];
+
+  for (const [dst, content] of scaffoldFiles) {
+    const dstPath = join(cwd, dst);
+    if (existsSync(dstPath)) {
+      skipped.push(dst);
+    } else {
+      writeFileSync(dstPath, content, 'utf-8');
+      created.push(dst);
+    }
+  }
+
   for (const [src, dst] of templates) {
     const srcPath = join(loomRoot, src);
     const dstPath = join(cwd, dst);

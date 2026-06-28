@@ -3,8 +3,11 @@
 // Agent 通过这个 CLI 访问 Intent Map / 哲学 / 验证记录，不直接读文件。
 
 import { argv, cwd, exit } from 'node:process';
-import { resolve, join } from 'node:path';
+import { resolve, join, dirname } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import { getNextIntent, getStatus, getDependencyGraph, getIntent, loadIntentMap, updateIntentStatus, getNarrative } from '../src/intent-map.js';
 import { getPhilosophy, listPhilosophyFiles } from '../src/philosophy.js';
@@ -78,6 +81,15 @@ const [cmd, sub, ...rest] = argv.slice(2);
 
 try {
   switch (cmd) {
+    case '--version':
+    case '-v': {
+      // 从根 package.json 读版本号（cli/bin -> cli -> LOOM root）
+      const pkgPath = resolve(__dirname, '..', '..', 'package.json');
+      const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+      console.log(`loom ${pkg.version}`);
+      break;
+    }
+
     case 'intent': {
       const loomDir = findLoomDir();
       switch (sub) {
@@ -86,11 +98,12 @@ try {
           break;
         case 'status': {
           const s = getStatus(loomDir);
+          const fmt = (ids) => ids.map((id) => s.titles[id] ? `${id}(${s.titles[id]})` : id).join(', ') || '-';
           console.log(`进度: ${s.counts.completed}/${s.counts.total} 完成`);
-          console.log(`  pending:     ${s.counts.pending}    ${s.ids.pending.join(', ') || '-'}`);
-          console.log(`  in_progress: ${s.counts.in_progress}    ${s.ids.in_progress.join(', ') || '-'}`);
-          console.log(`  completed:   ${s.counts.completed}    ${s.ids.completed.join(', ') || '-'}`);
-          console.log(`  blocked:     ${s.counts.blocked}    ${s.ids.blocked.join(', ') || '-'}`);
+          console.log(`  pending:     ${s.counts.pending}    ${fmt(s.ids.pending)}`);
+          console.log(`  in_progress: ${s.counts.in_progress}    ${fmt(s.ids.in_progress)}`);
+          console.log(`  completed:   ${s.counts.completed}    ${fmt(s.ids.completed)}`);
+          console.log(`  blocked:     ${s.counts.blocked}    ${fmt(s.ids.blocked)}`);
           break;
         }
         case 'graph':

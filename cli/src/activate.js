@@ -44,9 +44,21 @@ export function activateRole(role, loomDir) {
   }
   parts.push(readFileSync(roleFile, 'utf-8'));
 
-  // 2. BASELINE（所有角色都需要）
-  const baselineFile = join(loomRoot, 'meta/BASELINE.md');
-  parts.push('\n---\n\n## 强制加载：BASELINE\n\n' + readFileSync(baselineFile, 'utf-8'));
+  // 2. BASELINE 摘要（不重复全文——全文见 meta/BASELINE.md）
+  //    5 条底线压缩成摘要，角色需要知道底线存在 + 一句话内容。
+  //    如果角色需要底线细节（如 Weaver 织造哲学时），自行 readFileSync 全文。
+  parts.push('\n---\n\n## 强制加载：BASELINE 摘要\n\n');
+  parts.push('> 完整底线见 `meta/BASELINE.md`。以下是 5 条底线的摘要——\n');
+  parts.push('> 角色激活时必须知道这些底线存在，违反任何一条必须立即停止。\n');
+  parts.push('> Philosophy Weaver 织造哲学时必须读取完整 BASELINE.md 作为硬约束输入。\n\n');
+  parts.push('| 编号 | 底线 | 一句话 |\n');
+  parts.push('|------|------|--------|\n');
+  parts.push('| B1 | 必须有结构设计 | 编码前必须有明确的目录结构 + 模块职责边界 + 显式依赖关系 |\n');
+  parts.push('| B2 | 禁止硬编码 | 密钥/配置/环境特定值/魔法数字不进代码，用环境变量或集中配置 |\n');
+  parts.push('| B3 | 接口契约必须显式 | API/CLI/配置/错误语义/跨系统协议必须有显式定义，变更可追溯 |\n');
+  parts.push('| B4 | 决策必须可追溯 | 影响架构/接口/技术栈/依赖的决策必须记录（ADR 或等效格式） |\n');
+  parts.push('| B5 | 意图必须可回溯 | 每个实现单元有意图叙事（"为什么存在"），可被 Keeper 引用对照 |\n');
+  parts.push('\n> 底线不可被哲学覆盖。如果织造的哲学与底线冲突，底线优先。\n');
 
   // 3. 项目特定底线（如果有 loomDir）
   if (loomDir) {

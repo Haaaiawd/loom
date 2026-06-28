@@ -60,7 +60,7 @@ function extractMdSection(content, sectionSlug) {
 }
 
 /** 必填字段（INTENT_LOOP.md 底线） */
-const REQUIRED_FIELDS = ['id', 'narrative_ref', 'depends_on', 'acceptance', 'philosophy_anchors', 'status'];
+const REQUIRED_FIELDS = ['id', 'title', 'narrative_ref', 'depends_on', 'acceptance', 'philosophy_anchors', 'status'];
 
 /** 合法 status 值 */
 const VALID_STATUS = ['pending', 'in_progress', 'completed', 'blocked', 'needs_review'];
@@ -167,9 +167,11 @@ export function getNextIntent(loomDir) {
 export function getStatus(loomDir) {
   const { intents } = loadIntentMap(loomDir);
   const summary = { pending: [], in_progress: [], completed: [], blocked: [] };
+  const titles = {};
   for (const [id, intent] of Object.entries(intents)) {
     const s = intent.status;
     if (summary[s]) summary[s].push(id);
+    titles[id] = intent.title || '';
   }
   return {
     counts: {
@@ -180,6 +182,7 @@ export function getStatus(loomDir) {
       total: Object.keys(intents).length,
     },
     ids: summary,
+    titles,
   };
 }
 

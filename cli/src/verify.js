@@ -140,11 +140,14 @@ export function getPendingVerifications(loomDir, verificationsDir) {
 
 /**
  * 列出所有验证记录文件。
+ * 只列出正式验证记录——文件名匹配 INT-XXX 格式且内容含 records 字段。
+ * 过滤掉用户写入的临时输入文件（如 INT-001.verify.json、_tmp_*.json）。
  */
 export function listVerifications(verificationsDir) {
   if (!existsSync(verificationsDir)) return [];
   return readdirSync(verificationsDir)
     .filter((f) => f.endsWith('.json'))
+    .filter((f) => /^INT-\d+\.json$/.test(f))
     .map((f) => f.replace('.json', ''));
 }
 

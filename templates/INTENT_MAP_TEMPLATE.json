@@ -11,9 +11,10 @@
   "intents": {
     "INT-001": {
       "id": "INT-001",
+      "title": "[必须] 一句话标题，intent next/status 输出时优先展示",
       "narrative_ref": "01_VISION.md#int-001",
       "depends_on": [],
-      "acceptance": "[必须] 什么算忠实实现。这是 Keeper 验证的唯一真相源。可以内联定义，也可以引用 05_VERIFICATION.md 的章节（如 'see 05_VERIFICATION.md#int-001'），但引用时 Keeper 通过 CLI `verify contract <id>` 命令解析引用获取实际内容。",
+      "acceptance": "[必须] 什么算忠实实现。这是 Keeper 验证的唯一真相源。可以内联定义，也可以引用 05_VERIFICATION.md 的章节（如 'see 05_VERIFICATION.md#int-001'），但引用时 Keeper 通过 CLI `verify contract <id>` 命令解析引用获取实际内容。必须包含功能承诺 + 防御承诺（见 architect.md Pre-Mortem 设计法）。",
       "philosophy_anchors": ["PRODUCT_PHILOSOPHY.md#core-belief", "ENGINEERING_CREED.md#anti-patterns"],
       "status": "pending",
       "_optional": {
@@ -26,6 +27,7 @@
     },
     "INT-002": {
       "id": "INT-002",
+      "title": "...",
       "narrative_ref": "01_VISION.md#int-002",
       "depends_on": ["INT-001"],
       "acceptance": "...",
@@ -38,6 +40,7 @@
 
   "_field_reference": {
     "id": "[必须] 稳定标识，项目生命周期内不变",
+    "title": "[必须] 一句话标题，intent next/status 输出时优先展示",
     "narrative_ref": "[必须] 指向愿景文档中意图叙事的章节锚点",
     "depends_on": "[必须] 前置 Intent ID 列表。空数组表示无依赖。",
     "acceptance": "[必须] 验收契约，Keeper 判定 passed/deviated/blocked 的唯一真相源。内联或引用 05_VERIFICATION.md。",

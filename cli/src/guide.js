@@ -10,7 +10,8 @@ import { isAutoOn } from './auto.js';
 
 /**
  * 检测文件是否还是模板（未填充真实内容）。
- * MD 文件检查 <!-- LOOM_TEMPLATE --> 标记。
+ * MD 文件检查 <!-- LOOM_TEMPLATE --> 标记——但如果文件已经超过模板大小（>2KB），
+ * 认为用户已经填充了真实内容只是忘了删标记，忽略标记。
  * JSON 文件检查 _meta._template 字段。
  */
 function isTemplate(filePath) {
@@ -24,7 +25,12 @@ function isTemplate(filePath) {
       return false; // 损坏文件不算模板
     }
   }
-  return content.includes('<!-- LOOM_TEMPLATE -->');
+  // MD 文件：有 LOOM_TEMPLATE 标记 且 文件较小（<2KB）才算模板。
+  // 如果文件已经 >2KB，说明用户填充了内容只是忘了删标记——忽略标记。
+  if (content.includes('<!-- LOOM_TEMPLATE -->')) {
+    return content.length < 2048;
+  }
+  return false;
 }
 
 /**

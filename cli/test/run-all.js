@@ -25,6 +25,7 @@ function setup() {
     intents: {
       'INT-001': {
         id: 'INT-001',
+        title: '用户注册与登录',
         narrative_ref: '01_VISION.md#int-001',
         depends_on: [],
         acceptance: '用户能注册并登录',
@@ -33,6 +34,7 @@ function setup() {
       },
       'INT-002': {
         id: 'INT-002',
+        title: '项目创建',
         narrative_ref: '01_VISION.md#int-002',
         depends_on: ['INT-001'],
         acceptance: '用户能创建项目',
@@ -41,6 +43,7 @@ function setup() {
       },
       'INT-003': {
         id: 'INT-003',
+        title: '协作者邀请',
         narrative_ref: '01_VISION.md#int-003',
         depends_on: ['INT-001', 'INT-002'],
         acceptance: '用户能邀请协作者',
@@ -452,6 +455,8 @@ test('init — 初始化项目目录', () => {
   assert(existsSync(join(initRoot, '.loom', 'v1', '00_PHILOSOPHY')), '哲学目录未创建');
   assert(existsSync(join(initRoot, '.loom', 'v1', '04_INTENT_MAP.json')), 'Intent Map 模板未复制');
   assert(existsSync(join(initRoot, '.loom', 'v1', '01_VISION.md')), '愿景模板未复制');
+  assert(existsSync(join(initRoot, '.loom', 'v1', '02_ARCHITECTURE.md')), '02_ARCHITECTURE.md 未 scaffold');
+  assert(existsSync(join(initRoot, '.loom', 'v1', '05_VERIFICATION.md')), '05_VERIFICATION.md 未 scaffold');
   assert(existsSync(join(initRoot, '.loom', 'current')), 'current 指针未创建');
   assert(existsSync(join(initRoot, 'AGENTS.md')), 'AGENTS.md 未创建');
   assertContains(readFileSync(join(initRoot, 'AGENTS.md'), 'utf-8'), 'LOOM');
@@ -555,6 +560,13 @@ test('philosophy get 不存在的文件 — 报错', () => {
 });
 
 console.log('\n测试 version 命令');
+
+test('--version / -v — 输出版本号', () => {
+  const out2 = execSync(`node "${CLI}" --version`, { encoding: 'utf-8' });
+  assertContains(out2, 'loom');
+  const out3 = execSync(`node "${CLI}" -v`, { encoding: 'utf-8' });
+  assertContains(out3, 'loom');
+});
 
 test('version list — 列出版本并标记当前', () => {
   const out = runFromRoot('version list');
