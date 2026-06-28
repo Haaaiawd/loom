@@ -386,10 +386,31 @@ try {
     }
 
     case 'preview': {
-      // 输出提示词，让 AI 读 .loom/ 文件、重组信息、生成 HTML
+      const previewFile = join(cwd(), 'loom-preview.html');
+      const hasPreview = existsSync(previewFile);
+      const regenOnly = argv.includes('--regen') || argv.includes('-r');
+
+      // 已有 HTML 且没指定 --regen：直接打开浏览器
+      if (hasPreview && !regenOnly) {
+        const { spawn } = await import('node:child_process');
+        const target = previewFile.replace(/\\/g, '/');
+        if (process.platform === 'win32') {
+          spawn('cmd', ['/c', 'start', target], { detached: true, stdio: 'ignore' }).unref();
+        } else if (process.platform === 'darwin') {
+          spawn('open', [target], { detached: true, stdio: 'ignore' }).unref();
+        } else {
+          spawn('xdg-open', [target], { detached: true, stdio: 'ignore' }).unref();
+        }
+        console.log(`已打开浏览器: ${previewFile}`);
+        console.log(`重新生成: loom preview --regen`);
+        break;
+      }
+
+      // 没有 HTML 或指定 --regen：输出提示词让 AI 生成
       const prompt = generatePreviewPrompt();
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('To Agent: 按以下提示词读 .loom/ 文件并生成 loom-preview.html');
+      console.log('  生成完成后再次运行 loom preview 会自动打开浏览器');
       console.log('To Human: 把以下内容给你的 AI agent');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('');
@@ -443,7 +464,8 @@ To Human:
 
   loom doctor                   项目健康检查（一致性+孤儿引用+循环依赖+僵尸）
   loom context                  上下文摘要（进度+下一步+待验证+风险）
-  loom preview                  输出提示词+数据，让 AI 生成 HTML 可视化预览
+  loom preview                  已有 HTML 则打开浏览器，否则输出提示词让 AI 生成
+  loom preview --regen          强制重新输出提示词（让 AI 重新生成 HTML）
   loom help <topic>             分层指南（workflow|concepts|loop|version|doctor）
 
   loom philosophy get <anchor>  按锚点加载哲学章节

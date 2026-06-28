@@ -231,6 +231,7 @@ loom verify write --json-file verification.json
   "verdict": "passed",
   "timestamp": "2026-06-28T12:00:00.000Z",
   "summary": "具体证据描述——不是'看起来没问题'",
+  "reproduction_command": "LLM_API_KEY=mock npm test",
   "dimensions": {
     "intent_fidelity": "passed",
     "philosophy_consistency": "passed",
@@ -240,6 +241,7 @@ loom verify write --json-file verification.json
 }
 \`\`\`
 CLI 自动包装成 \`{ intent_id, records: [{ round, ... }] }\` 追加到验证文件。
+\`reproduction_command\` 是复现验证的命令——别人跑这个命令能复现你的验证结果。L2 必填。
 
 ## Step 5：根据判定结果
 

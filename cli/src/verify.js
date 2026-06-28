@@ -17,6 +17,7 @@ const VALID_VERDICTS = ['passed', 'deviated', 'blocked', 'pending_human'];
  * @param {string} record.timestamp — ISO 8601
  * @param {string} record.summary — 验证摘要
  * @param {object} record.dimensions — 四个维度的验证结果
+ * @param {string} [record.reproduction_command] — 复现验证的命令（如 "LLM_API_KEY=mock npm test"）
  * @param {string} [record.deviation_detail] — 偏离说明（deviated 时）
  * @param {boolean} [record.reset_suggested] — 是否建议重置上下文
  * @returns {{ filePath: string, round: number, deviated_count: number, should_escalate: boolean }}
@@ -64,6 +65,7 @@ export function writeVerification(verificationsDir, record) {
     timestamp: record.timestamp,
     summary: record.summary,
     dimensions: record.dimensions,
+    reproduction_command: record.reproduction_command,
     deviation_detail: record.deviation_detail,
     reset_suggested: record.reset_suggested,
   });
