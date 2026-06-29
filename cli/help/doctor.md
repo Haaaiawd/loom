@@ -16,6 +16,7 @@ loom doctor
 | completed_no_record | high | completed 但无验证记录 |
 | completed_depends_blocked | high | completed 依赖 blocked 的 Intent |
 | inspiration_source | high/medium | 灵感来源质量不达标（源太少/全是 Wikipedia/缺理由） |
+| part_decomposition | high/medium | 缺少实现部分拆解清单（Weaver 跳过了拆解步骤） |
 | in_progress_no_record | medium | in_progress 但无验证记录（可能中断） |
 | zombie | medium | in_progress/blocked 超过 7 天无活动 |
 
@@ -34,6 +35,20 @@ loom philosophy check
 - Wikipedia 占比不超过 70%
 
 不达标时，需要重新织造哲学——真正走搜索漏斗，找原著、论文、工程博客等深度源。
+
+## 实现部分拆解校验
+
+\`\`\`bash
+loom philosophy check
+\`\`\`
+
+同时校验哲学文档是否包含"实现部分清单"——Weaver 是否按 PART_DECOMPOSITION.md 拆解了项目的实现部分。
+
+校验规则：
+- 哲学文档中必须有"实现部分清单"章节（或"部分拆解""Part Decomposition"等）
+- 至少识别到 2 个实现部分（小项目建议 3-5 个，大项目 6-10 个）
+
+缺少时，说明 Weaver 跳过了拆解步骤，需要重新织造——按 PART_DECOMPOSITION.md 的方法论识别项目的实现部分。
 
 ## 上下文摘要
 

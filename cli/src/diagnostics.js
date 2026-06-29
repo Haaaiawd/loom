@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadIntentMap, getStatus, getNextIntent, getNarrative, getIntent } from './intent-map.js';
-import { getPhilosophy, validateInspirationSources } from './philosophy.js';
+import { getPhilosophy, validateInspirationSources, validatePartDecomposition } from './philosophy.js';
 import { getVerificationHistory, getPendingVerifications, getVerificationContract } from './verify.js';
 
 // ─── doctor ────────────────────────────────────────────
@@ -129,6 +129,11 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
     const inspirationCheck = validateInspirationSources(philosophyDir);
     for (const issue of inspirationCheck.issues) {
       issues.push({ id: 'philosophy', type: 'inspiration_source', severity: issue.severity, msg: issue.msg });
+    }
+    // 实现部分拆解校验（防止 Weaver 跳过拆解步骤）
+    const decompositionCheck = validatePartDecomposition(philosophyDir);
+    for (const issue of decompositionCheck.issues) {
+      issues.push({ id: 'philosophy', type: 'part_decomposition', severity: issue.severity, msg: issue.msg });
     }
   }
 

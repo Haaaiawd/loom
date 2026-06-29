@@ -281,16 +281,21 @@ test('philosophy list — 列出哲学文档', () => {
 });
 
 test('philosophy check — 无灵感来源章节报 high', () => {
-  // 当前测试数据的哲学文档没有"灵感来源"章节
+  // 当前测试数据的哲学文档没有"灵感来源"章节也没有"实现部分清单"
   const out = run('philosophy check', true);
-  assertContains(out, '灵感来源校验未通过');
+  assertContains(out, '哲学文档校验未通过');
   assertContains(out, '灵感来源');
 });
 
 test('philosophy check — 灵感来源全 Wikipedia 报 high', () => {
-  // 写一个只有 Wikipedia 链接的哲学文档
+  // 写一个只有 Wikipedia 链接的哲学文档（带实现部分清单以隔离测试）
   writeFileSync(join(PHILOSOPHY_DIR, 'TEST_INSPIRATION.md'), [
     '# 测试灵感来源',
+    '',
+    '## 实现部分清单',
+    '',
+    '- **CLI 交互设计** — 参数解析',
+    '- **转换引擎** — 核心逻辑',
     '',
     '## 灵感来源',
     '',
@@ -307,9 +312,35 @@ test('philosophy check — 灵感来源全 Wikipedia 报 high', () => {
   rmSync(join(PHILOSOPHY_DIR, 'TEST_INSPIRATION.md'), { force: true });
 });
 
-test('philosophy check — 合格灵感来源通过', () => {
+test('philosophy check — 缺实现部分清单报 high', () => {
+  // 有合格灵感来源但没有实现部分清单
+  writeFileSync(join(PHILOSOPHY_DIR, 'TEST_NO_PARTS.md'), [
+    '# 测试无部分清单',
+    '',
+    '## 灵感来源',
+    '',
+    '- **Unix Philosophy**（Doug McIlloy, 1978）— 做一件事并做好。萃取：单一职责。来源：https://en.wikipedia.org/wiki/Unix_philosophy',
+    '- **The Art of UNIX Programming**（Eric Raymond, 2003）— 17 条 Unix 原则。萃取：模块化。来源：https://www.catb.org/esr/writings/taoup/html/',
+    '- **The UNIX Philosophy**（Mike Gancarz, 1995）— 小即是美。萃取：小工具。来源：https://www.goodreads.com/book/show/108453.The_UNIX_Philosophy',
+    '',
+    '## 章节锚点',
+    '',
+    '- `#test` — 测试',
+  ].join('\n'));
+  const out = run('philosophy check', true);
+  assertContains(out, '实现部分清单');
+  rmSync(join(PHILOSOPHY_DIR, 'TEST_NO_PARTS.md'), { force: true });
+});
+
+test('philosophy check — 合格灵感来源 + 实现部分清单通过', () => {
   writeFileSync(join(PHILOSOPHY_DIR, 'TEST_GOOD.md'), [
-    '# 测试合格灵感来源',
+    '# 测试合格',
+    '',
+    '## 实现部分清单',
+    '',
+    '- **CLI 交互设计** — 参数解析、--help、用法提示',
+    '- **CLI 输出美学** — 成功反馈格式、颜色策略',
+    '- **转换引擎** — 纯函数、子集策略',
     '',
     '## 灵感来源',
     '',

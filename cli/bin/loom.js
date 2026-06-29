@@ -11,7 +11,7 @@ import { findLoomRoot, findVersionDir, readCurrentPointer } from '../src/shared/
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import { getNextIntent, getStatus, getDependencyGraph, getIntent, loadIntentMap, updateIntentStatus, getNarrative } from '../src/intent-map.js';
-import { getPhilosophy, listPhilosophyFiles, validateInspirationSources } from '../src/philosophy.js';
+import { getPhilosophy, listPhilosophyFiles, validateInspirationSources, validatePartDecomposition } from '../src/philosophy.js';
 import { writeVerification, getVerificationHistory, getPendingVerifications, listVerifications, getVerificationContract } from '../src/verify.js';
 import { initProject } from '../src/init.js';
 import { activateRole } from '../src/activate.js';
@@ -181,22 +181,31 @@ try {
           output(listPhilosophyFiles(getPhilosophyDir(versionDir)));
           break;
         case 'check': {
-          const result = validateInspirationSources(getPhilosophyDir(versionDir));
-          if (result.passed) {
-            console.log('✓ 灵感来源校验通过');
-            for (const { file, sources } of result.sources) {
-              console.log(`  ${file}: ${sources.length} 个源`);
+          const philDir = getPhilosophyDir(versionDir);
+          const inspiration = validateInspirationSources(philDir);
+          const decomposition = validatePartDecomposition(philDir);
+          const allIssues = [...inspiration.issues, ...decomposition.issues];
+          const allPassed = inspiration.passed && decomposition.passed;
+
+          if (allPassed) {
+            console.log('✓ 哲学文档校验通过');
+            console.log('  灵感来源:');
+            for (const { file, sources } of inspiration.sources) {
+              console.log(`    ${file}: ${sources.length} 个源`);
+            }
+            console.log('  实现部分拆解:');
+            for (const part of decomposition.parts) {
+              console.log(`    - ${part}`);
             }
           } else {
-            const high = result.issues.filter((i) => i.severity === 'high').length;
-            const medium = result.issues.filter((i) => i.severity === 'medium').length;
-            console.log(`✗ 灵感来源校验未通过（${result.issues.length} 个问题: ${high} high, ${medium} medium）`);
-            for (const issue of result.issues) {
+            const high = allIssues.filter((i) => i.severity === 'high').length;
+            const medium = allIssues.filter((i) => i.severity === 'medium').length;
+            console.log(`✗ 哲学文档校验未通过（${allIssues.length} 个问题: ${high} high, ${medium} medium）`);
+            for (const issue of allIssues) {
               const icon = issue.severity === 'high' ? '⚠' : '·';
               console.log(`  ${icon} [${issue.severity}] ${issue.msg}`);
             }
-            console.log('\nWeaver 织造哲学时必须真正搜索，不能从训练数据"背"几个名字就交差。');
-            console.log('参见 meta/PHILOSOPHY_WEAVER.md "织造漏斗" + dimensions/SEARCH_METHODOLOGY.md。');
+            console.log('\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/PART_DECOMPOSITION.md + dimensions/SEARCH_METHODOLOGY.md。');
             exit(1);
           }
           break;

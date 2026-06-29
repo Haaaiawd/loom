@@ -187,3 +187,88 @@ export function validateInspirationSources(philosophyDir) {
     sources: allSources,
   };
 }
+
+// ─── 实现部分清单校验 ───────────────────────────────────
+// 检查哲学文档是否包含"实现部分清单"——Weaver 是否走了拆解流程。
+// PHILOSOPHY_WEAVER.md Step 2 要求产出"实现部分清单"。
+
+/**
+ * 校验哲学文档是否包含实现部分拆解清单。
+ * Weaver 按 PART_DECOMPOSITION.md 拆解后，必须在哲学文档里显式列出拆解出的部分。
+ * @param {string} philosophyDir — 00_PHILOSOPHY/ 目录路径
+ * @returns {{ passed: boolean, issues: Array<{severity: string, msg: string}>, parts: string[] }}
+ */
+export function validatePartDecomposition(philosophyDir) {
+  const issues = [];
+  const parts = [];
+
+  const files = listPhilosophyFiles(philosophyDir);
+
+  // 搜索"实现部分"相关章节——可能叫"实现部分清单""部分拆解""Part Decomposition"等
+  const PART_SECTION_PATTERNS = [
+    /^##\s+实现部分清单/m,
+    /^##\s+部分拆解/m,
+    /^##\s+实现部分/m,
+    /^##\s+Part Decomposition/m,
+    /^##\s+Implementation Parts/m,
+    /^##\s+拆解出的部分/m,
+  ];
+
+  // 搜索部分条目——通常是 "- **部分名**" 或 "├── 部分名" 或 "| 部分名 |"
+  const PART_ITEM_PATTERNS = [
+    /^\s*[-*]\s+\*\*(.+?)\*\*/gm,  // - **CLI 交互设计**
+    /^\s*├──\s+(.+)/gm,              // ├── CLI 交互设计
+    /^\s*└──\s+(.+)/gm,              // └── 产物设计
+  ];
+
+  let foundSection = false;
+
+  for (const file of files) {
+    const content = readFileSync(join(philosophyDir, file), 'utf-8');
+
+    // 检查是否有实现部分章节
+    for (const pattern of PART_SECTION_PATTERNS) {
+      if (pattern.test(content)) {
+        foundSection = true;
+        // 提取该章节的部分条目
+        const sectionMatch = content.match(pattern);
+        if (sectionMatch) {
+          const startIdx = sectionMatch.index + sectionMatch[0].length;
+          const nextSection = content.slice(startIdx).match(/\n##\s/m);
+          const sectionText = nextSection
+            ? content.slice(startIdx, startIdx + nextSection.index)
+            : content.slice(startIdx);
+
+          for (const itemPattern of PART_ITEM_PATTERNS) {
+            const matches = [...sectionText.matchAll(itemPattern)];
+            for (const m of matches) {
+              const partName = m[1].trim().replace(/[—\-–].*$/, '').trim();
+              if (partName && !parts.includes(partName)) {
+                parts.push(partName);
+              }
+            }
+          }
+        }
+        break;
+      }
+    }
+  }
+
+  if (!foundSection) {
+    issues.push({
+      severity: 'high',
+      msg: '哲学文档没有"实现部分清单"章节。PHILOSOPHY_WEAVER.md Step 2 要求按 PART_DECOMPOSITION.md 拆解实现部分，并在哲学文档中显式列出。可能 Weaver 跳过了拆解步骤。',
+    });
+  } else if (parts.length < 2) {
+    issues.push({
+      severity: 'medium',
+      msg: `实现部分清单仅识别到 ${parts.length} 个部分。PART_DECOMPOSITION.md 建议小项目 3-5 个部分，大项目 6-10 个。可能拆解不充分。`,
+    });
+  }
+
+  return {
+    passed: issues.length === 0,
+    issues,
+    parts,
+  };
+}
