@@ -280,6 +280,52 @@ test('philosophy list — 列出哲学文档', () => {
   assert(files.includes('ENGINEERING_CREED.md'), '缺少 ENGINEERING_CREED.md');
 });
 
+test('philosophy check — 无灵感来源章节报 high', () => {
+  // 当前测试数据的哲学文档没有"灵感来源"章节
+  const out = run('philosophy check', true);
+  assertContains(out, '灵感来源校验未通过');
+  assertContains(out, '灵感来源');
+});
+
+test('philosophy check — 灵感来源全 Wikipedia 报 high', () => {
+  // 写一个只有 Wikipedia 链接的哲学文档
+  writeFileSync(join(PHILOSOPHY_DIR, 'TEST_INSPIRATION.md'), [
+    '# 测试灵感来源',
+    '',
+    '## 灵感来源',
+    '',
+    '- **Unix Philosophy** — 做一件事并做好。萃取：单一职责。来源：https://en.wikipedia.org/wiki/Unix_philosophy',
+    '- **Dieter Rams** — 少即多。萃取：减法优先。来源：https://en.wikipedia.org/wiki/Dieter_Rams',
+    '- **Minimalism** — 简约设计。萃取：去除冗余。来源：https://en.wikipedia.org/wiki/Minimalism',
+    '',
+    '## 章节锚点',
+    '',
+    '- `#test` — 测试',
+  ].join('\n'));
+  const out = run('philosophy check', true);
+  assertContains(out, '非 Wikipedia');
+  rmSync(join(PHILOSOPHY_DIR, 'TEST_INSPIRATION.md'), { force: true });
+});
+
+test('philosophy check — 合格灵感来源通过', () => {
+  writeFileSync(join(PHILOSOPHY_DIR, 'TEST_GOOD.md'), [
+    '# 测试合格灵感来源',
+    '',
+    '## 灵感来源',
+    '',
+    '- **Unix Philosophy**（Doug McIlloy, 1978）— 做一件事并做好。萃取：单一职责 + CLI 作为可组合原语。来源：https://en.wikipedia.org/wiki/Unix_philosophy',
+    '- **The Art of UNIX Programming**（Eric Raymond, 2003）— 17 条 Unix 原则。萃取：模块化、清晰性、透明性。来源：https://www.catb.org/esr/writings/taoup/html/',
+    '- **The UNIX Philosophy**（Mike Gancarz, 1995）— 小即是美。萃取：小工具组合优于大单体。来源：https://www.goodreads.com/book/show/108453.The_UNIX_Philosophy',
+    '',
+    '## 章节锚点',
+    '',
+    '- `#test` — 测试',
+  ].join('\n'));
+  const out = run('philosophy check');
+  assertContains(out, '通过');
+  rmSync(join(PHILOSOPHY_DIR, 'TEST_GOOD.md'), { force: true });
+});
+
 console.log('\n测试 verify 命令');
 
 test('verify pending — 返回待验证的 Intent（INT-002 是 in_progress 且无验证记录）', () => {

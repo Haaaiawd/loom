@@ -50,6 +50,19 @@ Philosophy Weaver 是一个**独立的 Agent 步骤**，在项目启动时运行
 
 Weaver 自己决定要产出几个文档、多详细——这取决于项目特征。
 
+### 灵感来源的硬约束
+
+哲学文档的"灵感来源"章节不是装饰——它是搜索过程的证据。CLI 会校验灵感来源质量（`loom philosophy check`）：
+
+1. **至少 3 个独立源**——少于 3 个说明搜索不充分
+2. **至少 2 个非 Wikipedia 链接**——Wikipedia 是常识入口，不是深度源。需要原著、论文、工程博客、标准文档等
+3. **每个源必须有选取理由**——必须说明"为什么选这个源"、萃取/转译关系
+4. **源类型不能单一**——Wikipedia 占比超过 70% 会报警
+
+**如果 Agent 从训练数据"背"几个熟悉的名字（如 Unix Philosophy、Dieter Rams）就交差，校验会失败。** 必须真正走搜索漏斗，找到原著、深度解读、实践案例。
+
+`loom doctor` 也会自动跑灵感来源校验——不达标的哲学文档会被标记为问题。
+
 ---
 
 ## 哲学维度分层
@@ -269,7 +282,13 @@ Weaver 织造时读取对应维度文件，按其指引搜索和萃取。
 
 维度库是**可扩展**的——用户或 Agent 可以添加新维度。但新维度必须包含上述四要素，否则 Weaver 无法使用。
 
-> **注**：`dimensions/` 当前包含 `SEARCH_METHODOLOGY.md`（检索方法论）。维度文件按需填充——Weaver 首次运行时如果维度文件不存在，可根据 PHILOSOPHY_WEAVER.md 中的维度表自主判断。
+> **注**：`dimensions/` 当前包含：
+> - `SEARCH_METHODOLOGY.md` — 检索方法论（怎么找到优质思想）
+> - `universal/PRODUCT_PHILOSOPHY.md` — 产品哲学维度指引（参考源清单 + 落地要求）
+> - `universal/ENGINEERING_CREED.md` — 工程哲学维度指引
+> - `universal/COLLABORATION_PHILOSOPHY.md` — 协作哲学维度指引
+>
+> 通用层三个维度已填充，Weaver 织造时必须读取对应维度文件，按其参考源指引搜索。领域层（`domain/`）和交叉层（`crosscutting/`）按需填充——Weaver 首次运行时如果维度文件不存在，可根据 PHILOSOPHY_WEAVER.md 中的维度表自主判断。
 
 ---
 

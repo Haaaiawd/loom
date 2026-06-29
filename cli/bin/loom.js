@@ -11,7 +11,7 @@ import { findLoomRoot, findVersionDir, readCurrentPointer } from '../src/shared/
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import { getNextIntent, getStatus, getDependencyGraph, getIntent, loadIntentMap, updateIntentStatus, getNarrative } from '../src/intent-map.js';
-import { getPhilosophy, listPhilosophyFiles } from '../src/philosophy.js';
+import { getPhilosophy, listPhilosophyFiles, validateInspirationSources } from '../src/philosophy.js';
 import { writeVerification, getVerificationHistory, getPendingVerifications, listVerifications, getVerificationContract } from '../src/verify.js';
 import { initProject } from '../src/init.js';
 import { activateRole } from '../src/activate.js';
@@ -180,8 +180,29 @@ try {
         case 'list':
           output(listPhilosophyFiles(getPhilosophyDir(versionDir)));
           break;
+        case 'check': {
+          const result = validateInspirationSources(getPhilosophyDir(versionDir));
+          if (result.passed) {
+            console.log('✓ 灵感来源校验通过');
+            for (const { file, sources } of result.sources) {
+              console.log(`  ${file}: ${sources.length} 个源`);
+            }
+          } else {
+            const high = result.issues.filter((i) => i.severity === 'high').length;
+            const medium = result.issues.filter((i) => i.severity === 'medium').length;
+            console.log(`✗ 灵感来源校验未通过（${result.issues.length} 个问题: ${high} high, ${medium} medium）`);
+            for (const issue of result.issues) {
+              const icon = issue.severity === 'high' ? '⚠' : '·';
+              console.log(`  ${icon} [${issue.severity}] ${issue.msg}`);
+            }
+            console.log('\nWeaver 织造哲学时必须真正搜索，不能从训练数据"背"几个名字就交差。');
+            console.log('参见 meta/PHILOSOPHY_WEAVER.md "织造漏斗" + dimensions/SEARCH_METHODOLOGY.md。');
+            exit(1);
+          }
+          break;
+        }
         default:
-          die(`未知子命令: philosophy ${sub}\n用法: loom philosophy [get <anchor>|list]`);
+          die(`未知子命令: philosophy ${sub}\n用法: loom philosophy [get <anchor>|list|check]`);
       }
       break;
     }
@@ -480,6 +501,7 @@ To Human:
 
   loom philosophy get <anchor>  按锚点加载哲学章节
   loom philosophy list          列出哲学文档文件
+  loom philosophy check         校验灵感来源质量（源数量/多样性/理由）
 
   loom verify contract <id>     返回某 Intent 的验收契约（解析引用）
   loom verify history <id>      返回某 Intent 验证历史

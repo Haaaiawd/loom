@@ -6,7 +6,7 @@
 loom doctor
 \`\`\`
 
-检测 6 类问题：
+检测 7 类问题：
 
 | 问题类型 | 严重度 | 说明 |
 |---|---|---|
@@ -15,8 +15,25 @@ loom doctor
 | orphan_dependency | high | depends_on 引用不存在的 Intent |
 | completed_no_record | high | completed 但无验证记录 |
 | completed_depends_blocked | high | completed 依赖 blocked 的 Intent |
+| inspiration_source | high/medium | 灵感来源质量不达标（源太少/全是 Wikipedia/缺理由） |
 | in_progress_no_record | medium | in_progress 但无验证记录（可能中断） |
 | zombie | medium | in_progress/blocked 超过 7 天无活动 |
+
+## 灵感来源校验
+
+\`\`\`bash
+loom philosophy check
+\`\`\`
+
+单独校验哲学文档的灵感来源质量。防止 Weaver 从训练数据"背"几个名字就交差。
+
+校验规则：
+- 至少 3 个独立源
+- 至少 2 个非 Wikipedia 链接
+- 每个源必须有选取理由（萃取/转译/启发关系）
+- Wikipedia 占比不超过 70%
+
+不达标时，需要重新织造哲学——真正走搜索漏斗，找原著、论文、工程博客等深度源。
 
 ## 上下文摘要
 

@@ -5,7 +5,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { loadIntentMap, getStatus, getNextIntent, getNarrative, getIntent } from './intent-map.js';
-import { getPhilosophy } from './philosophy.js';
+import { getPhilosophy, validateInspirationSources } from './philosophy.js';
 import { getVerificationHistory, getPendingVerifications, getVerificationContract } from './verify.js';
 
 // ─── doctor ────────────────────────────────────────────
@@ -121,6 +121,14 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
           // package.json 解析失败，不报——不是 doctor 的职责
         }
       }
+    }
+  }
+
+  // 哲学灵感来源校验（防止 Weaver 从训练数据"背"几个名字就交差）
+  if (existsSync(philosophyDir)) {
+    const inspirationCheck = validateInspirationSources(philosophyDir);
+    for (const issue of inspirationCheck.issues) {
+      issues.push({ id: 'philosophy', type: 'inspiration_source', severity: issue.severity, msg: issue.msg });
     }
   }
 
