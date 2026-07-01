@@ -1,7 +1,7 @@
 // run-all.js — CLI 端到端测试
 // 造一个临时 .loom/v1/ 项目结构，用模板数据，跑通所有命令。
 
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
 
@@ -445,6 +445,33 @@ test('verify write — deviated 轮次追踪和升级提示', () => {
   }
 });
 
+test('verify write — deviated 连续计数遇到 passed 会重置', () => {
+  rmSync(join(VERIFICATIONS_DIR, 'INT-099.json'), { force: true });
+  const verdicts = ['deviated', 'passed', 'deviated', 'deviated'];
+  for (let i = 0; i < verdicts.length; i++) {
+    const verdict = verdicts[i];
+    const record = {
+      intent_id: 'INT-099',
+      verdict,
+      timestamp: `2026-06-26T13:0${i}:00Z`,
+      summary: `第 ${i + 1} 轮 ${verdict}`,
+      dimensions: {
+        intent_fidelity: { verdict, evidence: '对照意图叙事第 2 段，记录连续偏离计数行为' },
+        philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2 均未违反' },
+        baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 逐条合规，无硬编码无隐式契约' },
+        acceptance_achievement: { verdict, evidence: '契约#3 用于验证连续 deviated 计数是否重置' },
+      },
+      deviation_detail: verdict === 'deviated' ? '偏离了原始意图' : undefined,
+    };
+    const tmpFile = join(LOOM_DIR, `_tmp_verify_reset_${i}.json`);
+    writeFileSync(tmpFile, JSON.stringify(record));
+    const out = run(`verify write --json-file "${tmpFile}"`);
+    assert(!out.includes('升级为 blocked'), '非连续 3 轮 deviated 不应触发升级');
+    rmSync(tmpFile, { force: true });
+  }
+  rmSync(join(VERIFICATIONS_DIR, 'INT-099.json'), { force: true });
+});
+
 test('verify write — pending_human verdict（L3 人类反馈）', () => {
   const record = {
     intent_id: 'INT-002',
@@ -795,9 +822,74 @@ test('context — 上下文摘要', () => {
   const out = run('context');
   const data = JSON.parse(out);
   assert(data.progress !== undefined, '缺少 progress');
+  assert(data.intent_map_valid === true, '健康 Intent Map 应标记为有效');
   assert(data.next_intent !== undefined, '缺少 next_intent');
   assert(data.pending_verifications !== undefined, '缺少 pending_verifications');
   assert(Array.isArray(data.risks), '缺少 risks 数组');
+});
+
+test('doctor/context — Intent Map 无效时返回诊断而不是崩溃', () => {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const original = readFileSync(mapPath, 'utf-8');
+  try {
+    const broken = JSON.parse(original);
+    delete broken.intents['INT-001'].title;
+    broken.intents['INT-002'].acceptance = '...';
+    broken._meta = { ...(broken._meta || {}), _template: true };
+    writeFileSync(mapPath, JSON.stringify(broken, null, 2));
+
+    const doctorOut = run('doctor');
+    assertContains(doctorOut, 'intent_map_invalid');
+    assertContains(doctorOut, 'intent_map_template');
+
+    const contextOut = run('context');
+    const context = JSON.parse(contextOut);
+    assert(context.intent_map_valid === false, '坏 Intent Map 应标记为无效');
+    assert(context.progress.total === 3, '坏 Intent Map 仍应尽量汇总原始进度');
+    assert(context.risks.length > 0, '坏 Intent Map 应输出风险');
+  } finally {
+    writeFileSync(mapPath, original);
+  }
+});
+
+test('doctor — completed Intent 的 verification_method 与 reproduction_command 漂移时报 high', () => {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const recordPath = join(VERIFICATIONS_DIR, 'INT-001.json');
+  const originalMap = readFileSync(mapPath, 'utf-8');
+  const hadRecord = existsSync(recordPath);
+  const originalRecord = hadRecord ? readFileSync(recordPath, 'utf-8') : null;
+  try {
+    const map = JSON.parse(originalMap);
+    map.intents['INT-001']._optional = { verification_method: 'run node bin/md2html.js --help' };
+    writeFileSync(mapPath, JSON.stringify(map, null, 2));
+    writeFileSync(recordPath, JSON.stringify({
+      intent_id: 'INT-001',
+      records: [{
+        round: 1,
+        verdict: 'passed',
+        timestamp: '2026-06-26T14:00:00Z',
+        summary: '只跑了 npm test',
+        dimensions: {
+          intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事第 2 段，测试命令通过' },
+          philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2 均未违反' },
+          baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 逐条合规，无硬编码无隐式契约' },
+          acceptance_achievement: { verdict: 'passed', evidence: 'npm test 通过，但未覆盖 help 命令' },
+        },
+        reproduction_command: 'npm test',
+      }],
+    }, null, 2));
+
+    const out = run('doctor');
+    assertContains(out, 'verification_method_drift');
+    assertContains(out, 'node bin/md2html.js --help');
+  } finally {
+    writeFileSync(mapPath, originalMap);
+    if (hadRecord) {
+      writeFileSync(recordPath, originalRecord);
+    } else {
+      rmSync(recordPath, { force: true });
+    }
+  }
 });
 
 test('intent trace — 完整追溯链', () => {
@@ -930,6 +1022,19 @@ test('guide — 哲学已织造引导 activate visionary', () => {
   rmSync(guideRoot, { recursive: true, force: true });
 });
 
+test('guide --dry-run — 不写 heartbeat', () => {
+  const guideRoot = join(process.cwd(), 'test', '.tmp-guide-dry-run');
+  rmSync(guideRoot, { recursive: true, force: true });
+  mkdirSync(guideRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: guideRoot, encoding: 'utf-8' });
+  const heartbeatPath = join(guideRoot, '.loom', 'heartbeat.json');
+  rmSync(heartbeatPath, { force: true });
+  const out = execSync(`node "${CLI}" guide --dry-run`, { cwd: guideRoot, encoding: 'utf-8' });
+  assertContains(out, 'dry-run');
+  assert(!existsSync(heartbeatPath), 'guide --dry-run 不应写 heartbeat');
+  rmSync(guideRoot, { recursive: true, force: true });
+});
+
 test('guide — --help 包含 To Agent 和 To Human 区块', () => {
   const out = run('--help');
   assertContains(out, 'To Agent');
@@ -983,6 +1088,57 @@ test('preview — 输出提示词', () => {
   assertContains(out, 'SVG');
   assertContains(out, '.loom/');
   assertContains(out, 'loom-preview.html');
+});
+
+test('preview --help — 输出 preview 用法', () => {
+  const out = run('preview --help');
+  assertContains(out, 'loom preview --regen');
+  assertContains(out, 'loom preview status');
+  assertContains(out, 'loom preview --stale');
+});
+
+test('preview status — 报告 preview 新鲜度', () => {
+  const previewRoot = join(process.cwd(), 'test', '.tmp-preview-status');
+  rmSync(previewRoot, { recursive: true, force: true });
+  mkdirSync(previewRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: previewRoot, encoding: 'utf-8' });
+  const previewPath = join(previewRoot, 'loom-preview.html');
+  writeFileSync(previewPath, '<html></html>', 'utf-8');
+  const oldTime = new Date('2026-01-01T00:00:00Z');
+  const newTime = new Date('2026-01-02T00:00:00Z');
+  utimesSync(previewPath, oldTime, oldTime);
+  utimesSync(join(previewRoot, '.loom', 'v1', '00_PHILOSOPHY', 'PRODUCT_PHILOSOPHY.md'), oldTime, oldTime);
+  utimesSync(join(previewRoot, '.loom', 'v1', '02_ARCHITECTURE.md'), oldTime, oldTime);
+  utimesSync(join(previewRoot, '.loom', 'v1', '04_INTENT_MAP.json'), oldTime, oldTime);
+  utimesSync(join(previewRoot, '.loom', 'v1', '05_VERIFICATION.md'), oldTime, oldTime);
+  const sourcePath = join(previewRoot, '.loom', 'v1', '01_VISION.md');
+  utimesSync(sourcePath, newTime, newTime);
+
+  const out = execSync(`node "${CLI}" preview status`, { cwd: previewRoot, encoding: 'utf-8' });
+  const data = JSON.parse(out);
+  assert(data.exists === true, 'preview 应存在');
+  assert(data.fresh === false, 'preview 应过期');
+  assert(data.latest_source_file === '.loom/v1/01_VISION.md', `latest_source_file 不匹配: ${data.latest_source_file}`);
+  rmSync(previewRoot, { recursive: true, force: true });
+});
+
+test('preview — 过期时提示 regen，不打开旧投影', () => {
+  const previewRoot = join(process.cwd(), 'test', '.tmp-preview-stale');
+  rmSync(previewRoot, { recursive: true, force: true });
+  mkdirSync(previewRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: previewRoot, encoding: 'utf-8' });
+  const previewPath = join(previewRoot, 'loom-preview.html');
+  writeFileSync(previewPath, '<html></html>', 'utf-8');
+  const oldTime = new Date('2026-01-01T00:00:00Z');
+  const newTime = new Date('2026-01-02T00:00:00Z');
+  utimesSync(previewPath, oldTime, oldTime);
+  utimesSync(join(previewRoot, '.loom', 'v1', '04_INTENT_MAP.json'), newTime, newTime);
+
+  const out = execSync(`node "${CLI}" preview`, { cwd: previewRoot, encoding: 'utf-8' });
+  assertContains(out, 'preview 已过期');
+  assertContains(out, 'loom preview --regen');
+  assertContains(out, 'loom preview --stale');
+  rmSync(previewRoot, { recursive: true, force: true });
 });
 
 // ─── 清理 ──────────────────────────────────────────────

@@ -8,6 +8,97 @@ import { loadIntentMap, getStatus, getNextIntent, getNarrative, getIntent } from
 import { getPhilosophy, validateInspirationSources, validatePartDecomposition } from './philosophy.js';
 import { getVerificationHistory, getPendingVerifications, getVerificationContract } from './verify.js';
 
+function readIntentMapRaw(versionDir) {
+  const filePath = join(versionDir, '04_INTENT_MAP.json');
+  if (!existsSync(filePath)) return null;
+  return JSON.parse(readFileSync(filePath, 'utf-8'));
+}
+
+function summarizeRawIntentMap(data) {
+  const intents = data?.intents && typeof data.intents === 'object' ? data.intents : {};
+  const ids = { pending: [], in_progress: [], completed: [], blocked: [], needs_review: [] };
+  const titles = {};
+
+  for (const [id, intent] of Object.entries(intents)) {
+    const status = intent?.status;
+    if (ids[status]) ids[status].push(id);
+    titles[id] = intent?.title || '';
+  }
+
+  return {
+    counts: {
+      pending: ids.pending.length,
+      in_progress: ids.in_progress.length,
+      completed: ids.completed.length,
+      blocked: ids.blocked.length,
+      needs_review: ids.needs_review.length,
+      total: Object.keys(intents).length,
+    },
+    ids,
+    titles,
+  };
+}
+
+function intentMapDiagnostics(versionDir) {
+  const issues = [];
+  let raw = null;
+  let valid = null;
+  let validMap = null;
+
+  try {
+    raw = readIntentMapRaw(versionDir);
+  } catch (e) {
+    issues.push({ id: 'intent_map', type: 'intent_map_unreadable', severity: 'fatal', msg: `Intent Map 无法读取或 JSON 损坏: ${e.message}` });
+    return { raw, valid, issues, validMap: null };
+  }
+
+  if (!raw) {
+    issues.push({ id: 'intent_map', type: 'intent_map_missing', severity: 'fatal', msg: '缺少 04_INTENT_MAP.json' });
+    return { raw, valid, issues, validMap: null };
+  }
+
+  if (raw._meta?._template === true) {
+    issues.push({ id: 'intent_map', type: 'intent_map_template', severity: 'high', msg: 'Intent Map 仍是模板，尚未由 Architect 产出真实意图图' });
+  }
+
+  try {
+    validMap = loadIntentMap(versionDir);
+    valid = true;
+  } catch (e) {
+    valid = false;
+    issues.push({ id: 'intent_map', type: 'intent_map_invalid', severity: 'fatal', msg: e.message });
+  }
+
+  return { raw, valid, issues, validMap };
+}
+
+function getIntentVerificationMethod(intent) {
+  return intent.verification_method || intent._optional?.verification_method || null;
+}
+
+function normalizeVerificationCommand(command) {
+  return String(command || '')
+    .replace(/^\s*run\s+/i, '')
+    .replace(/^\s*exec\s+/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function commandCoversMethod(actualCommand, expectedMethod) {
+  const actual = normalizeVerificationCommand(actualCommand);
+  const expected = normalizeVerificationCommand(expectedMethod);
+  if (!actual || !expected) return false;
+
+  return expected.split('&&').every((part) => {
+    const expectedPart = normalizeVerificationCommand(part);
+    if (!expectedPart) return true;
+    if (actual.includes(expectedPart)) return true;
+    // npm test is an acceptable broader reproduction for node --test based methods.
+    if (expectedPart.startsWith('node --test') && actual.includes('npm test')) return true;
+    return false;
+  });
+}
+
 // ─── doctor ────────────────────────────────────────────
 // 全面健康检查：一致性 + 孤儿引用 + 循环依赖 + 僵尸 Intent
 
@@ -19,8 +110,15 @@ import { getVerificationHistory, getPendingVerifications, getVerificationContrac
  * @returns {{ issues: object[], summary: object }}
  */
 export function doctor(versionDir, verificationsDir, philosophyDir) {
-  const { intents, topo_order } = loadIntentMap(versionDir);
-  const issues = [];
+  const mapState = intentMapDiagnostics(versionDir);
+  const issues = [...mapState.issues];
+
+  if (!mapState.validMap) {
+    appendPhilosophyDiagnostics(issues, philosophyDir);
+    return { issues, summary: summarizeIssues(issues) };
+  }
+
+  const { intents } = mapState.validMap;
 
   // 1. 状态一致性：in_progress/completed 但无验证记录
   for (const [id, intent] of Object.entries(intents)) {
@@ -93,8 +191,8 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
   // 7. 验证脚本可执行性：检查 verification_method 引用的脚本/目录是否存在
   const projectDir = join(versionDir, '..', '..');
   for (const [id, intent] of Object.entries(intents)) {
-    if (!intent.verification_method) continue;
-    const vm = intent.verification_method;
+    const vm = getIntentVerificationMethod(intent);
+    if (!vm) continue;
     // 检测 npm test 引用
     if (vm.includes('npm test') || vm.includes('npm run test')) {
       const pkgPath = join(projectDir, 'package.json');
@@ -124,28 +222,56 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
     }
   }
 
-  // 哲学灵感来源校验（防止 Weaver 从训练数据"背"几个名字就交差）
-  if (existsSync(philosophyDir)) {
-    const inspirationCheck = validateInspirationSources(philosophyDir);
-    for (const issue of inspirationCheck.issues) {
-      issues.push({ id: 'philosophy', type: 'inspiration_source', severity: issue.severity, msg: issue.msg });
-    }
-    // 实现部分拆解校验（防止 Weaver 跳过拆解步骤）
-    const decompositionCheck = validatePartDecomposition(philosophyDir);
-    for (const issue of decompositionCheck.issues) {
-      issues.push({ id: 'philosophy', type: 'part_decomposition', severity: issue.severity, msg: issue.msg });
+  // 8. completed Intent 的 verification_method 必须被最新验证记录覆盖，防止契约命令漂移。
+  for (const [id, intent] of Object.entries(intents)) {
+    if (intent.status !== 'completed') continue;
+    const method = getIntentVerificationMethod(intent);
+    if (!method) continue;
+
+    const expected = normalizeVerificationCommand(method);
+    if (!expected || expected === 'human_review') continue;
+
+    const history = getVerificationHistory(verificationsDir, id);
+    const latest = history?.records?.[history.records.length - 1];
+    const actual = normalizeVerificationCommand(latest?.reproduction_command);
+
+    if (!latest) {
+      issues.push({ id, type: 'verification_method_unverified', severity: 'high', msg: `${id} 声明了 verification_method 但没有验证记录覆盖: ${method}` });
+    } else if (!actual) {
+      issues.push({ id, type: 'verification_method_unverified', severity: 'high', msg: `${id} 最新验证记录缺少 reproduction_command，无法复现 verification_method: ${method}` });
+    } else if (!commandCoversMethod(actual, expected)) {
+      issues.push({ id, type: 'verification_method_drift', severity: 'high', msg: `${id} verification_method 未被最新 reproduction_command 覆盖。method="${method}" reproduction_command="${latest.reproduction_command}"` });
     }
   }
 
-  const summary = {
+  appendPhilosophyDiagnostics(issues, philosophyDir);
+  return { issues, summary: summarizeIssues(issues) };
+}
+
+function appendPhilosophyDiagnostics(issues, philosophyDir) {
+  // 哲学灵感来源校验（防止 Weaver 从训练数据"背"几个名字就交差）
+  if (!existsSync(philosophyDir)) return;
+
+  const inspirationCheck = validateInspirationSources(philosophyDir);
+  for (const issue of inspirationCheck.issues) {
+    issues.push({ id: 'philosophy', type: 'inspiration_source', severity: issue.severity, msg: issue.msg });
+  }
+
+  // 实现部分拆解校验（防止 Weaver 跳过拆解步骤）
+  const decompositionCheck = validatePartDecomposition(philosophyDir);
+  for (const issue of decompositionCheck.issues) {
+    issues.push({ id: 'philosophy', type: 'part_decomposition', severity: issue.severity, msg: issue.msg });
+  }
+}
+
+function summarizeIssues(issues) {
+  return {
     total_issues: issues.length,
     fatal: issues.filter((i) => i.severity === 'fatal').length,
     high: issues.filter((i) => i.severity === 'high').length,
     medium: issues.filter((i) => i.severity === 'medium').length,
     healthy: issues.length === 0,
   };
-
-  return { issues, summary };
 }
 
 /**
@@ -196,19 +322,21 @@ function detectCycles(intents) {
  * @returns {object}
  */
 export function contextSummary(versionDir, verificationsDir, philosophyDir) {
-  const status = getStatus(versionDir);
-  const next = getNextIntent(versionDir);
-  const pending = getPendingVerifications(versionDir, verificationsDir);
+  const mapState = intentMapDiagnostics(versionDir);
+  const status = mapState.valid ? getStatus(versionDir) : summarizeRawIntentMap(mapState.raw);
+  const next = mapState.valid ? getNextIntent(versionDir) : null;
+  const pending = mapState.valid ? getPendingVerifications(versionDir, verificationsDir) : [];
   const { issues } = doctor(versionDir, verificationsDir, philosophyDir);
 
   const risks = [];
   const fatalCount = issues.filter((i) => i.severity === 'fatal').length;
   const highCount = issues.filter((i) => i.severity === 'high').length;
-  if (fatalCount > 0) risks.push(`${fatalCount} 个致命问题（循环依赖）`);
+  if (fatalCount > 0) risks.push(`${fatalCount} 个致命问题（Intent Map 损坏/循环依赖）`);
   if (highCount > 0) risks.push(`${highCount} 个高严重度问题（状态不一致/孤儿引用）`);
   if (status.counts.blocked > 0) risks.push(`${status.counts.blocked} 个阻塞 Intent`);
 
   return {
+    intent_map_valid: mapState.valid === true,
     progress: {
       completed: status.counts.completed,
       total: status.counts.total,

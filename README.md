@@ -59,10 +59,12 @@ Keeper 验证（四维度：意图忠实度 / 哲学一致性 / 底线合规 / �
 
 ```bash
 loom guide
+loom guide --dry-run  # 只读诊断，不写 heartbeat
 ```
 
 guide 检测项目当前在哪个阶段，输出"你在阶段 X，下一步做 Y"。
 Agent 每完成一步都跑 guide 确认下一步。
+如果只是审计或探测，不希望产生任何状态写入，用 `loom guide --dry-run`。
 
 ### AUTO 模式
 
@@ -146,12 +148,18 @@ loom intent status
 ### 步骤 6：人类预览
 
 ```bash
-loom preview
+loom preview status   # 先检查 preview 是否新鲜
+loom preview          # 新鲜则打开；过期则提示重新生成
+loom preview --regen  # 输出生成提示词，让 Agent 重写 loom-preview.html
 ```
 
-输出提示词，Agent 按提示词读 `.loom/` 文件、拆解信息、生成 HTML 可视化预览。
-人类用浏览器打开 `loom-preview.html` 看全局——哲学、愿景、架构、Intent 进度、验证历史。
-这是只读投影，修改请编辑源文件后重新生成。
+preview 是人类总览用的只读投影：哲学、愿景、架构、Intent 进度、验证历史。
+`loom preview` 会用 mtime 检查 `.loom/v{N}` 是否比 `loom-preview.html` 更新：
+- 新鲜：直接打开 `loom-preview.html`
+- 过期：不打开旧投影，提示 `loom preview --regen`
+- 强行打开旧投影：`loom preview --stale`
+
+Agent 在用户说"看看进度 / 打开 preview / 看全局"时，先跑 `loom preview status`。
 
 **CLI 命令一览**：
 
@@ -159,10 +167,14 @@ loom preview
 |---|---|
 | `loom init` | 初始化项目 |
 | `loom guide` | 诊断当前阶段，输出下一步引导 |
+| `loom guide --dry-run` | 只读诊断当前阶段，不写 heartbeat |
 | `loom auto on\|off\|status` | AUTO 模式开关 |
 | `loom activate <role>` | 输出角色激活提示词 |
-| `loom preview` | 输出提示词，AI 生成 HTML 可视化预览 |
-| `loom help <topic>` | 分层指南（workflow\|concepts\|loop\|version\|doctor） |
+| `loom preview` | 打开新鲜 HTML 预览；过期时提示重新生成 |
+| `loom preview status` | 检查 `loom-preview.html` 是否存在、是否新鲜 |
+| `loom preview --regen` | 输出提示词，让 Agent 重写 HTML 预览 |
+| `loom preview --stale` | 强行打开过期预览 |
+| `loom help <topic>` | 分层指南（workflow\|concepts\|loop\|version\|doctor\|preview） |
 | `loom version list` | 列出所有版本（* 标记当前） |
 | `loom version new` | 创建新版本 + 自动切换（Major 升级） |
 | `loom version use <v>` | 切换当前版本 |

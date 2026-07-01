@@ -92,10 +92,14 @@ export function writeVerification(verificationsDir, record) {
     data = { intent_id: record.intent_id, records: [] };
   }
 
-  // 计算轮次和 deviated 计数
+  // 计算轮次和连续 deviated 计数。规范要求中间出现 passed/blocked 后重置。
   const round = data.records.length + 1;
-  const deviatedCount = data.records.filter(r => r.verdict === 'deviated').length
-    + (record.verdict === 'deviated' ? 1 : 0);
+  const recordsWithCurrent = [...data.records, record];
+  let deviatedCount = 0;
+  for (let i = recordsWithCurrent.length - 1; i >= 0; i--) {
+    if (recordsWithCurrent[i].verdict !== 'deviated') break;
+    deviatedCount++;
+  }
 
   // 追加新记录
   data.records.push({

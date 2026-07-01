@@ -20,7 +20,7 @@ import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../
 import { getHelpTopic, listHelpTopics } from '../src/help.js';
 import { guideProject } from '../src/guide.js';
 import { isAutoOn, autoOn, autoOff, autoStatus } from '../src/auto.js';
-import { generatePreviewPrompt } from '../src/preview.js';
+import { generatePreviewPrompt, getPreviewStatus } from '../src/preview.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // findLoomRoot / findVersionDir / readCurrentPointer 已提取到 shared/paths.js
@@ -369,8 +369,12 @@ try {
     }
 
     case 'guide': {
-      const result = guideProject(cwd());
+      const dryRun = argv.includes('--dry-run');
+      const result = guideProject(cwd(), { dryRun });
       console.log(`阶段 ${result.stage_num}: ${result.stage}`);
+      if (dryRun) {
+        console.log('诊断: dry-run（不写 heartbeat）');
+      }
       if (result.auto) {
         console.log(`模式: AUTO（自动执行，不等确认）`);
       } else {
@@ -427,11 +431,35 @@ try {
 
     case 'preview': {
       const previewFile = join(cwd(), 'loom-preview.html');
-      const hasPreview = existsSync(previewFile);
+      if (argv.includes('--help') || argv.includes('-h')) {
+        console.log(`用法:
+  loom preview              打开新鲜 preview；过期时提示重新生成
+  loom preview --regen      输出生成提示词，让 Agent 重写 loom-preview.html
+  loom preview status       检查 preview 是否存在、是否新鲜
+  loom preview --stale      强行打开过期 preview
+  loom preview --help       显示本帮助`);
+        break;
+      }
+      const status = getPreviewStatus(cwd());
+      const hasPreview = status.exists;
       const regenOnly = argv.includes('--regen') || argv.includes('-r');
+      const openStale = argv.includes('--stale');
+
+      if (sub === 'status') {
+        output(status);
+        break;
+      }
 
       // 已有 HTML 且没指定 --regen：直接打开浏览器
       if (hasPreview && !regenOnly) {
+        if (!status.fresh && !openStale) {
+          console.log('preview 已过期：.loom 源文件比 loom-preview.html 更新。');
+          console.log(`  preview: ${status.preview_mtime || '未知'}`);
+          console.log(`  最新源: ${status.source_latest_mtime || '未知'} ${status.latest_source_file ? `(${status.latest_source_file})` : ''}`);
+          console.log('\n下一步: loom preview --regen');
+          console.log('强行打开旧 preview: loom preview --stale');
+          break;
+        }
         const { spawn } = await import('node:child_process');
         const target = previewFile.replace(/\\/g, '/');
         if (process.platform === 'win32') {
@@ -442,7 +470,7 @@ try {
           spawn('xdg-open', [target], { detached: true, stdio: 'ignore' }).unref();
         }
         console.log(`已打开浏览器: ${previewFile}`);
-        console.log(`重新生成: loom preview --regen`);
+        console.log(status.fresh ? `重新生成: loom preview --regen` : `已打开旧 preview。重新生成: loom preview --regen`);
         break;
       }
 
@@ -482,6 +510,7 @@ To Human:
 用法:
   loom init                     初始化项目（创建 .loom/v1/ 骨架 + 模板）
   loom guide                    诊断当前阶段，输出下一步引导
+  loom guide --dry-run          只读诊断当前阶段，不写 heartbeat
   loom auto on|off|status       AUTO 模式开关（on 时 Agent 自动连续执行）
   loom activate <role>          输出角色激活提示词（weaver|visionary|architect|forge|keeper）
 
@@ -504,9 +533,11 @@ To Human:
 
   loom doctor                   项目健康检查（一致性+孤儿引用+循环依赖+僵尸）
   loom context                  上下文摘要（进度+下一步+待验证+风险）
-  loom preview                  已有 HTML 则打开浏览器，否则输出提示词让 AI 生成
+  loom preview                  打开新鲜 HTML；过期则提示重新生成
+  loom preview status           检查 preview 是否存在、是否新鲜
   loom preview --regen          强制重新输出提示词（让 AI 重新生成 HTML）
-  loom help <topic>             分层指南（workflow|concepts|loop|version|doctor）
+  loom preview --stale          强行打开过期 preview
+  loom help <topic>             分层指南（workflow|concepts|loop|version|doctor|preview）
 
   loom philosophy get <anchor>  按锚点加载哲学章节
   loom philosophy list          列出哲学文档文件

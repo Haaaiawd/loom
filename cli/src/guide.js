@@ -38,13 +38,13 @@ function isTemplate(filePath) {
  * @param {string} projectDir — 项目根目录
  * @returns {{ stage: string, stage_num: number, details: object, auto: boolean, next_action: string, next_command: string, message: string, needs_human_review: boolean }}
  */
-export function guideProject(projectDir) {
+export function guideProject(projectDir, options = {}) {
   const cwd = projectDir || process.cwd();
   const loomRoot = join(cwd, '.loom');
   const auto = isAutoOn(loomRoot);
   const result = diagnoseStage(cwd, loomRoot, auto);
   // 统一后处理：写心跳 + 加 AUTO 提示词 + 判断是否需要人类 review
-  if (existsSync(loomRoot)) {
+  if (existsSync(loomRoot) && !options.dryRun) {
     try {
       writeHeartbeat(loomRoot, {
         stage: result.stage,
@@ -145,9 +145,11 @@ function diagnoseStage(cwd, loomRoot, auto) {
   }
 
   // 状态 4-7: Intent Map 已设计，根据 Intent 状态判断
+  let intentMap;
   let intents;
   try {
-    intents = loadIntentMap(versionDir).intents;
+    intentMap = loadIntentMap(versionDir);
+    intents = intentMap.intents;
   } catch (e) {
     return {
       stage: 'intent_map_broken',
@@ -218,7 +220,7 @@ function diagnoseStage(cwd, loomRoot, auto) {
   if (counts.needs_review > 0) {
     const reviewIds = allIntents.filter((i) => i.status === 'needs_review').map((i) => i.id);
     // 读 _meta.pass_count 收敛趟计数（最大 3 趟）
-    const passCount = intents._meta?.pass_count || 1;
+    const passCount = intentMap._meta?.pass_count || 1;
     const MAX_PASSES = 3;
     const isOverLimit = passCount > MAX_PASSES;
     const passMsg = ` [Pass ${passCount}/${MAX_PASSES}]`;

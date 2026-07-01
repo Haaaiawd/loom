@@ -59,6 +59,25 @@ loom context
 一条命令获取：进度 + 下一个 Intent + 待验证 + 不一致项 + 风险。
 Agent 重启后先跑这个，快速知道"我在哪、接下来做什么"。
 
+## 只读阶段诊断
+
+\`\`\`bash
+loom guide --dry-run
+\`\`\`
+
+用于审计、子代理预演、只读探测。它输出和 `loom guide` 同样的阶段判断，但不写 `.loom/heartbeat.json`。
+
+## Preview 新鲜度诊断
+
+\`\`\`bash
+loom preview status
+\`\`\`
+
+检查 `loom-preview.html` 是否比当前 `.loom/v{N}` 源文件更新。人类要求看 preview 时，Agent 先跑这个命令：
+- `fresh=true`：可以 `loom preview`
+- `fresh=false`：不要打开旧投影，先 `loom preview --regen`
+- 必须看旧投影：`loom preview --stale`
+
 ## 崩溃恢复
 
 ### Forge 崩溃（Intent 留在 in_progress）

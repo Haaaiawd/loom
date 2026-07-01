@@ -10,6 +10,7 @@ loom guide
 
 guide 检测项目当前在哪个阶段，输出"你在阶段 X，下一步做 Y"。
 Agent 每完成一步都跑 guide 确认下一步。
+审计、预演、子代理探测时用 `loom guide --dry-run`，避免写 `.loom/heartbeat.json`。
 
 ## AUTO 模式
 
@@ -74,12 +75,17 @@ loom context            # 当前状态摘要
 ## 阶段 5：人类预览
 
 \`\`\`bash
+loom preview status
 loom preview
+loom preview --regen
 \`\`\`
 
-输出提示词，Agent 按提示词读 .loom/ 文件、拆解信息、生成 HTML 可视化预览。
-人类用浏览器打开 HTML 看全局——哲学、愿景、架构、Intent 进度、验证历史。
-这是只读投影，修改请编辑源文件后重新生成。
+preview 是给人看的只读投影。Agent 应先跑 `loom preview status`：
+- `fresh=true` → 运行 `loom preview` 打开
+- `fresh=false` → 运行 `loom preview --regen`，按提示词重写 `loom-preview.html`，再打开
+- 用户明确要看旧版 → `loom preview --stale`
+
+详细规则见 `loom help preview`。
 
 ## 阶段 6：版本演进（按需）
 
