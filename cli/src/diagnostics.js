@@ -57,7 +57,8 @@ function intentMapDiagnostics(versionDir) {
     return { raw, valid, issues, validMap: null };
   }
 
-  if (raw._meta?._template === true) {
+  const isTemplate = raw._meta?._template === true;
+  if (isTemplate) {
     issues.push({ id: 'intent_map', type: 'intent_map_template', severity: 'high', msg: 'Intent Map 仍是模板，尚未由 Architect 产出真实意图图' });
   }
 
@@ -66,7 +67,9 @@ function intentMapDiagnostics(versionDir) {
     valid = true;
   } catch (e) {
     valid = false;
-    issues.push({ id: 'intent_map', type: 'intent_map_invalid', severity: 'fatal', msg: e.message });
+    // 模板状态下字段缺失是预期的，降级为 high 而非 fatal
+    // 非模板状态下字段缺失是真正的损坏，保持 fatal
+    issues.push({ id: 'intent_map', type: 'intent_map_invalid', severity: isTemplate ? 'high' : 'fatal', msg: e.message });
   }
 
   return { raw, valid, issues, validMap };
