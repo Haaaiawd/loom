@@ -573,7 +573,7 @@ test('init — 重复初始化跳过已存在文件', () => {
   mkdirSync(initRoot, { recursive: true });
   execSync(`node "${CLI}" init`, { cwd: initRoot, encoding: 'utf-8' });
   const out2 = execSync(`node "${CLI}" init`, { cwd: initRoot, encoding: 'utf-8' });
-  assertContains(out2, '跳过');
+  assertContains(out2, 'skipped');
   rmSync(initRoot, { recursive: true, force: true });
 });
 

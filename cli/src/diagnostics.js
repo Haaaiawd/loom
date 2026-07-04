@@ -137,6 +137,42 @@ function commandCoversMethod(actualCommand, expectedMethod) {
 // ─── doctor ────────────────────────────────────────────
 // 全面健康检查：一致性 + 孤儿引用 + 循环依赖 + 僵尸 Intent
 
+// 每种 issue 类型的修复提示——给 Agent 行动化建议
+const FIX_HINTS = {
+  intent_map_unreadable: '检查 .loom/v{N}/04_INTENT_MAP.json 是否合法 JSON（jsonlint.com 或 node -e "JSON.parse(require(\'fs\').readFileSync(\'04_INTENT_MAP.json\'))"）',
+  intent_map_missing: '运行 loom init 或 loom activate architect 产出 04_INTENT_MAP.json',
+  intent_map_template: '运行 loom activate architect，Architect 填充真实 Intent Map 后删除 _meta._template 标记',
+  intent_map_invalid: '按报错信息修正 04_INTENT_MAP.json 里对应字段（补 title / 加长 acceptance / 填必填字段）',
+  completed_no_record: '在 .loom/v{N}/verifications/ 下补验证记录，或运行 loom verify pass {id} --summary "..."',
+  in_progress_no_record: '运行 loom verify pass {id} --summary "..." 写入验证记录，或 loom intent update {id} --status pending 回退',
+  orphan_philosophy_ref: '检查 04_INTENT_MAP.json 里 {id} 的 philosophy_anchors，移除或修正不存在的哲学文件引用',
+  orphan_dependency: '检查 04_INTENT_MAP.json 里 {id} 的 depends_on，移除或修正不存在的 Intent ID',
+  cycle: '打破循环：把循环链中某个 Intent 的 depends_on 里去掉前驱，或拆成更小的 Intent',
+  zombie: '检查 {id} 是否还需要——不需要就 loom intent update {id} --status completed 或 blocked',
+  completed_depends_blocked: '检查依赖 {dep} 为什么 blocked——解决阻塞或把 {id} 回退到 in_progress',
+  test_script_missing: '在 package.json 里加 test 脚本，或修正 verification_method 指向实际存在的测试命令',
+  verification_method_unverified: '运行 loom verify pass {id} --summary "..." --reproduction-command "..." 覆盖声明的验证方式',
+  verification_method_drift: '验证记录的 reproduction_command 要覆盖 verification_method 声明的命令（支持 npm/pnpm/bun 互相等价）',
+  inspiration_source: '在哲学文档的"灵感来源"章节填入至少 3 个源（- **源名** — 理由。来源：URL 或 file:// 或 local:./path）',
+  part_decomposition: '在哲学文档加"实现部分清单"章节，按 PART_DECOMPOSITION.md 拆解实现部分（- **部分名** 格式）',
+};
+
+/**
+ * 给 issue 补 fix_hint——把 {id} {dep} 等占位符替换成实际值。
+ */
+function addFixHint(issue) {
+  const template = FIX_HINTS[issue.type];
+  if (!template) return issue;
+  let hint = template;
+  // 提取 id 里的实际 Intent ID（issue.id 可能是 "INT-001" 或 "INT-002→INT-001" 等）
+  const idMatch = String(issue.id).match(/(INT-\d+)/);
+  if (idMatch) hint = hint.replace(/\{id\}/g, idMatch[1]);
+  // 提取 dep（从 msg 里找 depends_on 后的 Intent ID）
+  const depMatch = issue.msg && issue.msg.match(/依赖.*?(INT-\d+)/);
+  if (depMatch) hint = hint.replace(/\{dep\}/g, depMatch[1]);
+  return { ...issue, fix_hint: hint };
+}
+
 /**
  * 项目健康检查。
  * @param {string} versionDir — 当前版本目录
@@ -150,7 +186,8 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
 
   if (!mapState.validMap) {
     appendPhilosophyDiagnostics(issues, philosophyDir);
-    return { issues, summary: summarizeIssues(issues) };
+    const issuesWithHints = issues.map(addFixHint);
+    return { issues: issuesWithHints, summary: summarizeIssues(issuesWithHints) };
   }
 
   const { intents } = mapState.validMap;
@@ -281,7 +318,8 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
   }
 
   appendPhilosophyDiagnostics(issues, philosophyDir);
-  return { issues, summary: summarizeIssues(issues) };
+  const issuesWithHints = issues.map(addFixHint);
+  return { issues: issuesWithHints, summary: summarizeIssues(issuesWithHints) };
 }
 
 function appendPhilosophyDiagnostics(issues, philosophyDir) {

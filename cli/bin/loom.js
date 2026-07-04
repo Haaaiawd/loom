@@ -164,11 +164,10 @@ try {
     case 'init': {
       const result = initProject(cwd());
       console.log('LOOM 项目已初始化');
-      console.log(`  创建: ${result.created.length} 项`);
-      for (const c of result.created) console.log(`    + ${c}`);
-      if (result.skipped.length) {
-        console.log(`  跳过（已存在）: ${result.skipped.length} 项`);
-        for (const s of result.skipped) console.log(`    - ${s}`);
+      for (const c of result.created) console.log(`  [created] ${c}`);
+      for (const s of result.skipped) console.log(`  [skipped] ${s} (already exists)`);
+      if (result.created.length === 0 && result.skipped.length > 0) {
+        console.log('  所有文件已存在，无需操作。');
       }
       console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('To Agent: 运行 loom guide 诊断当前阶段，按引导执行');
@@ -392,7 +391,11 @@ try {
         for (const issue of issues) {
           const icon = issue.severity === 'fatal' ? '☠' : issue.severity === 'high' ? '⚠' : '·';
           console.log(`  ${icon} [${issue.severity}] ${issue.type}: ${issue.msg}`);
+          if (issue.fix_hint) {
+            console.log(`    → 修复: ${issue.fix_hint}`);
+          }
         }
+        console.log(`\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/PART_DECOMPOSITION.md + dimensions/SEARCH_METHODOLOGY.md。`);
       }
       break;
     }
