@@ -135,6 +135,36 @@ export function getVerificationHistory(verificationsDir, intentId) {
 }
 
 /**
+ * 快捷创建验证记录——Agent 不用手动构造完整 JSON。
+ * 内部用 summary 填充四个维度的 evidence，生成标准记录格式。
+ * @param {string} verificationsDir — verifications/ 目录路径
+ * @param {string} intentId — 如 "INT-001"
+ * @param {string} verdict — 'passed' | 'deviated' | 'blocked'
+ * @param {string} summary — 验证摘要（也会作为四个维度的 evidence）
+ * @param {object} [extras]
+ * @param {string} [extras.reproduction_command] — 复现命令
+ * @param {string} [extras.deviation_detail] — 偏离说明（deviated 时）
+ * @returns {{ filePath: string, round: number, deviated_count: number, should_escalate: boolean }}
+ */
+export function createQuickVerification(verificationsDir, intentId, verdict, summary, extras = {}) {
+  const timestamp = new Date().toISOString();
+  // 用 summary 填充四个维度的 evidence——快捷命令不要求 Agent 逐维度写
+  const dimensions = {};
+  for (const dim of REQUIRED_DIMENSIONS) {
+    dimensions[dim] = { verdict, evidence: summary };
+  }
+  return writeVerification(verificationsDir, {
+    intent_id: intentId,
+    verdict,
+    timestamp,
+    summary,
+    dimensions,
+    reproduction_command: extras.reproduction_command || null,
+    deviation_detail: extras.deviation_detail || null,
+  });
+}
+
+/**
  * 返回所有待验证的 Intent（有实现产物但还没验证记录的）。
  * 需要传入 Intent Map 来判断哪些 Intent 是 in_progress。
  */

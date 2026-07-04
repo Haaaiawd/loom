@@ -59,7 +59,7 @@ function intentMapDiagnostics(versionDir) {
 
   const isTemplate = raw._meta?._template === true;
   if (isTemplate) {
-    issues.push({ id: 'intent_map', type: 'intent_map_template', severity: 'high', msg: 'Intent Map 仍是模板，尚未由 Architect 产出真实意图图' });
+    issues.push({ id: 'intent_map', type: 'intent_map_template', severity: 'high', msg: 'Intent Map 仍是模板，尚未由 Architect 产出真实意图图', is_template: true });
   }
 
   try {
@@ -69,7 +69,7 @@ function intentMapDiagnostics(versionDir) {
     valid = false;
     // 模板状态下字段缺失是预期的，降级为 high 而非 fatal
     // 非模板状态下字段缺失是真正的损坏，保持 fatal
-    issues.push({ id: 'intent_map', type: 'intent_map_invalid', severity: isTemplate ? 'high' : 'fatal', msg: e.message });
+    issues.push({ id: 'intent_map', type: 'intent_map_invalid', severity: isTemplate ? 'high' : 'fatal', msg: e.message, is_template: isTemplate });
   }
 
   return { raw, valid, issues, validMap };
@@ -331,11 +331,16 @@ export function contextSummary(versionDir, verificationsDir, philosophyDir) {
   const pending = mapState.valid ? getPendingVerifications(versionDir, verificationsDir) : [];
   const { issues } = doctor(versionDir, verificationsDir, philosophyDir);
 
+  // 区分模板阶段问题（待填充）和真实损坏
+  const templateIssues = issues.filter((i) => i.is_template || i.type === 'intent_map_template' || i.type === 'inspiration_source' || i.type === 'part_decomposition');
+  const realIssues = issues.filter((i) => !templateIssues.includes(i));
+
   const risks = [];
-  const fatalCount = issues.filter((i) => i.severity === 'fatal').length;
-  const highCount = issues.filter((i) => i.severity === 'high').length;
+  const fatalCount = realIssues.filter((i) => i.severity === 'fatal').length;
+  const highCount = realIssues.filter((i) => i.severity === 'high').length;
   if (fatalCount > 0) risks.push(`${fatalCount} 个致命问题（Intent Map 损坏/循环依赖）`);
   if (highCount > 0) risks.push(`${highCount} 个高严重度问题（状态不一致/孤儿引用）`);
+  if (templateIssues.length > 0) risks.push(`${templateIssues.length} 个待填充（模板未产出，需 Weaver/Architect 填充）`);
   if (status.counts.blocked > 0) risks.push(`${status.counts.blocked} 个阻塞 Intent`);
 
   return {
@@ -349,7 +354,7 @@ export function contextSummary(versionDir, verificationsDir, philosophyDir) {
     pending_verifications: pending,
     inconsistent_states: issues.filter((i) => i.type === 'in_progress_no_record' || i.type === 'completed_no_record').map((i) => i.id),
     risks,
-    healthy: issues.length === 0,
+    healthy: realIssues.length === 0,
   };
 }
 

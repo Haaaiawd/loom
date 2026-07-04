@@ -12,14 +12,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 import { getNextIntent, getStatus, getDependencyGraph, getIntent, loadIntentMap, updateIntentStatus, getNarrative } from '../src/intent-map.js';
 import { getPhilosophy, listPhilosophyFiles, validateInspirationSources, validatePartDecomposition } from '../src/philosophy.js';
-import { writeVerification, getVerificationHistory, getPendingVerifications, listVerifications, getVerificationContract } from '../src/verify.js';
+import { writeVerification, createQuickVerification, getVerificationHistory, getPendingVerifications, listVerifications, getVerificationContract } from '../src/verify.js';
 import { initProject } from '../src/init.js';
 import { activateRole } from '../src/activate.js';
 import { listVersions, newVersion, useVersion, diffVersions } from '../src/version.js';
 import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../src/diagnostics.js';
 import { getHelpTopic, listHelpTopics } from '../src/help.js';
 import { guideProject } from '../src/guide.js';
-import { isAutoOn, autoOn, autoOff, autoStatus } from '../src/auto.js';
+import { isAutoOn, autoOn, autoOff, autoStatus, getAutoMode } from '../src/auto.js';
 import { generatePreviewPrompt, getPreviewStatus } from '../src/preview.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
@@ -126,8 +126,37 @@ try {
           console.log(`${id} status 已更新为 ${newStatus}`);
           break;
         }
+        case 'done': {
+          // loom intent done <id> — 自动走 pending→in_progress→completed，检查验证记录
+          const id = rest[0];
+          if (!id) die('用法: loom intent done <id>');
+          const verificationsDir = getVerificationsDir(versionDir);
+          // 检查有没有验证记录
+          const history = getVerificationHistory(verificationsDir, id);
+          if (!history || history.records.length === 0) {
+            die(`${id} 没有验证记录。先跑: loom verify pass ${id} --summary "..."`);
+          }
+          // 检查最新验证记录是否 passed
+          const latest = history.records[history.records.length - 1];
+          if (latest.verdict !== 'passed') {
+            die(`${id} 最新验证记录是 ${latest.verdict}（非 passed）。只有 passed 的 Intent 才能 done。`);
+          }
+          // 获取当前状态，自动走两步
+          const intent = getIntent(versionDir, id);
+          const currentStatus = intent.status;
+          if (currentStatus === 'completed') {
+            console.log(`${id} 已经是 completed，无需操作`);
+            break;
+          }
+          if (currentStatus === 'pending') {
+            updateIntentStatus(versionDir, id, 'in_progress');
+          }
+          updateIntentStatus(versionDir, id, 'completed');
+          console.log(`${id} 已完成（${currentStatus} → completed）`);
+          break;
+        }
         default:
-          die(`未知子命令: intent ${sub}\n用法: loom intent [next|status|graph|get <id>|narrative <id>|validate|trace <id>|reverse-dep <id>|reverse-ref <anchor>|update <id> --status <...>]`);
+          die(`未知子命令: intent ${sub}\n用法: loom intent [next|status|graph|get <id>|narrative <id>|validate|trace <id>|reverse-dep <id>|reverse-ref <anchor>|update <id> --status <...>|done <id>]`);
       }
       break;
     }
@@ -271,8 +300,34 @@ try {
           }
           break;
         }
+        case 'pass':
+        case 'fail': {
+          // loom verify pass <id> --summary "..." [--reproduction-command "..."]
+          // loom verify fail <id> --summary "..." [--deviation "..."] [--reproduction-command "..."]
+          const id = rest[0];
+          if (!id) die(`用法: loom verify ${sub} <id> --summary "..." [--reproduction-command "..."]${sub === 'fail' ? ' [--deviation "..."]' : ''}`);
+          const summaryIdx = argv.indexOf('--summary');
+          const reproIdx = argv.indexOf('--reproduction-command');
+          const deviationIdx = argv.indexOf('--deviation');
+          const summary = summaryIdx !== -1 ? argv[summaryIdx + 1] : null;
+          if (!summary) die(`缺少 --summary: loom verify ${sub} ${id} --summary "..."`);
+          const extras = {};
+          if (reproIdx !== -1 && argv[reproIdx + 1]) extras.reproduction_command = argv[reproIdx + 1];
+          if (sub === 'fail' && deviationIdx !== -1 && argv[deviationIdx + 1]) extras.deviation_detail = argv[deviationIdx + 1];
+          const verdict = sub === 'pass' ? 'passed' : 'deviated';
+          const result = createQuickVerification(verificationsDir, id, verdict, summary, extras);
+          console.log(`验证记录已写入: ${result.filePath}`);
+          console.log(`  轮次: ${result.round}, verdict: ${verdict}`);
+          if (verdict === 'deviated') {
+            console.log(`  deviated 累计: ${result.deviated_count} 轮`);
+            if (result.should_escalate) {
+              console.log(`  ⚠ 达到 3 轮上限，应升级为 blocked——Keeper 应执行: loom intent update ${id} --status blocked`);
+            }
+          }
+          break;
+        }
         default:
-          die(`未知子命令: verify ${sub}\n用法: loom verify [contract <id>|history <id>|pending|list|write --json-file <path>|--json <string>]`);
+          die(`未知子命令: verify ${sub}\n用法: loom verify [contract <id>|history <id>|pending|list|write --json-file <path>|--json <string>|pass <id> --summary "..."|fail <id> --summary "..."]`);
       }
       break;
     }
@@ -392,39 +447,56 @@ try {
     case 'auto': {
       const loomRoot = findLoomRoot();
       switch (sub) {
-        case 'on':
-          autoOn(loomRoot);
-          console.log('AUTO 模式已开启。Agent 将自动连续执行，不等用户确认。');
+        case 'on': {
+          // loom auto on → auto-loop（默认）
+          // loom auto on --design → auto-design
+          const wantDesign = argv.includes('--design');
+          const mode = wantDesign ? 'auto-design' : 'auto-loop';
+          autoOn(loomRoot, mode);
+          if (mode === 'auto-design') {
+            console.log('AUTO 模式: auto-design（全部自动，含哲学/愿景/架构）');
+            console.log('Agent 自动连续执行所有阶段，不等人类确认。');
+          } else {
+            console.log('AUTO 模式: auto-loop（Intent Loop 自动，设计阶段需 review）');
+            console.log('  - stage 1-3（哲学/愿景/架构）：自动执行但需人类 review');
+            console.log('  - stage 4+（Intent Loop）：自动连续执行');
+          }
           console.log('核心契约: 持续运行，除非出意外否则不允许私自停止。');
           console.log('  - L3 human_review 由 Keeper 自主判定，不停下等人类');
           console.log('  - 唯一允许停下的情况: blocked（依赖阻塞/契约无法判定/连续 3 轮 deviated 升级）');
-          console.log('关闭: loom auto off');
+          console.log('切换: loom auto on --design | loom auto off');
           break;
+        }
         case 'off':
           autoOff(loomRoot);
-          console.log('AUTO 模式已关闭。每步需要用户确认。');
+          console.log('AUTO 模式: manual（每步需人类确认）');
           break;
         case 'status': {
           const status = autoStatus(loomRoot);
-          if (status.on) {
-            console.log(`AUTO 模式: 开启（自 ${status.since}）`);
-            console.log('  规则: stage 1-3（哲学/愿景/架构）需人类 review，stage 4+（Intent Loop）自动执行');
-            if (status.heartbeat) {
-              const hb = status.heartbeat;
-              console.log(`  心跳: ${hb.timestamp}`);
-              console.log(`    阶段: ${hb.stage} (stage ${hb.stage_num})`);
-              console.log(`    下一步: ${hb.next_action}`);
-              console.log(`    命令: ${hb.next_command}`);
-            } else {
-              console.log('  心跳: 尚未记录（运行 loom guide 后生成）');
-            }
-          } else {
-            console.log('AUTO 模式: 关闭（所有阶段都需人类确认）');
+          const modeDesc = {
+            'manual': 'manual（每步需人类确认）',
+            'auto-loop': 'auto-loop（Intent Loop 自动，设计阶段需 review）',
+            'auto-design': 'auto-design（全部自动，含哲学/愿景/架构）',
+          };
+          console.log(`AUTO 模式: ${modeDesc[status.mode] || status.mode}`);
+          if (status.mode === 'auto-loop') {
+            console.log('  规则: stage 1-3 需人类 review，stage 4+ 自动执行');
+          } else if (status.mode === 'auto-design') {
+            console.log('  规则: 全部阶段自动执行，不需人类 review');
+          }
+          if (status.heartbeat) {
+            const hb = status.heartbeat;
+            console.log(`  心跳: ${hb.timestamp}`);
+            console.log(`    阶段: ${hb.stage} (stage ${hb.stage_num})`);
+            console.log(`    下一步: ${hb.next_action}`);
+            console.log(`    命令: ${hb.next_command}`);
+          } else if (status.mode !== 'manual') {
+            console.log('  心跳: 尚未记录（运行 loom guide 后生成）');
           }
           break;
         }
         default:
-          die(`未知子命令: auto ${sub}\n用法: loom auto [on|off|status]`);
+          die(`未知子命令: auto ${sub}\n用法: loom auto [on [--design]|off|status]`);
       }
       break;
     }

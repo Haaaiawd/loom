@@ -1,31 +1,54 @@
 // auto — AUTO 模式开关 + 心跳机制
-// 存储机制：.loom/auto 文件存在 = on，不存在 = off
+// 存储机制：.loom/auto 文件内容 = 模式名（auto-loop / auto-design），不存在 = manual
 // 心跳：每次 guide 调用时写 .loom/heartbeat.json（时间戳 + stage + next_command）
-// AUTO on（默认）：stage 4+（Intent Loop）自动跑，stage 1-3（哲学/愿景/架构）仍需人类 review
-// AUTO off：所有阶段都需人类确认，每步拆得更碎
+//
+// 三种模式：
+//   manual      — 每步停，所有阶段需人类 review
+//   auto-loop   — 只 Intent Loop（stage 4+）自动，stage 1-3 仍需人类 review（默认）
+//   auto-design — 哲学/愿景/架构也自动，全部阶段不需人类 review
 
 import { existsSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+const VALID_MODES = ['auto-loop', 'auto-design'];
+
 /**
- * 检查 AUTO 模式是否开启。
+ * 读取 .loom/auto 文件内容，返回模式名。
+ * 向后兼容：空文件 / 旧时间戳 / 未知内容 → auto-loop
+ * @param {string} loomRoot — .loom 目录路径
+ * @returns {string} 'manual' | 'auto-loop' | 'auto-design'
+ */
+export function getAutoMode(loomRoot) {
+  const path = join(loomRoot, 'auto');
+  if (!existsSync(path)) return 'manual';
+  const content = readFileSync(path, 'utf-8').trim();
+  if (VALID_MODES.includes(content)) return content;
+  return 'auto-loop'; // 旧格式兼容
+}
+
+/**
+ * 检查 AUTO 模式是否开启（非 manual）。
  * @param {string} loomRoot — .loom 目录路径
  * @returns {boolean}
  */
 export function isAutoOn(loomRoot) {
-  return existsSync(join(loomRoot, 'auto'));
+  return getAutoMode(loomRoot) !== 'manual';
 }
 
 /**
  * 开启 AUTO 模式。
  * @param {string} loomRoot — .loom 目录路径
+ * @param {string} mode — 'auto-loop' | 'auto-design'
  */
-export function autoOn(loomRoot) {
-  writeFileSync(join(loomRoot, 'auto'), new Date().toISOString(), 'utf-8');
+export function autoOn(loomRoot, mode = 'auto-loop') {
+  if (!VALID_MODES.includes(mode)) {
+    throw new Error(`非法 AUTO 模式: "${mode}" (合法: ${VALID_MODES.join(' | ')})`);
+  }
+  writeFileSync(join(loomRoot, 'auto'), mode, 'utf-8');
 }
 
 /**
- * 关闭 AUTO 模式。
+ * 关闭 AUTO 模式（切换到 manual）。
  * @param {string} loomRoot — .loom 目录路径
  */
 export function autoOff(loomRoot) {
@@ -36,14 +59,12 @@ export function autoOff(loomRoot) {
 /**
  * 获取 AUTO 状态描述。
  * @param {string} loomRoot — .loom 目录路径
- * @returns {{ on: boolean, since: string|null, heartbeat: object|null }}
+ * @returns {{ mode: string, heartbeat: object|null }}
  */
 export function autoStatus(loomRoot) {
-  const path = join(loomRoot, 'auto');
-  if (!existsSync(path)) return { on: false, since: null, heartbeat: null };
-  const since = readFileSync(path, 'utf-8').trim();
+  const mode = getAutoMode(loomRoot);
   const heartbeat = readHeartbeat(loomRoot);
-  return { on: true, since, heartbeat };
+  return { mode, heartbeat };
 }
 
 /**
@@ -79,15 +100,17 @@ export function readHeartbeat(loomRoot) {
 
 /**
  * 判断当前阶段是否需要人类 review。
- * AUTO on 时：stage 1-3（哲学/愿景/架构）需要人类 review，stage 4+ 自动跑
- * AUTO off 时：所有阶段都需要人类 review
+ * manual：全部需 review
+ * auto-loop：stage 1-3 需 review，stage 4+ 自动
+ * auto-design：全部自动
  * @param {string} loomRoot — .loom 目录路径
  * @param {number} stageNum — 阶段号
  * @returns {boolean} 是否需要人类 review
  */
 export function needsHumanReview(loomRoot, stageNum) {
-  const autoOn = isAutoOn(loomRoot);
-  if (!autoOn) return true; // AUTO off：所有阶段都需人类 review
-  // AUTO on：stage 1-3 需人类 review，stage 4+ 自动
+  const mode = getAutoMode(loomRoot);
+  if (mode === 'manual') return true;
+  if (mode === 'auto-design') return false;
+  // auto-loop：stage 1-3 需 review，stage 4+ 自动
   return stageNum > 0 && stageNum < 4;
 }

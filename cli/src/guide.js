@@ -6,7 +6,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { readCurrentPointer } from './version.js';
 import { loadIntentMap } from './intent-map.js';
-import { isAutoOn, writeHeartbeat, needsHumanReview } from './auto.js';
+import { isAutoOn, getAutoMode, writeHeartbeat, needsHumanReview } from './auto.js';
 
 /**
  * 检测文件是否还是模板（未填充真实内容）。
@@ -41,8 +41,10 @@ function isTemplate(filePath) {
 export function guideProject(projectDir, options = {}) {
   const cwd = projectDir || process.cwd();
   const loomRoot = join(cwd, '.loom');
-  const auto = isAutoOn(loomRoot);
+  const autoMode = getAutoMode(loomRoot);
+  const auto = autoMode !== 'manual'; // 向后兼容 boolean
   const result = diagnoseStage(cwd, loomRoot, auto);
+  result.auto_mode = autoMode;
   // 统一后处理：写心跳 + 加 AUTO 提示词 + 判断是否需要人类 review
   if (existsSync(loomRoot) && !options.dryRun) {
     try {
@@ -57,13 +59,19 @@ export function guideProject(projectDir, options = {}) {
   result.needs_human_review = needsHumanReview(loomRoot, result.stage_num);
   // 在 message 末尾加 AUTO 提示
   if (result.stage_num > 0 && result.stage_num < 4) {
-    result.message += auto
-      ? '\n\n> ⚠ 这是设计阶段（哲学/愿景/架构），即使 AUTO 模式开启也需要人类 review 后再继续。'
-      : '\n\n> ⚠ AUTO 模式关闭——每步都需要人类确认后再继续。';
-  } else if (result.stage_num >= 4 && !auto) {
-    result.message += '\n\n> ⚠ AUTO 模式关闭——执行 next_command 后等人类确认再继续。';
-  } else if (result.stage_num >= 4 && auto) {
-    result.message += '\n\n> AUTO 模式开启——直接执行 next_command，无需人类确认。';
+    if (autoMode === 'auto-design') {
+      result.message += '\n\n> AUTO 模式 auto-design——设计阶段也自动执行，无需人类确认。';
+    } else if (autoMode === 'auto-loop') {
+      result.message += '\n\n> ⚠ 这是设计阶段（哲学/愿景/架构），auto-loop 模式下需要人类 review 后再继续。';
+    } else {
+      result.message += '\n\n> ⚠ AUTO 模式 manual——每步都需要人类确认后再继续。';
+    }
+  } else if (result.stage_num >= 4) {
+    if (auto) {
+      result.message += '\n\n> AUTO 模式开启——直接执行 next_command，无需人类确认。';
+    } else {
+      result.message += '\n\n> ⚠ AUTO 模式关闭——执行 next_command 后等人类确认再继续。';
+    }
   }
   return result;
 }
