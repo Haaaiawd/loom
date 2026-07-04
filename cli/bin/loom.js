@@ -215,6 +215,17 @@ try {
           const allIssues = [...inspiration.issues, ...decomposition.issues];
           const allPassed = inspiration.passed && decomposition.passed;
 
+          // --json: 结构化输出，供 Agent 程序化消费
+          if (argv.includes('--json')) {
+            output({
+              passed: allPassed,
+              issues: allIssues,
+              sources: inspiration.sources.map(({ file, sources }) => ({ file, count: sources.length })),
+              parts: decomposition.parts,
+            });
+            exit(allPassed ? 0 : 1);
+          }
+
           if (allPassed) {
             console.log('✓ 哲学文档校验通过');
             console.log('  灵感来源:');
