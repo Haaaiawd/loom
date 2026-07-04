@@ -78,16 +78,19 @@ function parseInspirationSources(content) {
     ? content.slice(startIdx, startIdx + nextSection.index)
     : content.slice(startIdx);
 
-  // 解析每个 list item（- 或 * 开头）
+  // 解析每个 list item（- / * / 1. / 2. 等开头的无序或有序列表）
   const items = [];
   const lines = sectionText.split('\n');
   let currentItem = null;
 
+  // 匹配 - xxx / * xxx / 1. xxx / 2. xxx 等
+  const ITEM_RE = /^\s*(?:[-*]|\d+\.)\s+/;
+
   for (const line of lines) {
-    if (/^\s*[-*]\s/.test(line)) {
+    if (ITEM_RE.test(line)) {
       // 新条目
       if (currentItem) items.push(currentItem);
-      const raw = line.replace(/^\s*[-*]\s/, '').trim();
+      const raw = line.replace(ITEM_RE, '').trim();
       const urls = [...raw.matchAll(/https?:\/\/[^\s）)]+/g)].map((m) => m[0]);
       const name = raw.replace(/\*\*/g, '').split(/[（(——]/)[0].trim();
       const hasReason = REASON_KEYWORDS.some((kw) => raw.includes(kw));
@@ -241,9 +244,11 @@ export function validatePartDecomposition(philosophyDir) {
     /^##\s+Parts? /m,
   ];
 
-  // 搜索部分条目——通常是 "- **部分名**" 或 "├── 部分名" 或 "| 部分名 |"
+  // 搜索部分条目——支持无序列表、有序列表、树形符号
   const PART_ITEM_PATTERNS = [
-    /^\s*[-*]\s+\*\*(.+?)\*\*/gm,  // - **CLI 交互设计**
+    /^\s*[-*]\s+\*\*(.+?)\*\*/gm,    // - **CLI 交互设计**
+    /^\s*\d+\.\s+\*\*(.+?)\*\*/gm,   // 1. **CLI 交互设计**
+    /^\s*\d+\.\s+(.+)/gm,            // 1. CLI 交互设计
     /^\s*├──\s+(.+)/gm,              // ├── CLI 交互设计
     /^\s*└──\s+(.+)/gm,              // └── 产物设计
   ];
