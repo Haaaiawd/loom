@@ -45,6 +45,65 @@ export function guideProject(projectDir, options = {}) {
   const auto = autoMode !== 'manual'; // 向后兼容 boolean
   const result = diagnoseStage(cwd, loomRoot, auto);
   result.auto_mode = autoMode;
+
+  // 按 stage 补充可执行信息：要读什么、要产出什么、完成后跑什么校验
+  const current = result.details.version || 'v1';
+  const stageMeta = {
+    not_initialized: {
+      inputs: [],
+      outputs: ['.loom/v1/'],
+      verify_command: 'loom guide',
+    },
+    no_version: {
+      inputs: [],
+      outputs: ['.loom/v1/'],
+      verify_command: 'loom guide',
+    },
+    need_philosophy: {
+      inputs: ['meta/PHILOSOPHY_WEAVER.md', 'meta/BASELINE.md', 'dimensions/PART_DECOMPOSITION.md', 'dimensions/SEARCH_METHODOLOGY.md'],
+      outputs: [`.loom/${current}/00_PHILOSOPHY/PRODUCT_PHILOSOPHY.md`, `.loom/${current}/00_PHILOSOPHY/ENGINEERING_CREED.md`, `.loom/${current}/00_PHILOSOPHY/DECISION_RUBRIC.md`],
+      verify_command: 'loom philosophy check',
+    },
+    need_vision: {
+      inputs: ['roles/visionary.md', `.loom/${current}/00_PHILOSOPHY/`],
+      outputs: [`.loom/${current}/01_VISION.md`],
+      verify_command: 'loom guide',
+    },
+    need_architecture: {
+      inputs: ['roles/architect.md', `.loom/${current}/01_VISION.md`],
+      outputs: [`.loom/${current}/02_ARCHITECTURE.md`, `.loom/${current}/04_INTENT_MAP.json`],
+      verify_command: 'loom doctor',
+    },
+    intent_map_broken: {
+      inputs: [`.loom/${current}/04_INTENT_MAP.json`],
+      outputs: [`.loom/${current}/04_INTENT_MAP.json`],
+      verify_command: 'loom intent validate',
+    },
+    in_loop: {
+      inputs: ['roles/forge.md', 'roles/keeper.md', `.loom/${current}/04_INTENT_MAP.json`],
+      outputs: ['代码文件', `.loom/${current}/verifications/INT-*.json`],
+      verify_command: 'loom verify pending',
+    },
+    ready_for_loop: {
+      inputs: ['roles/forge.md', 'roles/keeper.md', `.loom/${current}/04_INTENT_MAP.json`],
+      outputs: ['代码文件', `.loom/${current}/verifications/INT-*.json`],
+      verify_command: 'loom verify pending',
+    },
+    all_done: {
+      inputs: [],
+      outputs: [],
+      verify_command: 'loom doctor',
+    },
+    unknown: {
+      inputs: [],
+      outputs: [],
+      verify_command: 'loom doctor',
+    },
+  };
+  const meta = stageMeta[result.stage] || {};
+  result.inputs = meta.inputs || [];
+  result.outputs = meta.outputs || [];
+  result.verify_command = meta.verify_command || null;
   // 统一后处理：写心跳 + 加 AUTO 提示词 + 判断是否需要人类 review
   if (existsSync(loomRoot) && !options.dryRun) {
     try {

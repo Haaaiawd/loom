@@ -425,20 +425,37 @@ try {
 
     case 'guide': {
       const dryRun = argv.includes('--dry-run');
+      const jsonOut = argv.includes('--json');
       const result = guideProject(cwd(), { dryRun });
+      if (jsonOut) {
+        output(result);
+        break;
+      }
       console.log(`阶段 ${result.stage_num}: ${result.stage}`);
       if (dryRun) {
         console.log('诊断: dry-run（不写 heartbeat）');
       }
-      if (result.auto) {
-        console.log(`模式: AUTO（自动执行，不等确认）`);
-      } else {
-        console.log(`模式: 手动（每步需用户确认）`);
-      }
+      const modeDesc = {
+        'manual': '手动（每步需确认）',
+        'auto-loop': 'AUTO auto-loop（设计阶段需 review，Intent Loop 自动）',
+        'auto-design': 'AUTO auto-design（全部自动）',
+      };
+      console.log(`模式: ${modeDesc[result.auto_mode] || result.auto_mode}`);
       console.log(`\n${result.message}`);
       console.log(`\n下一步: ${result.next_action}`);
       console.log(`  → ${result.next_command}`);
-      if (!result.auto && result.stage_num > 0 && result.stage_num < 6) {
+      if (result.inputs && result.inputs.length > 0) {
+        console.log(`\n需要读取:`);
+        for (const f of result.inputs) console.log(`  - ${f}`);
+      }
+      if (result.outputs && result.outputs.length > 0) {
+        console.log(`\n需要产出:`);
+        for (const f of result.outputs) console.log(`  - ${f}`);
+      }
+      if (result.verify_command) {
+        console.log(`\n完成后校验: ${result.verify_command}`);
+      }
+      if (result.auto_mode === 'manual' && result.stage_num > 0 && result.stage_num < 6) {
         console.log(`\n提示: 开启 AUTO 模式可自动连续执行 — loom auto on`);
       }
       break;

@@ -85,20 +85,22 @@ function parseInspirationSources(content) {
 
   // 匹配 - xxx / * xxx / 1. xxx / 2. xxx 等
   const ITEM_RE = /^\s*(?:[-*]|\d+\.)\s+/;
+  // URL 匹配：https:// / file:// / local:./path / local:/abs/path
+  const URL_RE = /(?:https?:|file:)[\/]+[^\s）)]+|local:[^\s）)]+/g;
 
   for (const line of lines) {
     if (ITEM_RE.test(line)) {
       // 新条目
       if (currentItem) items.push(currentItem);
       const raw = line.replace(ITEM_RE, '').trim();
-      const urls = [...raw.matchAll(/https?:\/\/[^\s）)]+/g)].map((m) => m[0]);
+      const urls = [...raw.matchAll(URL_RE)].map((m) => m[0]);
       const name = raw.replace(/\*\*/g, '').split(/[（(——]/)[0].trim();
       const hasReason = REASON_KEYWORDS.some((kw) => raw.includes(kw));
       currentItem = { raw, name, urls, hasReason };
     } else if (currentItem && line.trim()) {
       // 多行条目的续行
       currentItem.raw += ' ' + line.trim();
-      const newUrls = [...line.matchAll(/https?:\/\/[^\s）)]+/g)].map((m) => m[0]);
+      const newUrls = [...line.matchAll(URL_RE)].map((m) => m[0]);
       currentItem.urls.push(...newUrls);
       if (REASON_KEYWORDS.some((kw) => line.includes(kw))) {
         currentItem.hasReason = true;

@@ -87,6 +87,34 @@ function normalizeVerificationCommand(command) {
     .trim();
 }
 
+// 包管理器别名——npm test / pnpm test / bun test / yarn test 互相等价
+const PM_ALIASES = ['npm', 'pnpm', 'bun', 'yarn'];
+
+/**
+ * 把命令里的包管理器名归一化成 token，方便比较。
+ * "pnpm test" → "<PM> test"，"npm run build" → "<PM> run build"
+ */
+function normalizePackageManager(command) {
+  let result = command;
+  for (const pm of PM_ALIASES) {
+    result = result.replace(new RegExp(`\\b${pm}\\b`, 'g'), '<PM>');
+  }
+  return result;
+}
+
+/**
+ * 检测项目使用的包管理器。
+ * 优先级：锁文件存在性
+ * @param {string} projectDir — 项目根目录
+ * @returns {string} 'pnpm' | 'bun' | 'yarn' | 'npm'
+ */
+export function detectPackageManager(projectDir) {
+  if (existsSync(join(projectDir, 'pnpm-lock.yaml'))) return 'pnpm';
+  if (existsSync(join(projectDir, 'bun.lockb'))) return 'bun';
+  if (existsSync(join(projectDir, 'yarn.lock'))) return 'yarn';
+  return 'npm';
+}
+
 function commandCoversMethod(actualCommand, expectedMethod) {
   const actual = normalizeVerificationCommand(actualCommand);
   const expected = normalizeVerificationCommand(expectedMethod);
@@ -96,8 +124,12 @@ function commandCoversMethod(actualCommand, expectedMethod) {
     const expectedPart = normalizeVerificationCommand(part);
     if (!expectedPart) return true;
     if (actual.includes(expectedPart)) return true;
+    // 包管理器别名归一化：pnpm test = npm test = bun test = yarn test
+    const actualNorm = normalizePackageManager(actual);
+    const expectedNorm = normalizePackageManager(expectedPart);
+    if (actualNorm.includes(expectedNorm)) return true;
     // npm test is an acceptable broader reproduction for node --test based methods.
-    if (expectedPart.startsWith('node --test') && actual.includes('npm test')) return true;
+    if (expectedPart.startsWith('node --test') && actualNorm.includes('<PM> test')) return true;
     return false;
   });
 }
@@ -193,28 +225,29 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
 
   // 7. 验证脚本可执行性：检查 verification_method 引用的脚本/目录是否存在
   const projectDir = join(versionDir, '..', '..');
+  const pm = detectPackageManager(projectDir);
   for (const [id, intent] of Object.entries(intents)) {
     const vm = getIntentVerificationMethod(intent);
     if (!vm) continue;
-    // 检测 npm test 引用
-    if (vm.includes('npm test') || vm.includes('npm run test')) {
+    // 检测任意包管理器的 test 引用（npm/pnpm/bun/yarn）
+    const pmTestRe = new RegExp(`(?:${PM_ALIASES.join('|')})\\s+(?:run\\s+)?test`);
+    if (pmTestRe.test(vm)) {
       const pkgPath = join(projectDir, 'package.json');
       if (!existsSync(pkgPath)) {
-        issues.push({ id, type: 'test_script_missing', severity: 'medium', msg: `${id} verification_method 要求 npm test 但项目根没有 package.json` });
+        issues.push({ id, type: 'test_script_missing', severity: 'medium', msg: `${id} verification_method 要求 test 但项目根没有 package.json` });
       } else {
         try {
           const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
           const testScript = pkg.scripts && pkg.scripts.test;
           if (!testScript) {
-            issues.push({ id, type: 'test_script_missing', severity: 'medium', msg: `${id} verification_method 要求 npm test 但 package.json 没有 test 脚本` });
+            issues.push({ id, type: 'test_script_missing', severity: 'medium', msg: `${id} verification_method 要求 test 但 package.json 没有 test 脚本` });
           } else {
             // 检查 test 脚本引用的目录/文件是否存在
-            // 常见模式: "node --test test/" / "mocha test/" / "jest" 等
             const testDirMatch = testScript.match(/(?:--test|test)\s+(\S+)/);
             if (testDirMatch) {
               const testTarget = testDirMatch[1].replace(/['"]/g, '');
               if (!existsSync(join(projectDir, testTarget))) {
-                issues.push({ id, type: 'test_script_missing', severity: 'medium', msg: `${id} verification_method 要求 npm test 但 test 脚本引用的 ${testTarget} 不存在` });
+                issues.push({ id, type: 'test_script_missing', severity: 'medium', msg: `${id} verification_method 要求 test 但 test 脚本引用的 ${testTarget} 不存在` });
               }
             }
           }
