@@ -62,10 +62,13 @@ const REASON_KEYWORDS = ['萃取', '理由', '为什么', '因为', '启发', '�
  * 从哲学文档内容中提取"灵感来源"章节的条目。
  * @param {string} content — MD 全文
  * @returns {Array<{ raw: string, name: string, urls: string[], hasReason: boolean }>}
+ *   如果返回空数组，调用方需区分"没有章节"和"有章节但没条目"——
+ *   用 hasInspirationSection() 单独判断。
  */
 function parseInspirationSources(content) {
-  // 匹配 "## 灵感来源" 或 "## Inspiration" 章节
-  const sectionMatch = content.match(/^##\s+(?:灵感来源|Inspiration|参考来源|References)/m);
+  // 匹配 "## 灵感来源" 或 "## Inspiration Sources" 等章节
+  // 支持 {#anchor} 后缀和多种标题变体
+  const sectionMatch = content.match(/^##\s+(?:灵感来源|Inspiration|参考来源|References?|参考文献|参考资料|Sources|Bibliography)/m);
   if (!sectionMatch) return [];
 
   const startIdx = sectionMatch.index + sectionMatch[0].length;
@@ -101,6 +104,14 @@ function parseInspirationSources(content) {
   }
   if (currentItem) items.push(currentItem);
   return items;
+}
+
+/**
+ * 检查哲学文档是否有"灵感来源"章节（不管有没有条目）。
+ * 用来区分"没有章节"和"有章节但没条目"两种情况。
+ */
+function hasInspirationSection(content) {
+  return /^##\s+(?:灵感来源|Inspiration|参考来源|References?|参考文献|参考资料|Sources|Bibliography)/m.test(content);
 }
 
 /**
@@ -173,12 +184,26 @@ export function validateInspirationSources(philosophyDir) {
     }
   }
 
-  // 如果没有任何文件包含灵感来源章节
+  // 如果没有任何文件提取到灵感来源条目
   if (allSources.length === 0) {
-    issues.push({
-      severity: 'high',
-      msg: '所有哲学文档都没有"灵感来源"章节。PHILOSOPHY_WEAVER.md 要求哲学文档必须包含灵感来源（参考了哪些机构、人物、流派——附 URL 和理由）。',
-    });
+    // 区分两种情况：完全没有章节 vs 有章节但没条目
+    const filesWithSection = [];
+    for (const file of files) {
+      const content = readFileSync(join(philosophyDir, file), 'utf-8');
+      if (hasInspirationSection(content)) filesWithSection.push(file);
+    }
+
+    if (filesWithSection.length > 0) {
+      issues.push({
+        severity: 'high',
+        msg: `${filesWithSection.join(', ')} 有"灵感来源"章节但没有可识别的条目。章节里可能是模板占位符。需要 Weaver 真正走搜索漏斗，填入至少 ${MIN_SOURCES} 个源（- **源名** — 理由。来源：URL 格式）。`,
+      });
+    } else {
+      issues.push({
+        severity: 'high',
+        msg: '所有哲学文档都没有"灵感来源"章节。PHILOSOPHY_WEAVER.md 要求哲学文档必须包含灵感来源（参考了哪些机构、人物、流派——附 URL 和理由）。支持的标题：灵感来源 / Inspiration / 参考来源 / References / 参考文献 / 参考资料 / Sources / Bibliography。',
+      });
+    }
   }
 
   return {
@@ -204,7 +229,7 @@ export function validatePartDecomposition(philosophyDir) {
 
   const files = listPhilosophyFiles(philosophyDir);
 
-  // 搜索"实现部分"相关章节——可能叫"实现部分清单""部分拆解""Part Decomposition"等
+  // 搜索"实现部分"相关章节——支持 {#anchor} 后缀和多种标题变体
   const PART_SECTION_PATTERNS = [
     /^##\s+实现部分清单/m,
     /^##\s+部分拆解/m,
@@ -212,6 +237,8 @@ export function validatePartDecomposition(philosophyDir) {
     /^##\s+Part Decomposition/m,
     /^##\s+Implementation Parts/m,
     /^##\s+拆解出的部分/m,
+    /^##\s+Implementation Decomposition/m,
+    /^##\s+Parts? /m,
   ];
 
   // 搜索部分条目——通常是 "- **部分名**" 或 "├── 部分名" 或 "| 部分名 |"
@@ -257,12 +284,12 @@ export function validatePartDecomposition(philosophyDir) {
   if (!foundSection) {
     issues.push({
       severity: 'high',
-      msg: '哲学文档没有"实现部分清单"章节。PHILOSOPHY_WEAVER.md Step 2 要求按 PART_DECOMPOSITION.md 拆解实现部分，并在哲学文档中显式列出。可能 Weaver 跳过了拆解步骤。',
+      msg: '哲学文档没有"实现部分清单"章节。PHILOSOPHY_WEAVER.md Step 2 要求按 PART_DECOMPOSITION.md 拆解实现部分，并在哲学文档中显式列出。支持的标题：实现部分清单 / 部分拆解 / 实现部分 / Part Decomposition / Implementation Parts / 拆解出的部分。',
     });
   } else if (parts.length < 2) {
     issues.push({
       severity: 'medium',
-      msg: `实现部分清单仅识别到 ${parts.length} 个部分。PART_DECOMPOSITION.md 建议小项目 3-5 个部分，大项目 6-10 个。可能拆解不充分。`,
+      msg: `找到"实现部分清单"章节但仅识别到 ${parts.length} 个部分。可能章节里是模板占位符，或条目格式不被识别（用 - **部分名** 或 ├── 部分名 格式）。PART_DECOMPOSITION.md 建议小项目 3-5 个部分，大项目 6-10 个。`,
     });
   }
 
