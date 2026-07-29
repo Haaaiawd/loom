@@ -51,11 +51,12 @@ export function readCurrentPointer(loomRoot) {
 export function newVersion(projectDir) {
   const loomRoot = join(projectDir, '.loom');
   const { versions } = listVersions(loomRoot);
+  const parentVersion = readCurrentPointer(loomRoot);
   const nextNum = versions.length === 0
     ? 1
     : parseInt(versions[versions.length - 1].slice(1)) + 1;
   const nextV = `v${nextNum}`;
-  const result = createVersionStructure(projectDir, nextV);
+  const result = createVersionStructure(projectDir, nextV, parentVersion);
   // 自动切换为当前版本
   writeFileSync(join(loomRoot, 'current'), nextV, 'utf-8');
   result.created.push('.loom/current');

@@ -8,15 +8,15 @@
 
 ## LOOM 是什么
 
-LOOM 是一个**规范驱动开发框架**，核心理念：
+LOOM 是一个**哲学驱动的 Agent 质量框架**，核心理念：
 
-**不写死规范模板，让 Agent 根据项目特征从真实存在的思想体系中织造定制化哲学，作为所有开发角色的共同锚点。**
+**让 Agent 先拥有项目判断，再为当前任务编译专业能力；在可靠完成之上，通过比较与独立证据追求出众。**
 
 LOOM 的核心机制：
-1. **Philosophy Weaver** 根据项目特征织造定制化哲学
-2. **Intent-Driven Loop** 以意图为 loop 单元，验证实现是否忠实于原始意图
-3. **独立 Keeper** 作为子代理验证意图忠实度
-4. **底线内化** 把不可妥协的约束写进哲学，角色激活时强制加载
+1. **Project Doctrine** 从项目事实中形成长期判断，而不是套用规范模板
+2. **Intent + Contract** 同时定义可靠完成的底线与可选的质量上限
+3. **Expertise Compiler** 为当前任务临时组装领域、品味、批评与验证能力
+4. **Quality Arena + Quality Proof** 用机制不同的候选和独立证据支撑质量提升
 
 ---
 
@@ -27,20 +27,23 @@ LOOM 的核心机制：
 | **哲学** | 项目的价值观和工程原则——为什么存在、什么不做、冲突时谁优先。由 Weaver 从真实思想体系织造，不是模板填空 |
 | **Intent** | 一个意图单元——不是"做什么"（任务），是"为什么做"（意图）。每个 Intent 有验收契约，Keeper 据此判定实现是否忠实 |
 | **Intent Map** | 所有 Intent 的依赖图（JSON）。Architect 绘制，定义拓扑序和依赖关系 |
-| **Intent Loop** | 核心循环：Keeper 选 Intent → Forge 实现 → Keeper 验证 → 闭合或修正。每个 Intent 独立走一圈 |
-| **Keeper** | 独立验证子代理——不继承 Forge 的实现上下文，从磁盘重新加载意图和契约，判定 passed/deviated/blocked/pending_human |
+| **Expertise Pack** | Forge 针对当前任务临时编译的专业认知，不成为永久规则 |
+| **Quality Arena** | 以基线和机制不同候选进行探索、比较、实现与观察 |
+| **Quality Proof** | Keeper 独立验证完成与质量声明，证据不足时不允许宣称提升 |
+| **Intent Loop** | 选择 → 编译专业能力 → 实现/比较 → 独立证明 → 闭合或回流 |
+| **Keeper** | 独立验证角色——不继承 Forge 的解释，从磁盘重新加载意图和契约 |
 | **底线** | 不可妥协的约束（BASELINE.md 5 条 + 项目特定底线）。角色激活时强制加载，哲学不能覆盖 |
 
 ### Intent Loop 怎么跑
 
 ```
-Keeper 选 Intent（拓扑序第一个 pending 且依赖都 completed 的）
+Host/Orchestrator 选 Intent（拓扑序第一个 pending 且依赖都 completed 的）
   ↓
-Keeper 更新 status → in_progress
+Host/Orchestrator 更新 status → in_progress
   ↓
-Forge 实现（加载意图叙事 + 哲学 + 验收契约）
+Forge 编译 Expertise Pack，并在需要时运行 Quality Arena
   ↓
-Keeper 验证（四维度：意图忠实度 / 哲学一致性 / 底线合规 / 验收达成）
+Keeper 验证（基础四维；有质量契约时增加 quality_achievement，相对提升时附 Quality Proof）
   ↓
 判定结果：
   passed        → status → completed，回到选 Intent
@@ -50,6 +53,8 @@ Keeper 验证（四维度：意图忠实度 / 哲学一致性 / 底线合规 / �
 ```
 
 **Loop 终止**：所有 Intent 的 status 为 completed → 项目阶段完成。
+
+对会变更既有用户或系统状态的 Intent，Architect 设 `continuity_required: true`。它不创建第二份需求文档，而是要求同一份 acceptance 明确“哪些旧状态不得消失”与“旧状态 → 操作 → 新状态”的验证序列。此类 Intent 只有结果、守恒、可复现证据（以及按需的质量证明）同时通过，才允许闭合。
 
 ---
 
@@ -114,24 +119,23 @@ loom activate architect
 ```
 
 **输入**：愿景文档 + 哲学文档
-**Architect 会做什么**：设计系统结构 → 绘制 Intent Map（依赖图 + 验收契约 + 哲学锚点）
+**Architect 会做什么**：设计系统边界 → 绘制 Intent Map → 定义完成契约、按需的质量契约与专业能力需求
 **产出**：`.loom/v1/02_ARCHITECTURE.md` + `.loom/v1/04_INTENT_MAP.json`
-**怎么判断合格**：验收契约具体到可验证（不是"实现正确即可"），依赖关系无环，每个 Intent 有意图叙事引用
+**怎么判断合格**：完成契约可观察，质量契约可比较，依赖无环，每个 Intent 有叙事引用
 **下一步**：进入 Intent Loop
 
 ### 步骤 5：进入 Intent Loop
 
 ```bash
 # Keeper 选 Intent 并更新状态
-loom activate keeper
 loom intent next              # 查看下一个可执行 Intent
 loom intent update INT-001 --status in_progress
 
-# Forge 实现
-loom activate forge           # Forge 加载意图叙事 + 哲学 + 验收契约，实现代码
+# Forge 编译专业能力并实现
+loom activate forge --intent INT-001
 
-# Keeper 验证
-loom activate keeper          # Keeper 独立验证四维度
+# Keeper 独立形成 Quality Proof
+loom activate keeper --intent INT-001
 loom verify contract INT-001  # 查看验收契约
 loom verify write --json-file verification.json  # 写入验证记录
 
@@ -161,6 +165,16 @@ preview 是人类总览用的只读投影：哲学、愿景、架构、Intent �
 
 Agent 在用户说"看看进度 / 打开 preview / 看全局"时，先跑 `loom preview status`。
 
+**版本演进三档**：
+
+| 档位 | 什么时候用 | LOOM 流程 |
+|---|---|---|
+| Patch | 不触及 Intent，只修 bug / 样式 / 实现细节 | 不走 Intent Loop；跑验证并用 `loom patch record` 记录 |
+| Minor | 新增或修改 Intent，但不改变哲学前提、愿景北极星、架构边界 | 当前版本内变更；相关 Intent 进入 `pending` / `needs_review` |
+| Major | 哲学前提、愿景北极星或架构边界变化 | `loom version new` 创建新版本，全套重跑 |
+
+当前版本全部完成后，运行 `loom guide` 会提示按三档判断，而不是默认开新版本。
+
 **CLI 命令一览**：
 
 | 命令 | 用途 |
@@ -170,28 +184,48 @@ Agent 在用户说"看看进度 / 打开 preview / 看全局"时，先跑 `loom 
 | `loom guide --dry-run` | 只读诊断当前阶段，不写 heartbeat |
 | `loom auto on\|off\|status` | AUTO 模式开关 |
 | `loom activate <role>` | 输出角色激活提示词 |
+| `loom activate <role> --intent <id>` | 输出仅含指定 draft/官方 Intent 的角色上下文 |
 | `loom preview` | 打开新鲜 HTML 预览；过期时提示重新生成 |
 | `loom preview status` | 检查 `loom-preview.html` 是否存在、是否新鲜 |
 | `loom preview --regen` | 输出提示词，让 Agent 重写 HTML 预览 |
 | `loom preview --stale` | 强行打开过期预览 |
-| `loom help <topic>` | 分层指南（workflow\|concepts\|loop\|version\|doctor\|preview） |
+| `loom help <topic>` | 分层指南（workflow\|concepts\|loop\|version\|patch\|doctor\|preview） |
 | `loom version list` | 列出所有版本（* 标记当前） |
 | `loom version new` | 创建新版本 + 自动切换（Major 升级） |
 | `loom version use <v>` | 切换当前版本 |
 | `loom version diff <v1> <v2>` | 对比两个版本的文件差异 |
+| `loom patch record --json-file <path>` | 写入权威 Patch JSON 并生成 Markdown 投影 |
+| `loom patch list` | 列出当前版本 Patch |
+| `loom patch get <id>` | 查看单条 Patch |
+| `loom patch validate` | 校验 Patch ledger 和生成投影 |
 | `loom intent next` | 下一个可执行 Intent |
 | `loom intent status` | 进度概览 |
 | `loom intent get <id>` | Intent 详情 |
+| `loom intent add --title <text> [--depends-on <ids>]` | 创建当前版本新增 Intent draft |
+| `loom intent revise <id> --reason <text>` | 创建修订 draft 并报告反向依赖 |
+| `loom intent draft <id>` | 查看 draft |
+| `loom intent finalize <id> [--review <ids> --unaffected <ids>]` | 校验 draft 并原子更新官方 Map/topo_order；修订时必须分类全部下游影响 |
+| `loom intent deprecate <id> --reason <text>` | 只读评估当前版本弃用影响；加 `--confirm` 并完整分类依赖方后原子写入 |
 | `loom intent narrative <id>` | Intent 意图叙事 |
 | `loom intent trace <id>` | Intent 完整追溯链（依赖+验证+哲学+叙事） |
+| `loom intent diff <v1> <v2>` | 按显式 lineage 比较新建、修订、拆分、合并和未映射 Intent |
 | `loom intent reverse-dep <id>` | 反向依赖（谁依赖这个 Intent） |
 | `loom intent reverse-ref <anchor>` | 反向哲学引用（哪些 Intent 引用这个锚点） |
 | `loom intent update <id> --status <s>` | 更新状态（Keeper 用） |
 | `loom philosophy get <anchor>` | 加载哲学章节 |
+| `loom philosophy impact <anchor>` | 只读返回直接引用该锚点的 Intent 及传递依赖影响 |
+| `loom philosophy revise <anchor> --classification <clarification\|minor\|major> --reason <text>` | 只读评估哲学修订；clarification/minor 加 `--confirm` 和完整分区后写审计 ADR |
 | `loom verify contract <id>` | 获取验收契约 |
 | `loom verify write --json-file <path>` | 写入验证记录 |
+| `loom verify history <ref> --across-versions` | 沿 predecessors 读取各 owning version 的本地验证历史 |
 | `loom doctor` | 项目健康检查 |
 | `loom context` | 上下文摘要（Agent 重启后一条命令获取状态） |
+
+读命令 `intent get`、`intent narrative`、`intent trace` 和 `verify history` 支持 `v1:INT-003` 形式的跨版本引用；裸 ID 仍指当前版本。历史引用只读。跨版本沿革必须显式写在可选 `lineage.predecessors` 中，同 ID 或同标题不会建立映射，且 lineage 不属于 `depends_on`。
+
+弃用只适用于当前版本中已 `completed` 的 Intent。首次运行 `loom intent deprecate <id> --reason "<why>"` 只返回目标、直接/传递依赖方、各自状态和确认命令，不写文件。确认时用 `--review` 与 `--unaffected` 将所有依赖方恰好分类一次；叶子 Intent 不需要分类参数。弃用记录写入 `lifecycle.deprecation`，目标仍为 `completed`，依赖和契约不被修改。重复确认会明确失败。
+
+哲学修订由 CLI 分析后果和记录审计，不由 CLI 自动改写哲学文本。`philosophy impact` 与未确认的 `philosophy revise` 严格只读。确认 clarification 时全部受影响 Intent 必须归入 `--unaffected`；确认 minor 时可将确需重验的 Intent 归入 `--review`，其中 `completed` 才转为 `needs_review`。两者都不改 acceptance，并在 `03_DECISIONS/PHIL-REV-NNN.md` 记录审计。Major 永不修改当前版本，只返回 `loom version new`。
 
 ---
 
@@ -276,7 +310,7 @@ LOOM/
 | **Visionary** 远见者 | 产品联合创始人 | 定义愿景，织造意图叙事 | 项目启动 |
 | **Architect** 建筑师 | 系统建筑师 | 设计系统，绘制 Intent Map | Visionary 完成后 |
 | **Forge** 锻造师 | 高级工程师 | 在哲学约束下自主实现 | Intent Loop 实现阶段 |
-| **Keeper** 守护者 | 产品联合创始人（独立激活） | 选 Intent，验证意图忠实度 | Intent Loop 选择和验证阶段 |
+| **Keeper** 守护者 | 独立验证者（独立激活） | 从磁盘事实验证意图与质量主张 | Intent Loop 验证阶段 |
 
 Visionary 和 Keeper **同源但独立**——同一个产品哲学，但 Keeper 是"回溯验证者"，作为子代理运行，不继承 Forge 的实现上下文。
 
@@ -285,7 +319,7 @@ Visionary 和 Keeper **同源但独立**——同一个产品哲学，但 Keeper
 ## Intent-Driven Loop
 
 ```
-Keeper 选 Intent → Forge 加载意图链并自主实现 → Keeper 子代理独立验证 → 判定
+Host/Orchestrator 选 Intent → Forge 加载意图链并自主实现 → Keeper 子代理独立验证 → 判定
      ↑                                                                    │
      │                                                                    │
      └────────────── passed: 闭合，下一个 Intent ──────────────────────────┘
@@ -328,7 +362,8 @@ Agent 在项目中生成的文档结构：
     ├── 03_DECISIONS/              架构决策记录
     ├── 04_INTENT_MAP.json         意图依赖图（DAG）
     ├── 05_VERIFICATION.md         每个 Intent 的验证契约
-    ├── 06_CHANGELOG.md            版本变更记录
+    ├── 06_CHANGELOG.json          Patch 变更记录（唯一权威来源）
+    ├── 06_CHANGELOG.md            确定性生成的只读投影
     └── verifications/             Keeper 的验证记录
         ├── INT-001.json
         ├── INT-001.md
@@ -352,8 +387,8 @@ Agent 通过 **CLI 访问** JSON，不直接读文件——省 token、更高效
 ## 运行流程
 
 ```
-1. Philosophy Weaver 织造哲学
-   → 识别项目特征 → 激活哲学维度 → 逐维度搜索/萃取/转译/落地 → 整合冲突 → 版本锚定
+1. Weaver 织造 Project Doctrine
+   → 读取项目事实 → 提炼长期判断 → 按决策未知搜索 → 转译为原则、边界与 Evidence Map
 
 2. Visionary 定义愿景
    → 基于哲学写愿景 → 每个意图带意图叙事 → 识别需要的哲学维度
@@ -361,8 +396,8 @@ Agent 通过 **CLI 访问** JSON，不直接读文件——省 token、更高效
 3. Architect 设计系统
    → 基于愿景设计结构 → 绘制 Intent Map → 定义验证契约
 
-4. Intent Loop
-   → Keeper 选 Intent → Forge 实现 → Keeper 验证 → 判定 → 下一个
+4. LOOM Quality Engine
+   → Forge 编译 Expertise Pack → Quality Arena 实现/比较 → Keeper 形成 Quality Proof
    → 循环直到所有 Intent 闭合
 ```
 
@@ -375,7 +410,7 @@ Agent 通过 **CLI 访问** JSON，不直接读文件——省 token、更高效
 - [x] `templates/` 起点骨架（3 个模板）
 - [x] `README.md` 系统总览
 - [x] `dimensions/SEARCH_METHODOLOGY.md` 检索方法论
-- [x] `cli/` CLI 访问层（56 个测试全过）
+- [x] `cli/` CLI 访问层（118 个测试全过）
 - [ ] `dimensions/` 维度文件（按需填充，Weaver 可自主判断）
 
 ---

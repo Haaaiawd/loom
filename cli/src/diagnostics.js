@@ -3,10 +3,14 @@
 // 全部是只读的数据聚合，不做决策、不修改文件。
 
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { loadIntentMap, getStatus, getNextIntent, getNarrative, getIntent } from './intent-map.js';
-import { getPhilosophy, validateInspirationSources, validatePartDecomposition } from './philosophy.js';
-import { getVerificationHistory, getPendingVerifications, getVerificationContract } from './verify.js';
+import { getPhilosophy, validateInspirationSources } from './philosophy.js';
+import { getVerificationHistory, getPendingVerifications, getVerificationContract, getLatestPassedVerification, getVerificationIntentRevision, isVerificationCurrent, hasCurrentPassedVerification } from './verify.js';
+import { validatePatches } from './patch.js';
+import { formatIntentRef } from './shared/intent-ref.js';
+import { commandCoversVerificationMethod, getIntentVerificationMethod } from './shared/verification-method.js';
+import { resolveQualityProofReference } from './shared/proof-reference.js';
 
 function readIntentMapRaw(versionDir) {
   const filePath = join(versionDir, '04_INTENT_MAP.json');
@@ -75,10 +79,6 @@ function intentMapDiagnostics(versionDir) {
   return { raw, valid, issues, validMap };
 }
 
-function getIntentVerificationMethod(intent) {
-  return intent.verification_method || intent._optional?.verification_method || null;
-}
-
 function normalizeVerificationCommand(command) {
   return String(command || '')
     .replace(/^\s*run\s+/i, '')
@@ -144,6 +144,7 @@ const FIX_HINTS = {
   intent_map_template: '运行 loom activate architect，Architect 填充真实 Intent Map 后删除 _meta._template 标记',
   intent_map_invalid: '按报错信息修正 04_INTENT_MAP.json 里对应字段（补 title / 加长 acceptance / 填必填字段）',
   completed_no_record: '在 .loom/v{N}/verifications/ 下补验证记录，或运行 loom verify pass {id} --summary "..."',
+  completed_verification_not_passed: '最新验证不是当前 revision 的 passed；重新运行 loom verify pass {id} --summary "..."，再用 loom intent done {id} 闭合。',
   in_progress_no_record: '运行 loom verify pass {id} --summary "..." 写入验证记录，或 loom intent update {id} --status pending 回退',
   orphan_philosophy_ref: '检查 04_INTENT_MAP.json 里 {id} 的 philosophy_anchors，移除或修正不存在的哲学文件引用',
   orphan_dependency: '检查 04_INTENT_MAP.json 里 {id} 的 depends_on，移除或修正不存在的 Intent ID',
@@ -153,8 +154,13 @@ const FIX_HINTS = {
   test_script_missing: '在 package.json 里加 test 脚本，或修正 verification_method 指向实际存在的测试命令',
   verification_method_unverified: '运行 loom verify pass {id} --summary "..." --reproduction-command "..." 覆盖声明的验证方式',
   verification_method_drift: '验证记录的 reproduction_command 要覆盖 verification_method 声明的命令（支持 npm/pnpm/bun 互相等价）',
-  inspiration_source: '在哲学文档的"灵感来源"章节填入至少 3 个源（- **源名** — 理由。来源：URL 或 file:// 或 local:./path）',
-  part_decomposition: '在哲学文档加"实现部分清单"章节，按 PART_DECOMPOSITION.md 拆解实现部分（- **部分名** 格式）',
+  stale_verification: '重新验证当前 Intent revision：loom verify pass {id} --summary "..."，通过后再闭合 Intent',
+  inspiration_source: '在哲学文档的"证据地图/灵感来源"中写入实际使用的来源、选择理由和可追溯位置；数量由判断所需决定',
+  quality_dimension_missing: '为带 quality_contract 的 Intent 补写并通过 quality_achievement；相对提升声明在该维度中链接 Quality Proof',
+  quality_proof_invalid: '将 quality_proof_ref 改为项目内真实存在且含锚点的 Markdown 证据，例如 verifications/INT-001-quality-proof.md#int-001',
+  preservation_dimension_missing: '为 continuity_required 的 Intent 补写并通过 preservation_achievement，证据必须覆盖旧状态到新操作后的完整序列',
+  patch_changelog_invalid: '运行 loom patch validate 查看具体错误；修正 06_CHANGELOG.json 后重新生成 Markdown 投影',
+  patch_projection_drift: '不要手工编辑 06_CHANGELOG.md；重新运行 loom init 或下一次 loom patch record 生成投影',
 };
 
 /**
@@ -192,14 +198,47 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
 
   const { intents } = mapState.validMap;
 
-  // 1. 状态一致性：in_progress/completed 但无验证记录
+  // 1. 状态一致性：completed 必须由当前 revision 的最后一条 passed 验证支撑。
   for (const [id, intent] of Object.entries(intents)) {
-    const hasRecord = existsSync(join(verificationsDir, `${id}.json`));
+    const history = getVerificationHistory(verificationsDir, id);
+    const hasRecord = Boolean(history?.records?.length);
+    const latest = history?.records?.[history.records.length - 1];
     if (intent.status === 'completed' && !hasRecord) {
       issues.push({ id, type: 'completed_no_record', severity: 'high', msg: `${id} 状态为 completed 但无验证记录` });
+    } else if (intent.status === 'completed' && !hasCurrentPassedVerification(intent, history)) {
+      issues.push({ id, type: 'completed_verification_not_passed', severity: 'high', msg: `${id} 状态为 completed，但最后一条验证不是当前 revision 的 passed` });
     }
     if (intent.status === 'in_progress' && !hasRecord) {
       issues.push({ id, type: 'in_progress_no_record', severity: 'medium', msg: `${id} 状态为 in_progress 但无验证记录（可能上次中断）` });
+    }
+    if (intent.quality_contract && latest?.verdict === 'passed') {
+      const quality = latest.dimensions?.quality_achievement;
+      if (!quality || quality.verdict !== 'passed') {
+        issues.push({
+          id,
+          type: 'quality_dimension_missing',
+          severity: 'high',
+          msg: `${id} 声明了 quality_contract，但最新 passed 记录缺少通过的 quality_achievement`,
+        });
+      }
+      if (quality?.quality_proof_ref) {
+        try {
+          resolveQualityProofReference(versionDir, quality.quality_proof_ref);
+        } catch (error) {
+          issues.push({ id, type: 'quality_proof_invalid', severity: 'high', msg: `${id} 的 Quality Proof 无效: ${error.message}` });
+        }
+      }
+    }
+    if (intent.continuity_required && latest?.verdict === 'passed') {
+      const preservation = latest.dimensions?.preservation_achievement;
+      if (!preservation || preservation.verdict !== 'passed') {
+        issues.push({
+          id,
+          type: 'preservation_dimension_missing',
+          severity: 'high',
+          msg: `${id} 声明了 continuity_required，但最新 passed 记录缺少通过的 preservation_achievement`,
+        });
+      }
     }
   }
 
@@ -312,9 +351,39 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
       issues.push({ id, type: 'verification_method_unverified', severity: 'high', msg: `${id} 声明了 verification_method 但没有验证记录覆盖: ${method}` });
     } else if (!actual) {
       issues.push({ id, type: 'verification_method_unverified', severity: 'high', msg: `${id} 最新验证记录缺少 reproduction_command，无法复现 verification_method: ${method}` });
-    } else if (!commandCoversMethod(actual, expected)) {
+    } else if (!commandCoversVerificationMethod(actual, expected)) {
       issues.push({ id, type: 'verification_method_drift', severity: 'high', msg: `${id} verification_method 未被最新 reproduction_command 覆盖。method="${method}" reproduction_command="${latest.reproduction_command}"` });
     }
+  }
+
+  const patchJsonPath = join(versionDir, '06_CHANGELOG.json');
+  if (existsSync(patchJsonPath)) {
+    try {
+      validatePatches(versionDir);
+    } catch (error) {
+      const projectionDrift = String(error.message).includes('最新确定性投影') || String(error.message).includes('Markdown 投影不存在');
+      issues.push({
+        id: 'patch_changelog',
+        type: projectionDrift ? 'patch_projection_drift' : 'patch_changelog_invalid',
+        severity: projectionDrift ? 'medium' : 'high',
+        msg: error.message,
+      });
+    }
+  }
+
+  // completed/needs_review 的旧 revision 验证不能证明当前 Intent 仍然成立。
+  for (const [id, intent] of Object.entries(intents)) {
+    if (intent.status !== 'completed' && intent.status !== 'needs_review') continue;
+    const history = getVerificationHistory(verificationsDir, id);
+    const latestPassed = getLatestPassedVerification(history);
+    if (!latestPassed || isVerificationCurrent(intent, latestPassed)) continue;
+    const verifiedRevision = getVerificationIntentRevision(intent, latestPassed);
+    issues.push({
+      id,
+      type: 'stale_verification',
+      severity: 'high',
+      msg: `${id} 最新 passed 验证 revision ${verifiedRevision ?? 'legacy/unknown'} 早于当前 Intent revision ${intent.revision ?? 1}`,
+    });
   }
 
   appendPhilosophyDiagnostics(issues, philosophyDir);
@@ -331,11 +400,6 @@ function appendPhilosophyDiagnostics(issues, philosophyDir) {
     issues.push({ id: 'philosophy', type: 'inspiration_source', severity: issue.severity, msg: issue.msg });
   }
 
-  // 实现部分拆解校验（防止 Weaver 跳过拆解步骤）
-  const decompositionCheck = validatePartDecomposition(philosophyDir);
-  for (const issue of decompositionCheck.issues) {
-    issues.push({ id: 'philosophy', type: 'part_decomposition', severity: issue.severity, msg: issue.msg });
-  }
 }
 
 function summarizeIssues(issues) {
@@ -403,7 +467,7 @@ export function contextSummary(versionDir, verificationsDir, philosophyDir) {
   const { issues } = doctor(versionDir, verificationsDir, philosophyDir);
 
   // 区分模板阶段问题（待填充）和真实损坏
-  const templateIssues = issues.filter((i) => i.is_template || i.type === 'intent_map_template' || i.type === 'inspiration_source' || i.type === 'part_decomposition');
+  const templateIssues = issues.filter((i) => i.is_template || i.type === 'intent_map_template' || i.type === 'inspiration_source');
   const realIssues = issues.filter((i) => !templateIssues.includes(i));
 
   const risks = [];
@@ -421,6 +485,7 @@ export function contextSummary(versionDir, verificationsDir, philosophyDir) {
       total: status.counts.total,
       rate: `${status.counts.completed}/${status.counts.total}`,
     },
+    deprecated_intents: status.deprecated || [],
     next_intent: next ? next.id : null,
     pending_verifications: pending,
     inconsistent_states: issues.filter((i) => i.type === 'in_progress_no_record' || i.type === 'completed_no_record').map((i) => i.id),
@@ -484,7 +549,38 @@ export function traceIntent(versionDir, verificationsDir, philosophyDir, intentI
   }
   walkDeps(intentId, 0);
 
+  const version = basename(versionDir);
+  const ref = formatIntentRef(version, intentId);
+  const loomRoot = dirname(versionDir);
+  const predecessors = (intent.lineage?.predecessors || []).map((item) => {
+    let revision = null;
+    try { revision = getIntent(join(loomRoot, item.version), item.intent_id).revision ?? 1; }
+    catch { /* Validation is structural; a referenced version may not be locally available. */ }
+    return { ...item, ref: formatIntentRef(item.version, item.intent_id), revision };
+  });
+  const successors = [];
+  for (const candidateVersion of readdirSync(loomRoot).filter((name) => /^v\d+$/.test(name))) {
+    const candidateDir = join(loomRoot, candidateVersion);
+    if (!statSync(candidateDir).isDirectory() || !existsSync(join(candidateDir, '04_INTENT_MAP.json'))) continue;
+    let candidateMap;
+    try { candidateMap = loadIntentMap(candidateDir); }
+    catch { continue; }
+    for (const [candidateId, candidate] of Object.entries(candidateMap.intents)) {
+      if (candidate.lineage?.predecessors?.some((item) => item.version === version && item.intent_id === intentId)) {
+        successors.push({
+          ref: formatIntentRef(candidateVersion, candidateId),
+          version: candidateVersion,
+          intent_id: candidateId,
+          revision: candidate.revision ?? 1,
+        });
+      }
+    }
+  }
+
   return {
+    ref,
+    version,
+    revision: intent.revision ?? 1,
     intent,
     narrative,
     narrative_error: narrativeError,
@@ -493,6 +589,7 @@ export function traceIntent(versionDir, verificationsDir, philosophyDir, intentI
     verification_history: verificationHistory,
     philosophy_anchors_content: philosophyContent,
     dependency_chain: dependencyChain,
+    lineage: { predecessors, successors },
   };
 }
 

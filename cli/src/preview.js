@@ -11,6 +11,7 @@ const SOURCE_FILE_NAMES = new Set([
   '02_ARCHITECTURE.md',
   '04_INTENT_MAP.json',
   '05_VERIFICATION.md',
+  '06_CHANGELOG.json',
   '06_CHANGELOG.md',
 ]);
 

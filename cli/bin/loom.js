@@ -10,9 +10,9 @@ import { findLoomRoot, findVersionDir, readCurrentPointer } from '../src/shared/
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-import { getNextIntent, getStatus, getDependencyGraph, getIntent, loadIntentMap, updateIntentStatus, getNarrative } from '../src/intent-map.js';
-import { getPhilosophy, listPhilosophyFiles, validateInspirationSources, validatePartDecomposition } from '../src/philosophy.js';
-import { writeVerification, createQuickVerification, getVerificationHistory, getPendingVerifications, listVerifications, getVerificationContract } from '../src/verify.js';
+import { deprecateIntent, getNextIntent, getStatus, getDependencyGraph, getIntent, loadIntentMap, updateIntentStatus, getNarrative, diffIntentVersions } from '../src/intent-map.js';
+import { assessPhilosophyImpact, getPhilosophy, listPhilosophyFiles, revisePhilosophy, validateInspirationSources } from '../src/philosophy.js';
+import { writeVerification, createQuickVerification, getVerificationHistory, getAcrossVersionVerificationHistory, getPendingVerifications, listVerifications, getVerificationContract, isVerificationCurrent } from '../src/verify.js';
 import { initProject } from '../src/init.js';
 import { activateRole } from '../src/activate.js';
 import { listVersions, newVersion, useVersion, diffVersions } from '../src/version.js';
@@ -21,6 +21,9 @@ import { getHelpTopic, listHelpTopics } from '../src/help.js';
 import { guideProject } from '../src/guide.js';
 import { isAutoOn, autoOn, autoOff, autoStatus, getAutoMode } from '../src/auto.js';
 import { generatePreviewPrompt, getPreviewStatus } from '../src/preview.js';
+import { getPatch, listPatches, recordPatch, validatePatches } from '../src/patch.js';
+import { addIntentDraft, finalizeIntentDraft, getIntentDraft, reviseIntentDraft } from '../src/intent-draft.js';
+import { resolveIntentRef } from '../src/shared/intent-ref.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // findLoomRoot / findVersionDir / readCurrentPointer 已提取到 shared/paths.js
@@ -67,6 +70,72 @@ try {
     case 'intent': {
       const versionDir = findVersionDir();
       switch (sub) {
+        case 'add': {
+          const titleIdx = argv.indexOf('--title');
+          const dependsIdx = argv.indexOf('--depends-on');
+          const title = titleIdx !== -1 ? argv[titleIdx + 1] : null;
+          const dependencies = dependsIdx !== -1 && argv[dependsIdx + 1]
+            ? argv[dependsIdx + 1].split(',').map((id) => id.trim()).filter(Boolean)
+            : [];
+          if (!title) die('用法: loom intent add --title <text> [--depends-on INT-001,INT-002]');
+          output(addIntentDraft(versionDir, title, dependencies));
+          break;
+        }
+        case 'revise': {
+          const id = rest[0];
+          const reasonIdx = argv.indexOf('--reason');
+          const reason = reasonIdx !== -1 ? argv[reasonIdx + 1] : null;
+          if (!id || !reason) die('用法: loom intent revise <id> --reason <text>');
+          output(reviseIntentDraft(versionDir, id, reason));
+          break;
+        }
+        case 'draft': {
+          const id = rest[0];
+          if (!id) die('用法: loom intent draft <id>');
+          output(getIntentDraft(versionDir, id));
+          break;
+        }
+        case 'finalize': {
+          const id = rest[0];
+          if (!id) die('用法: loom intent finalize <id>');
+          const parseIds = (name) => {
+            const index = argv.indexOf(name);
+            if (index === -1) return [];
+            const value = argv[index + 1];
+            if (!value || value.startsWith('--')) die(`${name} 需要逗号分隔的 Intent ID`);
+            return value.split(',').map((item) => item.trim()).filter(Boolean);
+          };
+          output(finalizeIntentDraft(versionDir, id, {
+            review: parseIds('--review'),
+            unaffected: parseIds('--unaffected'),
+          }));
+          break;
+        }
+        case 'deprecate': {
+          const id = rest[0];
+          const readFlag = (name) => {
+            const index = argv.indexOf(name);
+            return index === -1 ? null : argv[index + 1];
+          };
+          const parseIds = (name) => {
+            const value = readFlag(name);
+            if (value === null) return [];
+            if (!value || value.startsWith('--')) die(`${name} 需要逗号分隔的 Intent ID`);
+            return value.split(',').map((item) => item.trim()).filter(Boolean);
+          };
+          const reason = readFlag('--reason');
+          if (!id || !reason || reason.startsWith('--')) die('用法: loom intent deprecate <id> --reason <text> [--confirm [--replacement <id>] [--review <ids>] [--unaffected <ids>]]');
+          const replacement = readFlag('--replacement');
+          if (argv.includes('--replacement') && (!replacement || replacement.startsWith('--'))) die('--replacement 需要当前版本的 Intent ID');
+          output(deprecateIntent(versionDir, id, {
+            reason,
+            confirm: argv.includes('--confirm'),
+            replacement,
+            review: parseIds('--review'),
+            unaffected: parseIds('--unaffected'),
+          }));
+          break;
+        }
         case 'next':
           output(getNextIntent(versionDir) ?? '没有可执行的 Intent');
           break;
@@ -78,6 +147,8 @@ try {
           console.log(`  in_progress: ${s.counts.in_progress}    ${fmt(s.ids.in_progress)}`);
           console.log(`  completed:   ${s.counts.completed}    ${fmt(s.ids.completed)}`);
           console.log(`  blocked:     ${s.counts.blocked}    ${fmt(s.ids.blocked)}`);
+          console.log(`  needs_review: ${s.counts.needs_review}    ${fmt(s.ids.needs_review)}`);
+          console.log(`  deprecated:   ${s.counts.deprecated}    ${fmt(s.deprecated)}`);
           break;
         }
         case 'graph':
@@ -86,13 +157,22 @@ try {
         case 'get': {
           const id = rest[0];
           if (!id) die('用法: loom intent get <id>');
-          output(getIntent(versionDir, id));
+          const resolved = resolveIntentRef(versionDir, id);
+          output(getIntent(resolved.versionDir, resolved.intentId));
           break;
         }
         case 'narrative': {
           const id = rest[0];
           if (!id) die('用法: loom intent narrative <id>');
-          output(getNarrative(versionDir, id));
+          const resolved = resolveIntentRef(versionDir, id);
+          output(getNarrative(resolved.versionDir, resolved.intentId));
+          break;
+        }
+        case 'diff': {
+          const from = rest[0];
+          const to = rest[1];
+          if (!from || !to) die('用法: loom intent diff <v1> <v2>');
+          output(diffIntentVersions(findLoomRoot(), from, to));
           break;
         }
         case 'validate':
@@ -102,7 +182,8 @@ try {
         case 'trace': {
           const id = rest[0];
           if (!id) die('用法: loom intent trace <id>');
-          output(traceIntent(versionDir, getVerificationsDir(versionDir), getPhilosophyDir(versionDir), id));
+          const resolved = resolveIntentRef(versionDir, id);
+          output(traceIntent(resolved.versionDir, getVerificationsDir(resolved.versionDir), getPhilosophyDir(resolved.versionDir), resolved.intentId));
           break;
         }
         case 'reverse-dep': {
@@ -136,13 +217,16 @@ try {
           if (!history || history.records.length === 0) {
             die(`${id} 没有验证记录。先跑: loom verify pass ${id} --summary "..."`);
           }
-          // 检查最新验证记录是否 passed
+          // 最新记录必须针对当前 revision 且通过，旧 revision 的通过不能闭合 Intent。
           const latest = history.records[history.records.length - 1];
           if (latest.verdict !== 'passed') {
             die(`${id} 最新验证记录是 ${latest.verdict}（非 passed）。只有 passed 的 Intent 才能 done。`);
           }
           // 获取当前状态，自动走两步
           const intent = getIntent(versionDir, id);
+          if (!isVerificationCurrent(intent, latest)) {
+            die(`${id} 最新 passed 验证不属于当前 Intent revision ${intent.revision ?? 1}。先重新验证。`);
+          }
           const currentStatus = intent.status;
           if (currentStatus === 'completed') {
             console.log(`${id} 已经是 completed，无需操作`);
@@ -156,12 +240,16 @@ try {
           break;
         }
         default:
-          die(`未知子命令: intent ${sub}\n用法: loom intent [next|status|graph|get <id>|narrative <id>|validate|trace <id>|reverse-dep <id>|reverse-ref <anchor>|update <id> --status <...>|done <id>]`);
+          die(`未知子命令: intent ${sub}\n用法: loom intent [add|revise|draft|finalize|deprecate|next|status|graph|get|narrative|diff|validate|trace|reverse-dep|reverse-ref|update|done]`);
       }
       break;
     }
 
     case 'init': {
+      if (sub === '--help' || sub === '-h') {
+        console.log('用法: loom init\\n\\n在当前目录创建 LOOM 项目骨架。若目录已有 .loom/，不会覆盖现有文件。');
+        break;
+      }
       const result = initProject(cwd());
       console.log('LOOM 项目已初始化');
       for (const c of result.created) console.log(`  [created] ${c}`);
@@ -191,7 +279,10 @@ try {
           if (!String(e.message).includes('找不到 .loom')) throw e;
         }
       }
-      const prompt = activateRole(role, versionDir);
+      const intentIdx = argv.indexOf('--intent');
+      const intentId = intentIdx !== -1 ? argv[intentIdx + 1] : null;
+      if (intentIdx !== -1 && !intentId) die('用法: loom activate <role> --intent <id>');
+      const prompt = activateRole(role, versionDir, intentId);
       output(prompt);
       break;
     }
@@ -208,12 +299,43 @@ try {
         case 'list':
           output(listPhilosophyFiles(getPhilosophyDir(versionDir)));
           break;
+        case 'impact': {
+          const anchor = rest[0];
+          if (!anchor) die('用法: loom philosophy impact <anchor>');
+          output(assessPhilosophyImpact(versionDir, anchor));
+          break;
+        }
+        case 'revise': {
+          const anchor = rest[0];
+          const readFlag = (name) => {
+            const index = argv.indexOf(name);
+            return index === -1 ? null : argv[index + 1];
+          };
+          const parseIds = (name) => {
+            const value = readFlag(name);
+            if (value === null) return [];
+            if (!value || value.startsWith('--')) die(`${name} 需要逗号分隔的 Intent ID`);
+            return value.split(',').map((item) => item.trim()).filter(Boolean);
+          };
+          const classification = readFlag('--classification');
+          const reason = readFlag('--reason');
+          if (!anchor || !classification || classification.startsWith('--') || !reason || reason.startsWith('--')) {
+            die('用法: loom philosophy revise <anchor> --classification <clarification|minor|major> --reason <text> [--confirm --review <ids> --unaffected <ids>]');
+          }
+          output(revisePhilosophy(versionDir, anchor, {
+            classification,
+            reason,
+            confirm: argv.includes('--confirm'),
+            review: parseIds('--review'),
+            unaffected: parseIds('--unaffected'),
+          }));
+          break;
+        }
         case 'check': {
           const philDir = getPhilosophyDir(versionDir);
           const inspiration = validateInspirationSources(philDir);
-          const decomposition = validatePartDecomposition(philDir);
-          const allIssues = [...inspiration.issues, ...decomposition.issues];
-          const allPassed = inspiration.passed && decomposition.passed;
+          const allIssues = inspiration.issues;
+          const allPassed = inspiration.passed;
 
           // --json: 结构化输出，供 Agent 程序化消费
           if (argv.includes('--json')) {
@@ -221,7 +343,6 @@ try {
               passed: allPassed,
               issues: allIssues,
               sources: inspiration.sources.map(({ file, sources }) => ({ file, count: sources.length })),
-              parts: decomposition.parts,
             });
             exit(allPassed ? 0 : 1);
           }
@@ -232,10 +353,6 @@ try {
             for (const { file, sources } of inspiration.sources) {
               console.log(`    ${file}: ${sources.length} 个源`);
             }
-            console.log('  实现部分拆解:');
-            for (const part of decomposition.parts) {
-              console.log(`    - ${part}`);
-            }
           } else {
             const high = allIssues.filter((i) => i.severity === 'high').length;
             const medium = allIssues.filter((i) => i.severity === 'medium').length;
@@ -244,13 +361,13 @@ try {
               const icon = issue.severity === 'high' ? '⚠' : '·';
               console.log(`  ${icon} [${issue.severity}] ${issue.msg}`);
             }
-            console.log('\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/PART_DECOMPOSITION.md + dimensions/SEARCH_METHODOLOGY.md。');
+            console.log('\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/SEARCH_METHODOLOGY.md。');
             exit(1);
           }
           break;
         }
         default:
-          die(`未知子命令: philosophy ${sub}\n用法: loom philosophy [get <anchor>|list|check]`);
+          die(`未知子命令: philosophy ${sub}\n用法: loom philosophy [get <anchor>|list|check|impact <anchor>|revise <anchor> --classification <clarification|minor|major> --reason <text>]`);
       }
       break;
     }
@@ -268,8 +385,13 @@ try {
         case 'history': {
           const id = rest[0];
           if (!id) die('用法: loom verify history <id>');
-          const history = getVerificationHistory(verificationsDir, id);
-          output(history ?? `没有 ${id} 的验证记录`);
+          if (argv.includes('--across-versions')) {
+            output(getAcrossVersionVerificationHistory(versionDir, id));
+          } else {
+            const resolved = resolveIntentRef(versionDir, id);
+            const history = getVerificationHistory(getVerificationsDir(resolved.versionDir), resolved.intentId);
+            output(history ?? `没有 ${resolved.ref} 的验证记录`);
+          }
           break;
         }
         case 'pending':
@@ -299,39 +421,52 @@ try {
           } else {
             die('用法: loom verify write --json-file <path> | --json <json-string>');
           }
-          const result = writeVerification(verificationsDir, record);
+          const result = writeVerification(versionDir, verificationsDir, record);
           console.log(`验证记录已写入: ${result.filePath}`);
           console.log(`  轮次: ${result.round}, verdict: ${record.verdict}`);
           if (record.verdict === 'deviated') {
             console.log(`  deviated 累计: ${result.deviated_count} 轮`);
             if (result.should_escalate) {
-              console.log(`  ⚠ 达到 3 轮上限，应升级为 blocked——Keeper 应执行: loom intent update ${record.intent_id} --status blocked`);
+              updateIntentStatus(versionDir, record.intent_id, 'blocked');
+              console.log(`  ⚠ 已达到 3 轮上限，${record.intent_id} 已自动升级为 blocked`);
             }
           }
           break;
         }
         case 'pass':
         case 'fail': {
-          // loom verify pass <id> --summary "..." [--reproduction-command "..."]
+          // loom verify pass <id> --summary "..." [--reproduction-command "..."] [--preservation-evidence "..."] [--quality-proof "..."]
           // loom verify fail <id> --summary "..." [--deviation "..."] [--reproduction-command "..."]
           const id = rest[0];
-          if (!id) die(`用法: loom verify ${sub} <id> --summary "..." [--reproduction-command "..."]${sub === 'fail' ? ' [--deviation "..."]' : ''}`);
+          if (!id) die(`用法: loom verify ${sub} <id> --summary "..." [--reproduction-command "..."]${sub === 'pass' ? ' [--preservation-evidence "..."] [--quality-proof "..."]' : ' [--deviation "..."]'}`);
           const summaryIdx = argv.indexOf('--summary');
           const reproIdx = argv.indexOf('--reproduction-command');
           const deviationIdx = argv.indexOf('--deviation');
+          const qualityProofIdx = argv.indexOf('--quality-proof');
+          const preservationIdx = argv.indexOf('--preservation-evidence');
           const summary = summaryIdx !== -1 ? argv[summaryIdx + 1] : null;
           if (!summary) die(`缺少 --summary: loom verify ${sub} ${id} --summary "..."`);
+          const intent = getIntent(versionDir, id);
+          if (sub === 'pass' && intent.continuity_required && !(preservationIdx !== -1 && argv[preservationIdx + 1])) {
+            die(`Intent ${id} 声明了 continuity_required；通过前必须提供 --preservation-evidence，证明旧状态 → 新操作后的完整序列未发生未授权丢失。`);
+          }
+          if (sub === 'pass' && intent.quality_contract && !(qualityProofIdx !== -1 && argv[qualityProofIdx + 1])) {
+            die(`Intent ${id} 声明了 quality_contract；通过前必须提供 --quality-proof，指向项目内真实的 Quality Proof Markdown 锚点。`);
+          }
           const extras = {};
           if (reproIdx !== -1 && argv[reproIdx + 1]) extras.reproduction_command = argv[reproIdx + 1];
           if (sub === 'fail' && deviationIdx !== -1 && argv[deviationIdx + 1]) extras.deviation_detail = argv[deviationIdx + 1];
+          if (sub === 'pass' && qualityProofIdx !== -1 && argv[qualityProofIdx + 1]) extras.quality_proof_ref = argv[qualityProofIdx + 1];
+          if (sub === 'pass' && preservationIdx !== -1 && argv[preservationIdx + 1]) extras.preservation_evidence = argv[preservationIdx + 1];
           const verdict = sub === 'pass' ? 'passed' : 'deviated';
-          const result = createQuickVerification(verificationsDir, id, verdict, summary, extras);
+          const result = createQuickVerification(versionDir, verificationsDir, id, verdict, summary, extras);
           console.log(`验证记录已写入: ${result.filePath}`);
           console.log(`  轮次: ${result.round}, verdict: ${verdict}`);
           if (verdict === 'deviated') {
             console.log(`  deviated 累计: ${result.deviated_count} 轮`);
             if (result.should_escalate) {
-              console.log(`  ⚠ 达到 3 轮上限，应升级为 blocked——Keeper 应执行: loom intent update ${id} --status blocked`);
+              updateIntentStatus(versionDir, id, 'blocked');
+              console.log(`  ⚠ 已达到 3 轮上限，${id} 已自动升级为 blocked`);
             }
           }
           break;
@@ -392,6 +527,40 @@ try {
       break;
     }
 
+    case 'patch': {
+      const versionDir = findVersionDir();
+      switch (sub) {
+        case 'record': {
+          const fileFlagIdx = argv.indexOf('--json-file');
+          const inputPath = fileFlagIdx !== -1 ? argv[fileFlagIdx + 1] : null;
+          if (!inputPath) die('用法: loom patch record --json-file <path>');
+          let record;
+          try {
+            record = JSON.parse(readFileSync(inputPath, 'utf-8'));
+          } catch (e) {
+            die(`JSON 文件解析失败: ${inputPath}\n原因: ${e.message}`);
+          }
+          output(recordPatch(versionDir, record));
+          break;
+        }
+        case 'list':
+          output(listPatches(versionDir));
+          break;
+        case 'get': {
+          const id = rest[0];
+          if (!id) die('用法: loom patch get <id>');
+          output(getPatch(versionDir, id));
+          break;
+        }
+        case 'validate':
+          output(validatePatches(versionDir));
+          break;
+        default:
+          die(`未知子命令: patch ${sub}\n用法: loom patch [record --json-file <path>|list|get <id>|validate]`);
+      }
+      break;
+    }
+
     case 'doctor': {
       const versionDir = findVersionDir();
       const { issues, summary } = doctor(versionDir, getVerificationsDir(versionDir), getPhilosophyDir(versionDir));
@@ -406,7 +575,7 @@ try {
             console.log(`    → 修复: ${issue.fix_hint}`);
           }
         }
-        console.log(`\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/PART_DECOMPOSITION.md + dimensions/SEARCH_METHODOLOGY.md。`);
+        console.log(`\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/SEARCH_METHODOLOGY.md。`);
       }
       break;
     }
@@ -614,8 +783,8 @@ To Human:
   loom init                     初始化项目（创建 .loom/v1/ 骨架 + 模板）
   loom guide                    诊断当前阶段，输出下一步引导
   loom guide --dry-run          只读诊断当前阶段，不写 heartbeat
-  loom auto on|off|status       AUTO 模式开关（on 时 Agent 自动连续执行）
-  loom activate <role>          输出角色激活提示词（weaver|visionary|architect|forge|keeper）
+  loom auto on|off|status       AUTO 编排协议开关（由 Agent/runtime 消费，不由 CLI 自行执行）
+  loom activate <role> [--intent <id>]  输出普通或 Intent-scoped 角色激活提示词
 
   loom version list             列出所有版本（* 标记当前）
   loom version current          显示当前版本
@@ -623,16 +792,28 @@ To Human:
   loom version use <v>          切换当前版本
   loom version diff <v1> <v2>   对比两个版本的文件差异
 
+  loom patch record --json-file <path>  记录 Patch 并生成 Markdown 投影
+  loom patch list               列出当前版本的 Patch
+  loom patch get <id>           返回指定 Patch
+  loom patch validate           校验 Patch ledger 和 Markdown 投影
+
   loom intent next              返回下一个可执行 Intent
+  loom intent add --title <text> [--depends-on <ids>]  创建新增 draft
+  loom intent revise <id> --reason <text>  创建修订 draft 并报告反向依赖
+  loom intent draft <id>        查看 draft
+  loom intent finalize <id>     校验并原子写入官方 Intent Map
+  loom intent deprecate <id> --reason <text>  只读评估；加 --confirm 才弃用
   loom intent status            返回进度概览
   loom intent graph             输出 Mermaid 依赖图
   loom intent get <id>          返回某 Intent 完整信息
   loom intent narrative <id>    返回某 Intent 的意图叙事（解析 narrative_ref）
+  loom intent diff <v1> <v2>    按显式 lineage 对比 Intent 语义
   loom intent validate          校验 Intent Map 结构
   loom intent trace <id>        返回某 Intent 的完整追溯链（依赖+验证+哲学+叙事）
   loom intent reverse-dep <id>  返回依赖某 Intent 的所有 Intent（变更影响评估）
   loom intent reverse-ref <anchor>  返回引用某哲学锚点的所有 Intent
   loom intent update <id> --status <s>  更新 Intent 状态（Keeper 用）
+  loom intent done <id>          当前 revision 验证通过后闭合 Intent
 
   loom doctor                   项目健康检查（一致性+孤儿引用+循环依赖+僵尸）
   loom context                  上下文摘要（进度+下一步+待验证+风险）
@@ -640,18 +821,23 @@ To Human:
   loom preview status           检查 preview 是否存在、是否新鲜
   loom preview --regen          强制重新输出提示词（让 AI 重新生成 HTML）
   loom preview --stale          强行打开过期 preview
-  loom help <topic>             分层指南（workflow|concepts|loop|version|doctor|preview）
+  loom help <topic>             分层指南（含 patch 工作流）
 
   loom philosophy get <anchor>  按锚点加载哲学章节
   loom philosophy list          列出哲学文档文件
   loom philosophy check         校验灵感来源质量（源数量/多样性/理由）
+  loom philosophy impact <anchor>  只读分析直接引用和传递影响
+  loom philosophy revise <anchor> --classification <type> --reason <text>  只读评估；加 --confirm 才记录 clarification/minor
 
   loom verify contract <id>     返回某 Intent 的验收契约（解析引用）
-  loom verify history <id>      返回某 Intent 验证历史
+  loom verify history <id>      返回某 Intent 本地验证历史
+  loom verify history <ref> --across-versions  递归返回 lineage 各版本的本地历史
   loom verify pending           返回待验证的 Intent
   loom verify list              列出所有验证记录
   loom verify write --json-file <path>  从文件读入并写入验证记录
   loom verify write --json <string>     从命令行字符串写入验证记录
+  loom verify pass|fail <id> --summary <text>  快捷写入验证结果
+    --quality-proof <ref>  声明相对质量提升时，指向基线比较与稳定性证据
 
 参数:
   --loom-dir <path>  指定 .loom/v{N} 目录（默认读 .loom/current 指针）`);

@@ -18,6 +18,8 @@ function setup() {
   rmSync(TEST_ROOT, { recursive: true, force: true });
   mkdirSync(PHILOSOPHY_DIR, { recursive: true });
   mkdirSync(VERIFICATIONS_DIR, { recursive: true });
+  mkdirSync(join(TEST_ROOT, 'artifacts'), { recursive: true });
+  writeFileSync(join(TEST_ROOT, 'artifacts', 'quality-proof.md'), '# INT-002 {#INT-002}\n\n基线、候选、稳定性与取舍证据。\n');
 
   // Intent Map（基于模板，填入可测试的数据）
   writeFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), JSON.stringify({
@@ -25,6 +27,7 @@ function setup() {
     intents: {
       'INT-001': {
         id: 'INT-001',
+        revision: 1,
         title: '用户注册与登录',
         narrative_ref: '01_VISION.md#int-001',
         depends_on: [],
@@ -34,6 +37,7 @@ function setup() {
       },
       'INT-002': {
         id: 'INT-002',
+        revision: 1,
         title: '项目创建',
         narrative_ref: '01_VISION.md#int-002',
         depends_on: ['INT-001'],
@@ -43,6 +47,7 @@ function setup() {
       },
       'INT-003': {
         id: 'INT-003',
+        revision: 1,
         title: '协作者邀请',
         narrative_ref: '01_VISION.md#int-003',
         depends_on: ['INT-001', 'INT-002'],
@@ -100,6 +105,13 @@ function setup() {
   writeFileSync(join(TEST_ROOT, '.loom', 'current'), 'v1', 'utf-8');
 }
 
+function completeAllIntents() {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  for (const intent of Object.values(map.intents)) intent.status = 'completed';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2), 'utf-8');
+}
+
 function run(args, allowFailure = false) {
   try {
     return execSync(`node "${CLI}" ${args} --loom-dir "${LOOM_DIR}"`, {
@@ -115,12 +127,17 @@ function run(args, allowFailure = false) {
 }
 
 // 从项目根目录跑（不带 --loom-dir，测试 findLoomDir 指针逻辑）
-function runFromRoot(args) {
-  return execSync(`node "${CLI}" ${args}`, {
-    encoding: 'utf-8',
-    cwd: TEST_ROOT,
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
+function runFromRoot(args, allowFailure = false) {
+  try {
+    return execSync(`node "${CLI}" ${args}`, {
+      encoding: 'utf-8',
+      cwd: TEST_ROOT,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+  } catch (e) {
+    if (allowFailure) return (e.stdout || '') + (e.stderr || '');
+    throw e;
+  }
 }
 
 function test(name, fn) {
@@ -202,8 +219,81 @@ test('intent validate — 校验通过', () => {
   assertContains(out, '校验通过');
 });
 
+test('intent validate — 质量契约与专业能力字段按最小结构校验', () => {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const original = readFileSync(mapPath, 'utf-8');
+  try {
+    const map = JSON.parse(original);
+    map.intents['INT-002'].quality_contract = '相对当前创建流程，首次成功时间至少降低 20%，且错误率不回退。';
+    map.intents['INT-002'].continuity_required = true;
+    map.intents['INT-002'].capability_needs = ['交互设计', '可用性测量'];
+    map.intents['INT-002'].creative_scope = '允许调整信息层级和反馈机制，不改变项目创建业务规则。';
+    writeFileSync(mapPath, JSON.stringify(map, null, 2));
+    assertContains(run('intent validate'), '校验通过');
+
+    map.intents['INT-002'].capability_needs = ['交互设计', '交互设计'];
+    map.intents['INT-002'].quality_contract = '更好';
+    map.intents['INT-002'].continuity_required = 'yes';
+    writeFileSync(mapPath, JSON.stringify(map, null, 2));
+    const out = run('intent validate', true);
+    assertContains(out, 'quality_contract');
+    assertContains(out, 'continuity_required');
+    assertContains(out, '重复专业领域');
+  } finally {
+    writeFileSync(mapPath, original);
+  }
+});
+
+test('intent validate — 缺失 revision 兼容为 1，非法显式 revision 被拒绝', () => {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const original = readFileSync(mapPath, 'utf-8');
+  try {
+    const legacy = JSON.parse(original);
+    delete legacy.intents['INT-001'].revision;
+    writeFileSync(mapPath, JSON.stringify(legacy, null, 2));
+    assertContains(run('intent validate'), '校验通过');
+    const readLegacy = JSON.parse(run('intent get INT-001'));
+    assert(readLegacy.revision === 1, '旧 Intent 读取时应投影有效 revision 1');
+    const persistedLegacy = JSON.parse(readFileSync(mapPath, 'utf-8'));
+    assert(!('revision' in persistedLegacy.intents['INT-001']), '读取旧 Intent 不应强制迁移磁盘文件');
+
+    for (const invalid of [0, -1, 1.5, '2', null]) {
+      const map = JSON.parse(original);
+      map.intents['INT-001'].revision = invalid;
+      writeFileSync(mapPath, JSON.stringify(map, null, 2));
+      assertContains(run('intent validate', true), 'revision 非法');
+    }
+  } finally {
+    writeFileSync(mapPath, original);
+  }
+});
+
+test('intent validate — lineage 结构、重复引用和同版本自引用被拒绝', () => {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const original = readFileSync(mapPath, 'utf-8');
+  try {
+    const map = JSON.parse(original);
+    map.intents['INT-001'].lineage = {
+      predecessors: [
+        { version: 'v1', intent_id: 'INT-001' },
+        { version: 'v1', intent_id: 'INT-001' },
+      ],
+      change_summary: '',
+    };
+    writeFileSync(mapPath, JSON.stringify(map, null, 2));
+    const out = run('intent validate', true);
+    assertContains(out, '不能自引用');
+    assertContains(out, '重复引用');
+    assertContains(out, 'change_summary');
+  } finally {
+    writeFileSync(mapPath, original);
+  }
+});
+
 test('intent update — 合法状态转换 pending→in_progress', () => {
-  // INT-003 是 pending，转成 in_progress
+  // INT-003 的依赖先完成，再转成 in_progress
+  run('verify pass INT-002 --summary "INT-002 当前 revision 的验收契约已验证通过，具备闭合条件"');
+  run('intent update INT-002 --status completed');
   const out = run('intent update INT-003 --status in_progress');
   assertContains(out, 'INT-003 status 已更新为 in_progress');
   // 验证确实改了
@@ -212,6 +302,17 @@ test('intent update — 合法状态转换 pending→in_progress', () => {
   // 改回去，不影响后续测试
   run('intent update INT-003 --status blocked');
   run('intent update INT-003 --status pending');
+  run('intent update INT-002 --status needs_review');
+  run('intent update INT-002 --status in_progress');
+});
+
+test('intent update — 纯 status 更新保持 revision 不变', () => {
+  setup();
+  const before = JSON.parse(run('intent get INT-002'));
+  run('verify pass INT-002 --summary "INT-002 当前 revision 的验收契约已验证通过，具备闭合条件"');
+  run('intent update INT-002 --status completed');
+  const after = JSON.parse(run('intent get INT-002'));
+  assert(after.revision === before.revision, 'status 更新不应改变 revision');
 });
 
 test('intent update — 非法状态转换被拒绝（completed→pending）', () => {
@@ -228,12 +329,324 @@ test('intent update — needs_review 状态转换（变更回流）', () => {
   // completed → needs_review（变更回流触发）
   const out = run('intent update INT-001 --status needs_review');
   assertContains(out, 'needs_review');
-  // needs_review → pending（重新验证）
-  const out2 = run('intent update INT-001 --status pending');
-  assertContains(out2, 'pending');
+  // needs_review → in_progress（进入重新实现/验证）
+  const out2 = run('intent update INT-001 --status in_progress');
+  assertContains(out2, 'in_progress');
   // 恢复为 completed，不影响后续测试
-  run('intent update INT-001 --status in_progress');
+  run('verify pass INT-001 --summary "INT-001 当前 revision 的验收契约已重新验证通过，具备闭合条件"');
   run('intent update INT-001 --status completed');
+});
+
+test('intent update — 没有当前 passed 验证时拒绝直接 completed', () => {
+  setup();
+  const out = run('intent update INT-002 --status completed', true);
+  assertContains(out, '不能标记 completed');
+  assertContains(out, 'loom intent done');
+});
+
+test('intent status — needs_review 纳入状态统计', () => {
+  setup();
+  run('intent update INT-001 --status needs_review');
+  const out = run('intent status');
+  assertContains(out, 'needs_review');
+  assertContains(out, 'INT-001');
+});
+
+test('intent update — 依赖未完成时拒绝 pending→in_progress', () => {
+  setup();
+  const out = run('intent update INT-003 --status in_progress', true);
+  assertContains(out, '依赖尚未完成');
+  assertContains(out, 'INT-002');
+});
+
+console.log('\n测试 Intent deprecation');
+
+test('intent deprecate — assessment 返回完整影响且逐字不修改 map', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const before = readFileSync(mapPath, 'utf-8');
+  const result = JSON.parse(run('intent deprecate INT-001 --reason "认证能力由统一身份层替代"'));
+  assert(result.mode === 'assessment' && result.mutated === false, '应明确报告只读 assessment');
+  assert(result.target.id === 'INT-001' && result.target.status === 'completed', '目标信息不完整');
+  assert(result.dependents.direct.some((item) => item.id === 'INT-002' && item.status === 'in_progress'), '缺少直接依赖方及状态');
+  assert(result.dependents.transitive.some((item) => item.id === 'INT-003' && item.status === 'pending'), '缺少传递依赖方及状态');
+  assert(result.required_partition.join(',') === 'INT-002,INT-003', 'required_partition 不完整');
+  assertContains(result.follow_up.command, '--confirm');
+  assertContains(result.follow_up.command, '--review');
+  assertContains(result.follow_up.command, '--unaffected');
+  assert(readFileSync(mapPath, 'utf-8') === before, 'assessment 不得修改 map');
+});
+
+test('intent deprecate — 分区缺失、重叠、重复和无关 ID 全部拒绝且不写入', () => {
+  const cases = [
+    ['--review INT-002', '缺少: INT-003'],
+    ['--review INT-002,INT-003 --unaffected INT-003', '重叠'],
+    ['--review INT-002,INT-002 --unaffected INT-003', '重复 ID'],
+    ['--review INT-002 --unaffected INT-003,INT-999', '无关 Intent'],
+  ];
+  for (const [flags, expected] of cases) {
+    setup();
+    const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+    const before = readFileSync(mapPath, 'utf-8');
+    const out = run(`intent deprecate INT-001 --reason "退出旧认证" --confirm ${flags}`, true);
+    assertContains(out, expected);
+    assert(readFileSync(mapPath, 'utf-8') === before, `失败分区不得写 map: ${flags}`);
+  }
+});
+
+test('intent deprecate — reviewed completed 进入 needs_review，其他 reviewed 状态与 unaffected 不变', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].status = 'completed';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  const result = JSON.parse(run('intent deprecate INT-001 --reason "迁移到项目身份" --confirm --replacement INT-002 --review INT-002,INT-003'));
+  const persisted = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  assert(result.mode === 'confirmed' && result.mutated === true, '应报告确认写入');
+  assert(persisted.intents['INT-001'].status === 'completed', '弃用目标必须保持 completed');
+  assert(persisted.intents['INT-001'].lifecycle.deprecation.reason === '迁移到项目身份', '弃用原因未持久化');
+  assert(persisted.intents['INT-001'].lifecycle.deprecation.replacement === 'INT-002', 'replacement 未持久化');
+  assert(persisted.intents['INT-002'].status === 'needs_review', 'reviewed completed 必须进入 needs_review');
+  assert(persisted.intents['INT-003'].status === 'pending', 'reviewed 非 completed 状态必须不变');
+  assert(result.reviewed.some((item) => item.id === 'INT-003' && item.status_before === 'pending' && item.status_after === 'pending'), '结果必须包含未转换的 reviewed 依赖方');
+  assertContains(run('intent deprecate INT-001 --reason "重复" --confirm', true), '已弃用');
+});
+
+test('intent deprecate — unaffected 保持不变，leaf 无需分区', () => {
+  setup();
+  let mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  let map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].status = 'completed';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  const result = JSON.parse(run('intent deprecate INT-001 --reason "退出认证" --confirm --review INT-002 --unaffected INT-003'));
+  map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  assert(map.intents['INT-003'].status === 'pending', 'unaffected 状态不得改变');
+  assert(result.unaffected.some((item) => item.id === 'INT-003' && item.status_after === 'pending'), '结果应列出 unaffected 状态');
+
+  setup();
+  mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-003'].status = 'completed';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  const assessment = JSON.parse(run('intent deprecate INT-003 --reason "协作邀请退出"'));
+  assert(assessment.required_partition.length === 0, 'leaf 不应要求分区');
+  assert(!assessment.follow_up.command.includes('--review'), 'leaf 指引不应包含分区参数');
+  run('intent deprecate INT-003 --reason "协作邀请退出" --confirm');
+  map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  assert(map.intents['INT-003'].status === 'completed' && map.intents['INT-003'].lifecycle.deprecation, 'leaf 应直接完成弃用');
+});
+
+test('intent deprecate — replacement 必须是另一个当前 Intent', () => {
+  for (const [replacement, expected] of [['INT-001', '另一个当前 Intent'], ['INT-999', '不是当前 Intent']]) {
+    setup();
+    const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+    const before = readFileSync(mapPath, 'utf-8');
+    const out = run(`intent deprecate INT-001 --reason "退出认证" --confirm --replacement ${replacement} --unaffected INT-002,INT-003`, true);
+    assertContains(out, expected);
+    assert(readFileSync(mapPath, 'utf-8') === before, 'replacement 校验失败不得写入');
+  }
+});
+
+test('收敛计数 — 批量影响只计一趟，全部闭合后重置', () => {
+  setup();
+  completeAllIntents();
+  run('intent deprecate INT-001 --reason "退出认证" --confirm --review INT-002,INT-003');
+  let map = JSON.parse(readFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), 'utf-8'));
+  assert(map._meta.pass_count === 1, `批量 review 应只计一趟，实际 ${map._meta.pass_count}`);
+  assert(map._meta.reviewing_ids.length === 2, '应跟踪两个回流 Intent');
+  run('intent update INT-002 --status in_progress');
+  run('verify pass INT-002 --summary "INT-002 回流后的当前 revision 已重新验证通过，具备闭合条件"');
+  run('intent update INT-002 --status completed');
+  map = JSON.parse(readFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), 'utf-8'));
+  assert(map._meta.pass_count === 1, '仍有回流 Intent 时不应重置趟数');
+  run('intent update INT-003 --status in_progress');
+  run('verify pass INT-003 --summary "INT-003 回流后的当前 revision 已重新验证通过，具备闭合条件"');
+  run('intent update INT-003 --status completed');
+  map = JSON.parse(readFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), 'utf-8'));
+  assert(map._meta.pass_count === 0, '全部回流 Intent 闭合后应重置趟数');
+  assert(!map._meta.reviewing_ids, '全部闭合后应清理 reviewing_ids');
+});
+
+test('intent lifecycle — validator 检查结构，status/context 暴露弃用且 next 跳过异常非 completed 弃用项', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const original = readFileSync(mapPath, 'utf-8');
+  try {
+    const invalid = JSON.parse(original);
+    invalid.intents['INT-001'].lifecycle = { deprecation: { deprecated_at: 'not-a-date', reason: '', replacement: 'INT-999' } };
+    writeFileSync(mapPath, JSON.stringify(invalid, null, 2));
+    const invalidOut = run('intent validate', true);
+    assertContains(invalidOut, 'deprecated_at');
+    assertContains(invalidOut, 'reason');
+    assertContains(invalidOut, 'replacement');
+
+    writeFileSync(mapPath, original);
+    run('intent deprecate INT-001 --reason "退出认证" --confirm --unaffected INT-002,INT-003');
+    const status = run('intent status');
+    assertContains(status, 'deprecated:   1');
+    assertContains(status, 'INT-001');
+    const context = JSON.parse(run('context'));
+    assert(context.deprecated_intents.includes('INT-001'), 'context 应暴露弃用 Intent');
+
+    const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+    map.intents['INT-001'].status = 'pending';
+    map.intents['INT-002'].status = 'completed';
+    writeFileSync(mapPath, JSON.stringify(map, null, 2));
+    const next = run('intent next');
+    assertContains(next, '没有可执行的 Intent');
+    assert(!next.includes('INT-001'), 'next 必须跳过异常处于 pending 的弃用 Intent');
+  } finally {
+    writeFileSync(mapPath, original);
+  }
+});
+
+console.log('\n测试 Minor Intent draft 命令');
+
+function makeDraftFinalizable(id) {
+  const draftPath = join(LOOM_DIR, 'drafts', `${id}.json`);
+  const draft = JSON.parse(readFileSync(draftPath, 'utf-8'));
+  draft.philosophy_anchors = ['PRODUCT_PHILOSOPHY.md#core-belief'];
+  writeFileSync(draftPath, JSON.stringify(draft, null, 2));
+  const visionPath = join(LOOM_DIR, '01_VISION.md');
+  const verificationPath = join(LOOM_DIR, '05_VERIFICATION.md');
+  writeFileSync(visionPath, readFileSync(visionPath, 'utf-8').replace(
+    /\[TODO: replace this with the intent narrative:[^\]]+\]/,
+    '团队需要可靠地导出项目资料，以便在迁移、审计和离线协作时仍然掌控自己的工作成果。'
+  ));
+  writeFileSync(verificationPath, readFileSync(verificationPath, 'utf-8').replace(
+    /\[TODO: replace this with concrete, observable acceptance criteria[^\]]+\]/,
+    '用户执行导出后会得到包含项目名称和成员清单的文件；无权限用户被拒绝，空项目仍生成结构合法的文件。'
+  ));
+  return draft;
+}
+
+test('intent add — 分配 ID 并保持官方 map/topo_order 不变', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const before = readFileSync(mapPath, 'utf-8');
+  const draft = JSON.parse(run('intent add --title "项目资料导出" --depends-on INT-003'));
+  assert(draft.id === 'INT-004', '应分配 INT-004');
+  assert(draft.revision === 1 && draft.status === 'pending', '新增 draft 初始语义错误');
+  assert(draft.acceptance === 'see 05_VERIFICATION.md#int-004', 'acceptance 应引用验证章节');
+  assert(readFileSync(mapPath, 'utf-8') === before, 'finalize 前官方 map 必须逐字不变');
+  assertContains(readFileSync(join(LOOM_DIR, '01_VISION.md'), 'utf-8'), '[DRAFT] INT-004');
+  assertContains(readFileSync(join(LOOM_DIR, '05_VERIFICATION.md'), 'utf-8'), '[DRAFT] INT-004');
+  assert(JSON.parse(run('intent draft INT-004')).id === 'INT-004', 'draft 命令未返回 draft');
+});
+
+test('intent finalize — 拒绝占位章节且不修改官方 map', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  run('intent add --title "项目资料导出"');
+  const draftPath = join(LOOM_DIR, 'drafts', 'INT-004.json');
+  const draft = JSON.parse(readFileSync(draftPath, 'utf-8'));
+  draft.philosophy_anchors = ['PRODUCT_PHILOSOPHY.md#core-belief'];
+  writeFileSync(draftPath, JSON.stringify(draft, null, 2));
+  const before = readFileSync(mapPath, 'utf-8');
+  assertContains(run('intent finalize INT-004', true), '非占位内容');
+  assert(readFileSync(mapPath, 'utf-8') === before, '失败 finalize 不得修改官方 map');
+  assert(existsSync(draftPath), '失败 finalize 不得删除 draft');
+});
+
+test('intent finalize — 成功新增并按 DAG 重算 topo_order', () => {
+  setup();
+  run('intent add --title "项目资料导出" --depends-on INT-003');
+  makeDraftFinalizable('INT-004');
+  const result = JSON.parse(run('intent finalize INT-004'));
+  const map = JSON.parse(readFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), 'utf-8'));
+  assert(result.operation === 'add', '应报告 add');
+  assert(map.intents['INT-004'].status === 'pending', '新增 Intent 必须 pending');
+  assert(map.topo_order.indexOf('INT-003') < map.topo_order.indexOf('INT-004'), '依赖必须位于新增 Intent 前');
+  assert(!existsSync(join(LOOM_DIR, 'drafts', 'INT-004.json')), '成功后应删除 draft');
+  assert(!readFileSync(join(LOOM_DIR, '01_VISION.md'), 'utf-8').includes('[DRAFT] INT-004'), '成功后应提升愿景章节');
+  assert(!readFileSync(join(LOOM_DIR, '05_VERIFICATION.md'), 'utf-8').includes('[DRAFT] INT-004'), '成功后应提升验证章节');
+  assertContains(run('intent validate'), '校验通过');
+});
+
+test('intent revise — 强制声明全部下游影响，completed finalize 为 needs_review', () => {
+  setup();
+  completeAllIntents();
+  const result = JSON.parse(run('intent revise INT-001 --reason "认证承诺增加会话撤销边界"'));
+  assert(result.draft.revision === 2, '修订 revision 应递增');
+  assert(result.reverse_dependencies.direct.includes('INT-002'), '应报告直接反向依赖');
+  assert(result.reverse_dependencies.transitive.includes('INT-003'), '应报告传递反向依赖');
+  assertContains(run('intent revise INT-001 --reason "再次修改"', true), '已存在 draft');
+  assertContains(run('intent finalize INT-001', true), '依赖分区不完整');
+  const out = JSON.parse(run('intent finalize INT-001 --review INT-002,INT-003'));
+  assert(out.intent.revision === 2, 'finalize 后 revision 应为 2');
+  assert(out.intent.status === 'needs_review', 'completed 修订后必须 needs_review');
+  const map = JSON.parse(readFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), 'utf-8'));
+  assert(map._meta.pass_count === 1, 'completed→needs_review 应增加收敛趟计数');
+  assert(map.intents['INT-002'].status === 'needs_review', '直接下游 completed 必须回流复验');
+  assert(map.intents['INT-003'].status === 'needs_review', '传递下游 completed 必须回流复验');
+});
+
+test('intent finalize — 循环依赖被拒绝且官方 map 不变', () => {
+  setup();
+  run('intent revise INT-001 --reason "调整认证依赖边界以覆盖协作流程"');
+  const draftPath = join(LOOM_DIR, 'drafts', 'INT-001.json');
+  const draft = JSON.parse(readFileSync(draftPath, 'utf-8'));
+  draft.depends_on = ['INT-003'];
+  writeFileSync(draftPath, JSON.stringify(draft, null, 2));
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const before = readFileSync(mapPath, 'utf-8');
+  assertContains(run('intent finalize INT-001 --review INT-002,INT-003', true), '循环');
+  assert(readFileSync(mapPath, 'utf-8') === before, '循环依赖失败不得修改官方 map');
+  assert(existsSync(draftPath), '循环依赖失败不得删除 draft');
+});
+
+test('activate --intent — draft 与官方角色都只加载对应作用域', () => {
+  setup();
+  run('intent add --title "项目资料导出"');
+  const draftPrompt = run('activate visionary --intent INT-004');
+  assertContains(draftPrompt, '# LOOM Context Pack');
+  assertContains(draftPrompt, '只处理下面这个 draft');
+  assertContains(draftPrompt, '不要修改官方 Intent Map');
+  assertContains(draftPrompt, '项目资料导出');
+  assert(!draftPrompt.includes('用户注册与登录'), 'draft 激活不应加载其他官方 Intent');
+
+  const officialPrompt = run('activate forge --intent INT-001');
+  assertContains(officialPrompt, '## 2. Active Objective');
+  assertContains(officialPrompt, '## 6. Expertise Inputs');
+  assertContains(officialPrompt, '用户注册与登录');
+  assertContains(officialPrompt, '身份自治的入口');
+  assertContains(officialPrompt, '注册并登录');
+  assertContains(officialPrompt, '掌控自己的数据');
+  assert(!officialPrompt.includes('协作是产品的核心'), '官方 Intent 只应加载精确 Doctrine anchor');
+  assertContains(run('activate forge --intent INT-004', true), 'Intent 不存在');
+});
+
+test('activate forge — Context Pack 顺序稳定并注入质量与专业能力输入', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  Object.assign(map.intents['INT-001'], {
+    quality_contract: '相对当前基线，首次登录理解时间至少降低 20%，安全行为与错误率不回退。',
+    capability_needs: ['身份安全', '交互反馈设计'],
+    creative_scope: '允许探索信息层级和反馈机制，不改变认证业务语义与安全边界。',
+  });
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+
+  const out = run('activate forge --intent INT-001');
+  const headings = [
+    '## 1. Execution Envelope',
+    '## 2. Active Objective',
+    '## 3. Hard Invariants',
+    '## 4. Success Contracts',
+    '## 5. Project Judgment',
+    '## 6. Expertise Inputs',
+    '## 7. Working Facts',
+    '## 8. Role Contract / Output / Reflow / Stop',
+  ];
+  for (let i = 1; i < headings.length; i++) {
+    assert(out.indexOf(headings[i - 1]) < out.indexOf(headings[i]), `Context Pack 顺序错误: ${headings[i]}`);
+  }
+  assertContains(out, '身份安全');
+  assertContains(out, '交互反馈设计');
+  assertContains(out, '首次登录理解时间');
+  assertContains(out, '只代表可发现入口');
+  assert(!out.includes('协作者邀请'), '当前 Intent 不应注入无关 Intent');
+  setup();
 });
 
 console.log('\n测试 philosophy 命令');
@@ -273,6 +686,11 @@ test('philosophy get — 无锚点时返回整个文件', () => {
   assertContains(out, 'Simplicity');
 });
 
+test('philosophy get — 拒绝越出哲学目录的文件路径', () => {
+  const out = run('philosophy get ../01_VISION.md', true);
+  assertContains(out, '哲学锚点文件名非法');
+});
+
 test('philosophy list — 列出哲学文档', () => {
   const out = run('philosophy list');
   const files = JSON.parse(out);
@@ -281,80 +699,139 @@ test('philosophy list — 列出哲学文档', () => {
 });
 
 test('philosophy check — 无灵感来源章节报 high', () => {
-  // 当前测试数据的哲学文档没有"灵感来源"章节也没有"实现部分清单"
+  // 当前测试数据的哲学文档没有可追溯的证据条目。
   const out = run('philosophy check', true);
   assertContains(out, '哲学文档校验未通过');
   assertContains(out, '灵感来源');
 });
 
-test('philosophy check — 灵感来源全 Wikipedia 报 high', () => {
-  // 写一个只有 Wikipedia 链接的哲学文档（带实现部分清单以隔离测试）
+test('philosophy check — 单个决策相关的 Wikipedia 来源可以通过', () => {
   writeFileSync(join(PHILOSOPHY_DIR, 'TEST_INSPIRATION.md'), [
     '# 测试灵感来源',
     '',
-    '## 实现部分清单',
-    '',
-    '- **CLI 交互设计** — 参数解析',
-    '- **转换引擎** — 核心逻辑',
-    '',
     '## 灵感来源',
     '',
-    '- **Unix Philosophy** — 做一件事并做好。萃取：单一职责。来源：https://en.wikipedia.org/wiki/Unix_philosophy',
-    '- **Dieter Rams** — 少即多。萃取：减法优先。来源：https://en.wikipedia.org/wiki/Dieter_Rams',
-    '- **Minimalism** — 简约设计。萃取：去除冗余。来源：https://en.wikipedia.org/wiki/Minimalism',
-    '',
-    '## 章节锚点',
-    '',
-    '- `#test` — 测试',
+    '- **Unix Philosophy** — 为什么相关：用于判断 CLI 是否应保持单一职责；转译为组合优先。来源：https://en.wikipedia.org/wiki/Unix_philosophy',
   ].join('\n'));
-  const out = run('philosophy check', true);
-  assertContains(out, '非 Wikipedia');
+  const out = run('philosophy check');
+  assertContains(out, '通过');
   rmSync(join(PHILOSOPHY_DIR, 'TEST_INSPIRATION.md'), { force: true });
 });
 
-test('philosophy check — 缺实现部分清单报 high', () => {
-  // 有合格灵感来源但没有实现部分清单
-  writeFileSync(join(PHILOSOPHY_DIR, 'TEST_NO_PARTS.md'), [
-    '# 测试无部分清单',
+test('philosophy check — 来源缺少选择理由时拒绝', () => {
+  writeFileSync(join(PHILOSOPHY_DIR, 'TEST_NO_REASON.md'), [
+    '# 测试无理由来源',
     '',
     '## 灵感来源',
     '',
-    '- **Unix Philosophy**（Doug McIlloy, 1978）— 做一件事并做好。萃取：单一职责。来源：https://en.wikipedia.org/wiki/Unix_philosophy',
-    '- **The Art of UNIX Programming**（Eric Raymond, 2003）— 17 条 Unix 原则。萃取：模块化。来源：https://www.catb.org/esr/writings/taoup/html/',
-    '- **The UNIX Philosophy**（Mike Gancarz, 1995）— 小即是美。萃取：小工具。来源：https://www.goodreads.com/book/show/108453.The_UNIX_Philosophy',
-    '',
-    '## 章节锚点',
-    '',
-    '- `#test` — 测试',
+    '- **Unix Philosophy** — 来源：https://en.wikipedia.org/wiki/Unix_philosophy',
   ].join('\n'));
   const out = run('philosophy check', true);
-  assertContains(out, '实现部分清单');
-  rmSync(join(PHILOSOPHY_DIR, 'TEST_NO_PARTS.md'), { force: true });
+  assertContains(out, '缺乏选取理由');
+  rmSync(join(PHILOSOPHY_DIR, 'TEST_NO_REASON.md'), { force: true });
 });
 
-test('philosophy check — 合格灵感来源 + 实现部分清单通过', () => {
+test('philosophy check — 一个可追溯且有转译理由的来源即可通过', () => {
   writeFileSync(join(PHILOSOPHY_DIR, 'TEST_GOOD.md'), [
     '# 测试合格',
     '',
-    '## 实现部分清单',
-    '',
-    '- **CLI 交互设计** — 参数解析、--help、用法提示',
-    '- **CLI 输出美学** — 成功反馈格式、颜色策略',
-    '- **转换引擎** — 纯函数、子集策略',
-    '',
     '## 灵感来源',
     '',
-    '- **Unix Philosophy**（Doug McIlloy, 1978）— 做一件事并做好。萃取：单一职责 + CLI 作为可组合原语。来源：https://en.wikipedia.org/wiki/Unix_philosophy',
-    '- **The Art of UNIX Programming**（Eric Raymond, 2003）— 17 条 Unix 原则。萃取：模块化、清晰性、透明性。来源：https://www.catb.org/esr/writings/taoup/html/',
-    '- **The UNIX Philosophy**（Mike Gancarz, 1995）— 小即是美。萃取：小工具组合优于大单体。来源：https://www.goodreads.com/book/show/108453.The_UNIX_Philosophy',
-    '',
-    '## 章节锚点',
-    '',
-    '- `#test` — 测试',
+    '- **真实用户反馈** — 为什么相关：直接暴露首次使用失败；转译为默认路径必须可发现。来源：local:./research/user-feedback.md',
   ].join('\n'));
   const out = run('philosophy check');
   assertContains(out, '通过');
   rmSync(join(PHILOSOPHY_DIR, 'TEST_GOOD.md'), { force: true });
+});
+
+test('philosophy impact — 返回直接引用和传递闭包且不修改文件', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const before = readFileSync(mapPath, 'utf-8');
+  const result = JSON.parse(run('philosophy impact PRODUCT_PHILOSOPHY.md#core-belief'));
+  assert(result.direct.length === 1 && result.direct[0].id === 'INT-001', '直接引用不正确');
+  assert(result.transitive.map((item) => item.id).join(',') === 'INT-002,INT-003', '传递闭包不正确');
+  assert(result.impacted.every((item) => item.title && item.status && item.revision === 1 && item.acceptance), '影响详情不完整');
+  assert(readFileSync(mapPath, 'utf-8') === before, 'impact 不得修改 map');
+  assert(!existsSync(join(LOOM_DIR, '03_DECISIONS')), 'impact 不得创建 ADR 目录');
+  assertContains(run('philosophy impact PRODUCT_PHILOSOPHY.md#missing', true), '章节未找到');
+});
+
+test('philosophy revise assessment — clarification/minor 严格只读并给出确认指引', () => {
+  for (const classification of ['clarification', 'minor']) {
+    setup();
+    const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+    const before = readFileSync(mapPath, 'utf-8');
+    const result = JSON.parse(run(`philosophy revise PRODUCT_PHILOSOPHY.md#core-belief --classification ${classification} --reason "补充边界说明"`));
+    assert(result.mode === 'assessment' && result.mutated === false, '未确认必须只读');
+    assert(result.required_partition.join(',') === 'INT-001,INT-002,INT-003', '必须分区全部影响');
+    assertContains(result.follow_up.command, '--confirm');
+    if (classification === 'clarification') {
+      assertContains(result.follow_up.command, '--unaffected INT-001,INT-002,INT-003');
+      assert(!result.follow_up.command.includes('--review'), 'clarification 不得要求 review');
+    } else assertContains(result.follow_up.command, '--review');
+    assert(readFileSync(mapPath, 'utf-8') === before, 'assessment 不得修改 map');
+    assert(!existsSync(join(LOOM_DIR, '03_DECISIONS')), 'assessment 不得写 ADR');
+  }
+});
+
+test('philosophy revise clarification — review 为空，状态和 acceptance 不变并写 ADR', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const before = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  assertContains(run('philosophy revise PRODUCT_PHILOSOPHY.md#core-belief --classification clarification --reason "补充边界" --confirm --review INT-001 --unaffected INT-002,INT-003', true), 'review 必须为空');
+  const result = JSON.parse(run('philosophy revise PRODUCT_PHILOSOPHY.md#core-belief --classification clarification --reason "补充边界" --confirm --unaffected INT-001,INT-002,INT-003'));
+  const after = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  assert(result.audit_adr === '03_DECISIONS/PHIL-REV-001.md', 'ADR 命名不正确');
+  for (const id of ['INT-001', 'INT-002', 'INT-003']) {
+    assert(after.intents[id].status === before.intents[id].status, `${id} 状态不应改变`);
+    assert(after.intents[id].acceptance === before.intents[id].acceptance, `${id} acceptance 不应改变`);
+  }
+  const adr = readFileSync(join(LOOM_DIR, result.audit_adr), 'utf-8');
+  assertContains(adr, 'Classification: clarification');
+  assertContains(adr, 'Philosophy prose is edited by Weaver/user separately');
+});
+
+test('philosophy revise minor — 校验完整分区，completed 回流且 pass_count 只加一', () => {
+  const invalidCases = [
+    ['--review INT-001', '缺少: INT-002, INT-003'],
+    ['--review INT-001,INT-002 --unaffected INT-002,INT-003', '重叠'],
+    ['--review INT-001,INT-001 --unaffected INT-002,INT-003', '重复 ID'],
+    ['--review INT-001 --unaffected INT-002,INT-003,INT-999', '无关 Intent'],
+  ];
+  for (const [partition, expected] of invalidCases) {
+    setup();
+    const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+    const before = readFileSync(mapPath, 'utf-8');
+    assertContains(run(`philosophy revise PRODUCT_PHILOSOPHY.md#core-belief --classification minor --reason "调整原则" --confirm ${partition}`, true), expected);
+    assert(readFileSync(mapPath, 'utf-8') === before, '分区失败不得修改 map');
+    assert(!existsSync(join(LOOM_DIR, '03_DECISIONS')), '分区失败不得写 ADR');
+  }
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].status = 'completed';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  const acceptanceBefore = Object.fromEntries(Object.entries(map.intents).map(([id, intent]) => [id, intent.acceptance]));
+  const result = JSON.parse(run('philosophy revise PRODUCT_PHILOSOPHY.md#core-belief --classification minor --reason "调整原则" --confirm --review INT-001,INT-002 --unaffected INT-003'));
+  const after = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  assert(after.intents['INT-001'].status === 'needs_review' && after.intents['INT-002'].status === 'needs_review', 'reviewed completed 必须回流');
+  assert(after.intents['INT-003'].status === 'pending', 'unaffected 必须不变');
+  assert(after._meta.pass_count === 1, '一次 minor 操作只能增加一次 pass_count');
+  assert(result.reviewed.every((item) => item.status_after === 'needs_review'), '结果必须报告 reviewed 状态');
+  for (const id of Object.keys(after.intents)) assert(after.intents[id].acceptance === acceptanceBefore[id], '不得修改 acceptance');
+  assertContains(readFileSync(join(LOOM_DIR, '03_DECISIONS', 'PHIL-REV-001.md'), 'utf-8'), 'Classification: minor');
+});
+
+test('philosophy revise major — confirm 也不修改当前版本', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const before = readFileSync(mapPath, 'utf-8');
+  const result = JSON.parse(run('philosophy revise PRODUCT_PHILOSOPHY.md#core-belief --classification major --reason "核心前提改变" --confirm --review INT-001'));
+  assert(result.mutated === false && result.follow_up.command === 'loom version new', 'major 必须只给新版本指引');
+  assert(readFileSync(mapPath, 'utf-8') === before, 'major 不得修改 map');
+  assert(!existsSync(join(LOOM_DIR, '03_DECISIONS')), 'major 不得写当前 ADR');
+  assertContains(run('philosophy revise PRODUCT_PHILOSOPHY.md#core-belief --classification typo --reason "x"', true), 'classification 非法');
 });
 
 console.log('\n测试 verify 命令');
@@ -392,9 +869,105 @@ test('verify contract — 引用 acceptance 解析 05_VERIFICATION.md', () => {
   assertContains(out, '项目成员');
 });
 
+test('verify pass — 质量契约强制第五维，相对提升可附 Quality Proof', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].quality_contract = '相对当前基线，项目创建首次成功时间至少降低 20%，错误率不回退。';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+
+  writeFileSync(join(VERIFICATIONS_DIR, 'INT-002.json'), JSON.stringify({
+    intent_id: 'INT-002',
+    records: [{ round: 1, intent_revision: 1, verdict: 'passed' }],
+  }));
+  assertContains(run('intent done INT-002', true), 'quality_achievement');
+  rmSync(join(VERIFICATIONS_DIR, 'INT-002.json'), { force: true });
+
+  const inconsistent = {
+    intent_id: 'INT-002',
+    verdict: 'passed',
+    timestamp: '2026-07-28T12:00:00Z',
+    summary: '完成契约通过但质量比较未达到约定差异',
+    dimensions: {
+      intent_fidelity: { verdict: 'passed', evidence: '对照叙事，用户目标与非目标均保持一致' },
+      philosophy_consistency: { verdict: 'passed', evidence: '对照项目原则，关键取舍没有发生冲突' },
+      baseline_compliance: { verdict: 'passed', evidence: 'B1-B5 与项目底线逐项检查均未失守' },
+      acceptance_achievement: { verdict: 'passed', evidence: '完成契约的可观察行为均已复现通过' },
+      quality_achievement: {
+        verdict: 'deviated',
+        evidence: '相对基线只提升 5%，未达到契约要求的 20%',
+        quality_proof_ref: 'artifacts/quality-proof.md#INT-002',
+      },
+    },
+  };
+  const inconsistentPath = join(LOOM_DIR, '_tmp_quality_inconsistent.json');
+  writeFileSync(inconsistentPath, JSON.stringify(inconsistent));
+  assertContains(run(`verify write --json-file "${inconsistentPath}"`, true), '整体 verdict 为 passed');
+  rmSync(inconsistentPath, { force: true });
+
+  assertContains(run('verify pass INT-002 --summary "完成质量契约的基线比较并验证回归稳定"', true), '--quality-proof');
+  assertContains(run('verify pass INT-002 --summary "完成质量契约的基线比较并验证回归稳定" --quality-proof "artifacts/missing.md#INT-002"', true), '不存在');
+  run('verify pass INT-002 --summary "完成契约通过，基线比较达到约定差异且回归稳定" --quality-proof "artifacts/quality-proof.md#INT-002"');
+  const history = JSON.parse(run('verify history INT-002'));
+  const latest = history.records.at(-1);
+  assert(latest.dimensions.quality_achievement.verdict === 'passed', '应自动写入第五维');
+  assert(latest.dimensions.quality_achievement.quality_proof_ref === 'artifacts/quality-proof.md#INT-002', '应在质量维度保留 Quality Proof 引用');
+  setup();
+});
+
+test('状态守恒门 — stateful Intent 必须提供独立守恒证据才能闭合', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].continuity_required = true;
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+
+  const missing = run('verify pass INT-002 --summary "项目创建结果与基础验收均已复现"', true);
+  assertContains(missing, 'continuity_required');
+  assertContains(missing, '--preservation-evidence');
+
+  run('verify pass INT-002 --summary "项目创建结果与基础验收均已复现" --preservation-evidence "复现已有项目 Alpha → 新建项目 Beta → 刷新后 Alpha 与 Beta 均存在，Alpha 的原属性不变"');
+  const latest = JSON.parse(run('verify history INT-002')).records.at(-1);
+  assert(latest.dimensions.preservation_achievement.verdict === 'passed', '状态型 Intent 必须写入守恒维度');
+  assertContains(latest.dimensions.preservation_achievement.evidence, 'Alpha');
+  assertContains(run('intent done INT-002'), '已完成');
+
+  const activation = run('activate forge --intent INT-002');
+  assertContains(activation, 'Codex Goal Alignment');
+  assertContains(activation, '状态守恒门');
+  setup();
+});
+
+test('doctor — 状态守恒门的旧 passed 记录缺少守恒维度时报告 high', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-001'].continuity_required = true;
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  writeFileSync(join(VERIFICATIONS_DIR, 'INT-001.json'), JSON.stringify({
+    intent_id: 'INT-001',
+    records: [{
+      round: 1,
+      intent_revision: 1,
+      verdict: 'passed',
+      dimensions: {
+        intent_fidelity: { verdict: 'passed', evidence: '旧记录只证明当前结果存在，未复现状态变化序列' },
+        philosophy_consistency: { verdict: 'passed', evidence: '项目原则与当前实现没有明显冲突' },
+        baseline_compliance: { verdict: 'passed', evidence: '基础底线检查通过，未发现外部依赖或秘密泄露' },
+        acceptance_achievement: { verdict: 'passed', evidence: '基础功能路径已经复现，但没有守恒序列证据' },
+      },
+    }],
+  }));
+  const out = run('doctor');
+  assertContains(out, 'preservation_dimension_missing');
+  assertContains(out, 'preservation_achievement');
+  setup();
+});
+
 test('verify write — 写入验证记录（追加模式）', () => {
   const record = {
     intent_id: 'INT-002',
+    intent_revision: 999,
     verdict: 'passed',
     timestamp: '2026-06-26T12:00:00Z',
     summary: '实现忠实于意图',
@@ -412,10 +985,16 @@ test('verify write — 写入验证记录（追加模式）', () => {
   assertContains(out, '验证记录已写入');
   assertContains(out, '轮次: 1');
   assert(existsSync(join(VERIFICATIONS_DIR, 'INT-002.json')), '验证记录文件未创建');
+  const written = JSON.parse(readFileSync(join(VERIFICATIONS_DIR, 'INT-002.json'), 'utf-8'));
+  assert(written.records[0].intent_revision === 1, 'CLI 必须覆盖调用者伪造的 intent_revision');
   rmSync(tmpFile, { force: true });
 });
 
 test('verify write — deviated 轮次追踪和升级提示', () => {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-003'].status = 'in_progress';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
   // 写 3 轮 deviated，第 3 轮应触发升级提示
   for (let i = 1; i <= 3; i++) {
     const record = {
@@ -440,18 +1019,24 @@ test('verify write — deviated 轮次追踪和升级提示', () => {
     } else {
       assertContains(out, '达到 3 轮上限');
       assertContains(out, '升级为 blocked');
+      assert(JSON.parse(run('intent get INT-003')).status === 'blocked', '第 3 轮偏离必须自动阻断 Intent');
     }
     rmSync(tmpFile, { force: true });
   }
 });
 
 test('verify write — deviated 连续计数遇到 passed 会重置', () => {
-  rmSync(join(VERIFICATIONS_DIR, 'INT-099.json'), { force: true });
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-003'].status = 'in_progress';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  const recordPath = join(VERIFICATIONS_DIR, 'INT-003.json');
+  rmSync(recordPath, { force: true });
   const verdicts = ['deviated', 'passed', 'deviated', 'deviated'];
   for (let i = 0; i < verdicts.length; i++) {
     const verdict = verdicts[i];
     const record = {
-      intent_id: 'INT-099',
+      intent_id: 'INT-003',
       verdict,
       timestamp: `2026-06-26T13:0${i}:00Z`,
       summary: `第 ${i + 1} 轮 ${verdict}`,
@@ -469,7 +1054,7 @@ test('verify write — deviated 连续计数遇到 passed 会重置', () => {
     assert(!out.includes('升级为 blocked'), '非连续 3 轮 deviated 不应触发升级');
     rmSync(tmpFile, { force: true });
   }
-  rmSync(join(VERIFICATIONS_DIR, 'INT-099.json'), { force: true });
+  rmSync(recordPath, { force: true });
 });
 
 test('verify write — pending_human verdict（L3 人类反馈）', () => {
@@ -490,6 +1075,30 @@ test('verify write — pending_human verdict（L3 人类反馈）', () => {
   const out = run(`verify write --json-file "${tmpFile}"`);
   assertContains(out, '验证记录已写入');
   assertContains(out, 'pending_human');
+  rmSync(tmpFile, { force: true });
+});
+
+test('verify write — pending Intent 不得抢先写入验证记录', () => {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-003'].status = 'pending';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  const record = {
+    intent_id: 'INT-003',
+    verdict: 'pending_human',
+    timestamp: '2026-06-26T14:30:00Z',
+    summary: '尚未开始的 Intent 不应进入验证阶段',
+    dimensions: {
+      intent_fidelity: { verdict: 'pending_human', evidence: '该 Intent 仍是 pending，验证记录不应抢先写入' },
+      philosophy_consistency: { verdict: 'pending_human', evidence: '该 Intent 仍是 pending，尚未具备可判定产物' },
+      baseline_compliance: { verdict: 'pending_human', evidence: '该 Intent 仍是 pending，不能声明底线检查完成' },
+      acceptance_achievement: { verdict: 'pending_human', evidence: '该 Intent 仍是 pending，完成契约尚未进入验证' },
+    },
+  };
+  const tmpFile = join(LOOM_DIR, '_tmp_verify_pending.json');
+  writeFileSync(tmpFile, JSON.stringify(record));
+  const out = run(`verify write --json-file "${tmpFile}"`, true);
+  assertContains(out, '当前状态为 pending');
   rmSync(tmpFile, { force: true });
 });
 
@@ -548,6 +1157,90 @@ test('verify list — 列出所有验证记录', () => {
   assert(list.includes('INT-002'), '应包含 INT-002');
 });
 
+test('verify pending — 旧 revision、needs_review 和当前非 passed 最新记录均待验证', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].revision = 2;
+  map.intents['INT-003'].status = 'needs_review';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  writeFileSync(join(VERIFICATIONS_DIR, 'INT-002.json'), JSON.stringify({
+    intent_id: 'INT-002',
+    records: [{ round: 1, intent_revision: 1, verdict: 'passed' }],
+  }));
+  writeFileSync(join(VERIFICATIONS_DIR, 'INT-003.json'), JSON.stringify({
+    intent_id: 'INT-003',
+    records: [
+      { round: 1, intent_revision: 1, verdict: 'passed' },
+      { round: 2, intent_revision: 1, verdict: 'deviated' },
+    ],
+  }));
+
+  const pending = JSON.parse(run('verify pending'));
+  assert(pending.includes('INT-002'), '旧 revision passed 的 in_progress Intent 应待验证');
+  assert(pending.includes('INT-003'), '最新记录非 passed 的 needs_review Intent 应待验证');
+});
+
+test('intent done — 拒绝旧 revision，通过重新验证后才能完成', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].revision = 2;
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  writeFileSync(join(VERIFICATIONS_DIR, 'INT-002.json'), JSON.stringify({
+    intent_id: 'INT-002',
+    records: [{ round: 1, intent_revision: 1, verdict: 'passed' }],
+  }));
+
+  assertContains(run('intent done INT-002', true), '不属于当前 Intent revision 2');
+  run('verify pass INT-002 --summary "当前 revision 验收契约已完整通过"');
+  const history = JSON.parse(run('verify history INT-002'));
+  assert(history.records[1].intent_revision === 2, '新验证应自动绑定当前 revision 2');
+  assertContains(run('intent done INT-002'), '已完成');
+});
+
+test('legacy Intent revision 1 — 无标签旧验证记录仍可完成', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  delete map.intents['INT-002'].revision;
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  writeFileSync(join(VERIFICATIONS_DIR, 'INT-002.json'), JSON.stringify({
+    intent_id: 'INT-002',
+    records: [{ round: 1, verdict: 'passed' }],
+  }));
+
+  assertContains(run('intent done INT-002'), '已完成');
+});
+
+test('验证 epoch — completed 回流后旧 passed 记录不能再次闭合', () => {
+  setup();
+  writeFileSync(join(VERIFICATIONS_DIR, 'INT-001.json'), JSON.stringify({
+    intent_id: 'INT-001',
+    records: [{ intent_revision: 1, verification_epoch: 1, verdict: 'passed' }],
+  }, null, 2));
+  run('intent update INT-001 --status needs_review');
+  const map = JSON.parse(readFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), 'utf-8'));
+  assert(map.intents['INT-001'].verification_epoch === 2, '回流必须推进验证 epoch');
+  assert(JSON.parse(run('verify pending')).includes('INT-001'), '旧 epoch 的 passed 必须重新进入待验证');
+  assertContains(run('intent done INT-001', true), '不属于当前 Intent');
+  run('intent update INT-001 --status in_progress');
+  run('verify pass INT-001 --summary "按当前回流后的验收边界重新执行并记录可复现结果"');
+  assertContains(run('intent done INT-001'), '已完成');
+});
+
+test('完成门 — verification_method 必须由 reproduction_command 覆盖', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002']._optional = { verification_method: 'npm test' };
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  run('verify pass INT-002 --summary "已执行全部自动化测试并逐项复核项目创建的验收边界"');
+  assertContains(run('intent done INT-002', true), 'reproduction_command');
+  run('verify pass INT-002 --summary "已执行全部自动化测试并逐项复核项目创建的验收边界" --reproduction-command "npm test"');
+  assertContains(run('intent done INT-002'), '已完成');
+});
+
 console.log('\n测试 init 命令');
 
 test('init — 初始化项目目录', () => {
@@ -558,9 +1251,15 @@ test('init — 初始化项目目录', () => {
   assertContains(out, 'LOOM 项目已初始化');
   assert(existsSync(join(initRoot, '.loom', 'v1', '00_PHILOSOPHY')), '哲学目录未创建');
   assert(existsSync(join(initRoot, '.loom', 'v1', '04_INTENT_MAP.json')), 'Intent Map 模板未复制');
+  const initMap = JSON.parse(readFileSync(join(initRoot, '.loom', 'v1', '04_INTENT_MAP.json'), 'utf-8'));
+  assert(initMap._meta._loom_version === 'v1', 'v1 模板应写入实际版本');
+  assert(initMap._meta._parent_version === null, 'v1 parent 应为 null');
   assert(existsSync(join(initRoot, '.loom', 'v1', '01_VISION.md')), '愿景模板未复制');
   assert(existsSync(join(initRoot, '.loom', 'v1', '02_ARCHITECTURE.md')), '02_ARCHITECTURE.md 未 scaffold');
   assert(existsSync(join(initRoot, '.loom', 'v1', '05_VERIFICATION.md')), '05_VERIFICATION.md 未 scaffold');
+  assert(existsSync(join(initRoot, '.loom', 'v1', '06_CHANGELOG.json')), '06_CHANGELOG.json 未 scaffold');
+  assert(existsSync(join(initRoot, '.loom', 'v1', '06_CHANGELOG.md')), '06_CHANGELOG.md 未 scaffold');
+  assertContains(readFileSync(join(initRoot, '.loom', 'v1', '06_CHANGELOG.md'), 'utf-8'), 'GENERATED FILE');
   assert(existsSync(join(initRoot, '.loom', 'current')), 'current 指针未创建');
   assert(existsSync(join(initRoot, 'AGENTS.md')), 'AGENTS.md 未创建');
   assertContains(readFileSync(join(initRoot, 'AGENTS.md'), 'utf-8'), 'LOOM');
@@ -577,11 +1276,21 @@ test('init — 重复初始化跳过已存在文件', () => {
   rmSync(initRoot, { recursive: true, force: true });
 });
 
+test('init --help — 只显示帮助，不初始化当前目录', () => {
+  const initRoot = join(process.cwd(), 'test', '.tmp-init-help');
+  rmSync(initRoot, { recursive: true, force: true });
+  mkdirSync(initRoot, { recursive: true });
+  const out = execSync(`node "${CLI}" init --help`, { cwd: initRoot, encoding: 'utf-8' });
+  assertContains(out, '用法: loom init');
+  assert(!existsSync(join(initRoot, '.loom')), 'init --help 不得创建 .loom');
+  rmSync(initRoot, { recursive: true, force: true });
+});
+
 console.log('\n测试 activate 命令');
 
 test('activate weaver — 输出激活提示词', () => {
   const out = run('activate weaver');
-  assertContains(out, 'Philosophy Weaver');
+  assertContains(out, 'Project Doctrine');
   assertContains(out, 'BASELINE');
 });
 
@@ -589,6 +1298,17 @@ test('activate keeper — 输出激活提示词', () => {
   const out = run('activate keeper');
   assertContains(out, 'Keeper');
   assertContains(out, 'BASELINE');
+  assertContains(out, '我们相信用户应该掌控自己的数据');
+  assertContains(out, '新的 Agent thread 中运行');
+  assert(!out.includes('## 角色激活协议'), '不应把完整跨角色协议注入当前角色');
+});
+
+test('activate visionary — 注入项目哲学而非完整跨角色协议', () => {
+  const out = run('activate visionary');
+  assertContains(out, '我们相信用户应该掌控自己的数据');
+  assertContains(out, 'Execution Envelope');
+  assertContains(out, 'Active Objective');
+  assert(!out.includes('## 角色激活协议'), '不应把完整跨角色协议注入当前角色');
 });
 
 test('activate 不存在的角色 — 报错', () => {
@@ -753,6 +1473,7 @@ console.log('\n测试 version 命令');
 
 test('--version / -v — 输出版本号', () => {
   const out2 = execSync(`node "${CLI}" --version`, { encoding: 'utf-8' });
+  assertContains(out2, '1.0.0');
   assertContains(out2, 'loom');
   const out3 = execSync(`node "${CLI}" -v`, { encoding: 'utf-8' });
   assertContains(out3, 'loom');
@@ -776,6 +1497,11 @@ test('version new — 创建 v2 并切换', () => {
   assertContains(out, '当前版本已切换为 v2');
   // 验证目录创建
   assert(existsSync(join(TEST_ROOT, '.loom', 'v2', '04_INTENT_MAP.json')), 'v2 模板未创建');
+  assert(existsSync(join(TEST_ROOT, '.loom', 'v2', '06_CHANGELOG.json')), 'v2 Patch JSON 未创建');
+  assert(existsSync(join(TEST_ROOT, '.loom', 'v2', '06_CHANGELOG.md')), 'v2 Patch Markdown 未创建');
+  const v2Template = JSON.parse(readFileSync(join(TEST_ROOT, '.loom', 'v2', '04_INTENT_MAP.json'), 'utf-8'));
+  assert(v2Template._meta._loom_version === 'v2', 'v2 模板应写入实际版本');
+  assert(v2Template._meta._parent_version === 'v1', 'v2 parent 应为创建前的当前版本');
   // 验证指针切换
   const pointer = readFileSync(join(TEST_ROOT, '.loom', 'current'), 'utf-8').trim();
   assert(pointer === 'v2', `指针应为 v2，实际: ${pointer}`);
@@ -816,6 +1542,53 @@ test('doctor — 健康检查（INT-001 completed 无验证记录 → 应报告�
   // INT-001 是 completed 但无验证记录，应该被检测到
   assertContains(out, 'completed_no_record');
   assertContains(out, '问题');
+});
+
+test('doctor — completed 的最后一条非 passed 验证必须报 high', () => {
+  const recordPath = join(VERIFICATIONS_DIR, 'INT-001.json');
+  const original = existsSync(recordPath) ? readFileSync(recordPath, 'utf-8') : null;
+  try {
+    writeFileSync(recordPath, JSON.stringify({
+      intent_id: 'INT-001',
+      records: [{ round: 1, intent_revision: 1, verdict: 'deviated' }],
+    }));
+    const out = run('doctor');
+    assertContains(out, 'completed_verification_not_passed');
+    assertContains(out, 'INT-001');
+  } finally {
+    if (original === null) rmSync(recordPath, { force: true });
+    else writeFileSync(recordPath, original);
+  }
+});
+
+test('doctor — 质量契约的旧 passed 记录缺少第五维时报告 high', () => {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const recordPath = join(VERIFICATIONS_DIR, 'INT-001.json');
+  const originalMap = readFileSync(mapPath, 'utf-8');
+  const originalRecord = existsSync(recordPath) ? readFileSync(recordPath, 'utf-8') : null;
+  try {
+    const map = JSON.parse(originalMap);
+    map.intents['INT-001'].quality_contract = '相对当前基线，首次登录理解时间至少降低 20%，且安全行为不回退。';
+    writeFileSync(mapPath, JSON.stringify(map, null, 2));
+    writeFileSync(recordPath, JSON.stringify({
+      intent_id: 'INT-001',
+      records: [{
+        round: 1,
+        intent_revision: 1,
+        verdict: 'passed',
+        dimensions: {
+          intent_fidelity: { verdict: 'passed', evidence: '旧记录未包含质量维度与比较证据' },
+        },
+      }],
+    }));
+    const out = run('doctor');
+    assertContains(out, 'quality_dimension_missing');
+    assertContains(out, 'quality_achievement');
+  } finally {
+    writeFileSync(mapPath, originalMap);
+    if (originalRecord === null) rmSync(recordPath, { force: true });
+    else writeFileSync(recordPath, originalRecord);
+  }
 });
 
 test('context — 上下文摘要', () => {
@@ -940,20 +1713,21 @@ test('help workflow — 输出工作流指南', () => {
   assertContains(out, 'Weaver');
   assertContains(out, 'Visionary');
   assertContains(out, 'Architect');
-  assertContains(out, 'Intent Loop');
+  assertContains(out, 'Quality Engine');
 });
 
 test('help concepts — 输出核心概念', () => {
   const out = run('help concepts');
-  assertContains(out, '哲学');
+  assertContains(out, 'Doctrine');
   assertContains(out, 'Intent');
   assertContains(out, 'Keeper');
-  assertContains(out, '底线');
+  assertContains(out, 'Quality Proof');
 });
 
 test('help loop — 输出 Loop 详细流程', () => {
   const out = run('help loop');
-  assertContains(out, 'Step 1');
+  assertContains(out, 'Expertise Compiler');
+  assertContains(out, 'Quality Arena');
   assertContains(out, 'Keeper');
   assertContains(out, 'Forge');
   assertContains(out, 'passed');
@@ -962,17 +1736,177 @@ test('help loop — 输出 Loop 详细流程', () => {
 
 test('help version — 输出版本演进指南', () => {
   const out = run('help version');
+  assertContains(out, 'Patch');
   assertContains(out, 'Major');
   assertContains(out, 'Minor');
   assertContains(out, 'version new');
   assertContains(out, 'version diff');
 });
 
+test('Intent lineage — composite reads、semantic diff、split/merge 与跨版本历史', () => {
+  const v2Dir = join(TEST_ROOT, '.loom', 'v2');
+  const acceptance = '功能承诺：跨版本能力保持可验证。防御承诺：不复制或继承任何旧版本通过状态。';
+  writeFileSync(join(v2Dir, '04_INTENT_MAP.json'), JSON.stringify({
+    _meta: { _version: '1.0', _loom_version: 'v2', _parent_version: 'v1' },
+    intents: {
+      'INT-001': { id: 'INT-001', revision: 1, title: '同 ID 新能力', narrative_ref: '01_VISION.md#int-001', depends_on: [], acceptance, philosophy_anchors: [], status: 'pending' },
+      'INT-007': { id: 'INT-007', revision: 2, title: '认证能力修订', narrative_ref: '01_VISION.md#int-007', depends_on: [], acceptance, philosophy_anchors: [], status: 'pending', lineage: { predecessors: [{ version: 'v1', intent_id: 'INT-001' }], change_summary: '收紧认证边界' } },
+      'INT-008': { id: 'INT-008', revision: 1, title: '项目创建 A', narrative_ref: '01_VISION.md#int-008', depends_on: [], acceptance, philosophy_anchors: [], status: 'pending', lineage: { predecessors: [{ version: 'v1', intent_id: 'INT-002' }], change_summary: '拆分 A' } },
+      'INT-009': { id: 'INT-009', revision: 1, title: '项目创建 B', narrative_ref: '01_VISION.md#int-009', depends_on: [], acceptance, philosophy_anchors: [], status: 'pending', lineage: { predecessors: [{ version: 'v1', intent_id: 'INT-002' }], change_summary: '拆分 B' } },
+      'INT-010': { id: 'INT-010', revision: 1, title: '协作项目', narrative_ref: '01_VISION.md#int-010', depends_on: [], acceptance, philosophy_anchors: [], status: 'pending', lineage: { predecessors: [{ version: 'v1', intent_id: 'INT-002' }, { version: 'v1', intent_id: 'INT-003' }], change_summary: '合并项目与协作' } },
+    },
+    topo_order: ['INT-001', 'INT-007', 'INT-008', 'INT-009', 'INT-010'],
+  }, null, 2));
+  writeFileSync(join(v2Dir, '01_VISION.md'), '# v2\n\n## Intent 007 {#int-007}\n\n跨版本修订叙事。\n');
+  mkdirSync(join(v2Dir, 'verifications'), { recursive: true });
+  writeFileSync(join(v2Dir, 'verifications', 'INT-007.json'), JSON.stringify({ intent_id: 'INT-007', records: [{ round: 1, verdict: 'deviated' }] }));
+  writeFileSync(join(VERIFICATIONS_DIR, 'INT-001.json'), JSON.stringify({ intent_id: 'INT-001', records: [{ round: 1, verdict: 'passed' }] }));
+
+  runFromRoot('version use v2');
+  const historical = JSON.parse(runFromRoot('intent get v1:INT-001'));
+  assert(historical.title === '用户注册与登录', 'composite get 应读取 owning version');
+  assertContains(runFromRoot('intent narrative v1:INT-001'), '身份自治');
+  const trace = JSON.parse(runFromRoot('intent trace v2:INT-007'));
+  assert(trace.ref === 'v2:INT-007' && trace.version === 'v2' && trace.revision === 2, 'trace 缺少版本化身份');
+  assert(trace.lineage.predecessors.some((item) => item.ref === 'v1:INT-001'), 'trace 缺少 predecessor');
+
+  const diff = JSON.parse(runFromRoot('intent diff v1 v2'));
+  assert(diff.new.includes('v2:INT-001'), '同 ID 且无 lineage 应判定为 new');
+  assert(diff.revised.some((item) => item.to === 'v2:INT-007'), '缺少 one-to-one revised');
+  assert(diff.split.some((item) => item.from === 'v1:INT-002'), '缺少 split');
+  assert(diff.merged.some((item) => item.to === 'v2:INT-010'), '缺少 merge');
+  assert(diff.warnings.some((warning) => warning.includes('ID 相同')), '同 ID 不映射应给 warning');
+
+  const across = JSON.parse(runFromRoot('verify history v2:INT-007 --across-versions'));
+  assert(across.histories.length === 2, '应递归读取当前与 predecessor 两份历史');
+  assert(across.histories[0].records[0].source_version === 'v2', '当前记录缺少来源标注');
+  assert(across.histories[1].records[0].source_intent === 'INT-001', '前序记录缺少来源标注');
+  assert(across.histories[0].records[0].verdict === 'deviated' && across.histories[1].records[0].verdict === 'passed', '不得继承 passed 状态');
+  runFromRoot('version use v1');
+});
+
+test('Intent lineage — across-version history detects cycles', () => {
+  const v1Path = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const v2Path = join(TEST_ROOT, '.loom', 'v2', '04_INTENT_MAP.json');
+  const originalV1 = readFileSync(v1Path, 'utf-8');
+  try {
+    const v1 = JSON.parse(originalV1);
+    v1.intents['INT-001'].lineage = { predecessors: [{ version: 'v2', intent_id: 'INT-007' }], change_summary: '构造循环测试' };
+    writeFileSync(v1Path, JSON.stringify(v1, null, 2));
+    const out = runFromRoot('verify history v2:INT-007 --across-versions', true);
+    assertContains(out, 'lineage 存在循环');
+  } finally {
+    writeFileSync(v1Path, originalV1);
+  }
+});
+
+test('doctor — completed/needs_review 的旧 revision passed 记录报告 stale_verification', () => {
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const originalMap = readFileSync(mapPath, 'utf-8');
+  const recordPaths = ['INT-001', 'INT-002'].map((id) => join(VERIFICATIONS_DIR, `${id}.json`));
+  const originals = recordPaths.map((path) => existsSync(path) ? readFileSync(path, 'utf-8') : null);
+  try {
+    const map = JSON.parse(originalMap);
+    map.intents['INT-001'].status = 'completed';
+    map.intents['INT-001'].revision = 2;
+    map.intents['INT-002'].status = 'needs_review';
+    map.intents['INT-002'].revision = 3;
+    writeFileSync(mapPath, JSON.stringify(map, null, 2));
+    writeFileSync(recordPaths[0], JSON.stringify({ intent_id: 'INT-001', records: [{ round: 1, intent_revision: 1, verdict: 'passed' }] }));
+    writeFileSync(recordPaths[1], JSON.stringify({ intent_id: 'INT-002', records: [{ round: 1, intent_revision: 2, verdict: 'passed' }] }));
+
+    const out = run('doctor');
+    assertContains(out, 'stale_verification');
+    assertContains(out, 'INT-001');
+    assertContains(out, 'INT-002');
+  } finally {
+    writeFileSync(mapPath, originalMap);
+    recordPaths.forEach((path, index) => {
+      if (originals[index] === null) rmSync(path, { force: true });
+      else writeFileSync(path, originals[index]);
+    });
+  }
+});
+
+test('help patch — 输出 Patch 审计指南', () => {
+  const out = run('help patch');
+  assertContains(out, '06_CHANGELOG.json');
+  assertContains(out, 'loom patch record');
+  assertContains(out, '绝不执行命令');
+});
+
+console.log('\n测试 patch 命令');
+
+test('patch record/list/get/validate — 分配 ID 和时间并生成确定性投影', () => {
+  setup();
+  completeAllIntents();
+  const jsonPath = join(LOOM_DIR, '06_CHANGELOG.json');
+  const mdPath = join(LOOM_DIR, '06_CHANGELOG.md');
+  writeFileSync(jsonPath, JSON.stringify({ _meta: { schema_version: '1.0', source: '06_CHANGELOG.json' }, patches: [] }, null, 2) + '\n');
+  writeFileSync(mdPath, '<stale>');
+  const inputPath = join(TEST_ROOT, 'patch-input.json');
+  writeFileSync(inputPath, JSON.stringify({
+    summary: '修复空输入崩溃',
+    reason: '解析器遗漏空字符串边界',
+    affects: ['INT-001'],
+    files: ['cli/src/patch.js', 'cli/test/run-all.js'],
+    verification: [
+      { command: 'npm test', result: 'passed' },
+      { method: 'agent-browser screenshot', result: 'passed', evidence: '浅色和深色背景下均清晰可读' },
+    ],
+  }));
+  const recorded = JSON.parse(runFromRoot(`patch record --json-file "${inputPath}"`));
+  assert(recorded.id === 'PATCH-001', `Patch ID 不匹配: ${recorded.id}`);
+  assert(!Number.isNaN(Date.parse(recorded.timestamp)), 'timestamp 应由 CLI 分配');
+  const list = JSON.parse(runFromRoot('patch list'));
+  assert(list.length === 1 && list[0].id === 'PATCH-001', 'patch list 不匹配');
+  const item = JSON.parse(runFromRoot('patch get PATCH-001'));
+  assert(item.summary === '修复空输入崩溃', 'patch get 不匹配');
+  const validation = JSON.parse(runFromRoot('patch validate'));
+  assert(validation.valid === true && validation.patches === 1, 'patch validate 应通过');
+  assertContains(readFileSync(mdPath, 'utf-8'), 'GENERATED FILE');
+  assertContains(readFileSync(mdPath, 'utf-8'), 'PATCH-001');
+  rmSync(inputPath, { force: true });
+});
+
+test('patch record — 拒绝不存在 Intent、不安全路径和无 passed 验证', () => {
+  setup();
+  completeAllIntents();
+  const jsonPath = join(LOOM_DIR, '06_CHANGELOG.json');
+  const mdPath = join(LOOM_DIR, '06_CHANGELOG.md');
+  writeFileSync(jsonPath, JSON.stringify({ _meta: { schema_version: '1.0', source: '06_CHANGELOG.json' }, patches: [] }, null, 2) + '\n');
+  writeFileSync(mdPath, '<stale>');
+  const cases = [
+    [{ summary: 'x', reason: 'y', affects: ['INT-999'], files: ['src/a.js'], verification: [{ command: 'npm test', result: 'passed' }] }, '不存在的 Intent'],
+    [{ summary: 'x', reason: 'y', files: ['../secret'], verification: [{ command: 'npm test', result: 'passed' }] }, '项目相对路径'],
+    [{ summary: 'x', reason: 'y', files: ['src/a.js'], verification: [{ command: 'npm test', result: 'failed' }] }, '至少需要一个 passed'],
+  ];
+  cases.forEach(([input, expected], index) => {
+    const inputPath = join(TEST_ROOT, `bad-patch-${index}.json`);
+    writeFileSync(inputPath, JSON.stringify(input));
+    const out = runFromRoot(`patch record --json-file "${inputPath}"`, true);
+    assertContains(out, expected);
+    rmSync(inputPath, { force: true });
+  });
+});
+
+test('patch validate — 检测手工修改的 Markdown 投影', () => {
+  const mdPath = join(LOOM_DIR, '06_CHANGELOG.md');
+  writeFileSync(mdPath, 'hand edited');
+  const out = runFromRoot('patch validate', true);
+  assertContains(out, '不是 06_CHANGELOG.json');
+});
+
+test('doctor — 检测 Patch Markdown 投影漂移', () => {
+  const out = runFromRoot('doctor');
+  assertContains(out, 'patch_projection_drift');
+});
+
 test('help doctor — 输出诊断指南', () => {
   const out = run('help doctor');
   assertContains(out, 'doctor');
   assertContains(out, 'context');
-  assertContains(out, '崩溃恢复');
+  assertContains(out, 'Quality Proof');
   assertContains(out, 'trace');
 });
 
@@ -1053,6 +1987,68 @@ test('guide — init 输出包含 To Agent 和 To Human 引导', () => {
   rmSync(initRoot, { recursive: true, force: true });
 });
 
+test('init — 不覆盖只有手工 Markdown 的旧版 changelog', () => {
+  const initRoot = join(process.cwd(), 'test', '.tmp-init-legacy-changelog');
+  rmSync(initRoot, { recursive: true, force: true });
+  mkdirSync(initRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: initRoot, encoding: 'utf-8' });
+  const jsonPath = join(initRoot, '.loom', 'v1', '06_CHANGELOG.json');
+  const markdownPath = join(initRoot, '.loom', 'v1', '06_CHANGELOG.md');
+  rmSync(jsonPath, { force: true });
+  writeFileSync(markdownPath, '# Legacy changelog\n\n- Important history\n', 'utf-8');
+  let output = '';
+  try {
+    execSync(`node "${CLI}" init`, { cwd: initRoot, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (error) {
+    output = (error.stdout || '') + (error.stderr || '');
+  }
+  assertContains(output, '拒绝用空 Patch ledger 覆盖');
+  assertContains(readFileSync(markdownPath, 'utf-8'), 'Important history');
+  assert(!existsSync(jsonPath), '拒绝迁移时不应创建空 JSON');
+  rmSync(initRoot, { recursive: true, force: true });
+});
+
+test('guide — 健康的全部完成后提示 Patch / Minor / Major 三档演进', () => {
+  setup();
+  const evidencePath = join(PHILOSOPHY_DIR, 'RELEASE_EVIDENCE.md');
+  writeFileSync(evidencePath, [
+    '# 发布证据',
+    '',
+    '## 灵感来源',
+    '',
+    '- **真实项目复盘** — 为什么相关：用于判断完成是否必须有可复现证据；转译为完成门必须阻断过期验证。来源：local:./research/release-retrospective.md',
+  ].join('\n'));
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  for (const intent of Object.values(map.intents)) intent.status = 'completed';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2), 'utf-8');
+  for (const intent of Object.values(map.intents)) {
+    writeFileSync(join(VERIFICATIONS_DIR, `${intent.id}.json`), JSON.stringify({
+      intent_id: intent.id,
+      records: [{
+        intent_id: intent.id,
+        intent_revision: intent.revision,
+        verdict: 'passed',
+        dimensions: {
+          intent_fidelity: { verdict: 'passed', evidence: '测试通过并符合验收标准。' },
+          philosophy_consistency: { verdict: 'passed', evidence: '测试通过并符合验收标准。' },
+          baseline_compliance: { verdict: 'passed', evidence: '测试通过并符合验收标准。' },
+          acceptance_achievement: { verdict: 'passed', evidence: '测试通过并符合验收标准。' },
+        },
+        evidence: '测试通过并符合验收标准。',
+        created_at: new Date().toISOString(),
+      }],
+    }, null, 2), 'utf-8');
+  }
+  const out = execSync(`node "${CLI}" guide --dry-run`, { cwd: TEST_ROOT, encoding: 'utf-8' });
+  assertContains(out, 'done');
+  assertContains(out, 'Patch');
+  assertContains(out, 'Minor');
+  assertContains(out, 'Major');
+  assertContains(out, 'loom help version');
+  rmSync(evidencePath, { force: true });
+});
+
 console.log('\n测试 auto 命令');
 
 test('auto on/off/status — 三模式切换', () => {
@@ -1113,19 +2109,27 @@ test('preview status — 报告 preview 新鲜度', () => {
   writeFileSync(previewPath, '<html></html>', 'utf-8');
   const oldTime = new Date('2026-01-01T00:00:00Z');
   const newTime = new Date('2026-01-02T00:00:00Z');
+  const newestTime = new Date('2026-01-03T00:00:00Z');
   utimesSync(previewPath, oldTime, oldTime);
   utimesSync(join(previewRoot, '.loom', 'v1', '00_PHILOSOPHY', 'PRODUCT_PHILOSOPHY.md'), oldTime, oldTime);
   utimesSync(join(previewRoot, '.loom', 'v1', '02_ARCHITECTURE.md'), oldTime, oldTime);
   utimesSync(join(previewRoot, '.loom', 'v1', '04_INTENT_MAP.json'), oldTime, oldTime);
   utimesSync(join(previewRoot, '.loom', 'v1', '05_VERIFICATION.md'), oldTime, oldTime);
+  utimesSync(join(previewRoot, '.loom', 'v1', '06_CHANGELOG.json'), newTime, newTime);
+  utimesSync(join(previewRoot, '.loom', 'v1', '06_CHANGELOG.md'), oldTime, oldTime);
   const sourcePath = join(previewRoot, '.loom', 'v1', '01_VISION.md');
-  utimesSync(sourcePath, newTime, newTime);
+  utimesSync(sourcePath, oldTime, oldTime);
 
-  const out = execSync(`node "${CLI}" preview status`, { cwd: previewRoot, encoding: 'utf-8' });
-  const data = JSON.parse(out);
+  let out = execSync(`node "${CLI}" preview status`, { cwd: previewRoot, encoding: 'utf-8' });
+  let data = JSON.parse(out);
   assert(data.exists === true, 'preview 应存在');
   assert(data.fresh === false, 'preview 应过期');
-  assert(data.latest_source_file === '.loom/v1/01_VISION.md', `latest_source_file 不匹配: ${data.latest_source_file}`);
+  assert(data.latest_source_file === '.loom/v1/06_CHANGELOG.json', `latest_source_file 不匹配: ${data.latest_source_file}`);
+
+  utimesSync(join(previewRoot, '.loom', 'v1', '06_CHANGELOG.md'), newestTime, newestTime);
+  out = execSync(`node "${CLI}" preview status`, { cwd: previewRoot, encoding: 'utf-8' });
+  data = JSON.parse(out);
+  assert(data.latest_source_file === '.loom/v1/06_CHANGELOG.md', `Markdown 投影未纳入 freshness: ${data.latest_source_file}`);
   rmSync(previewRoot, { recursive: true, force: true });
 });
 

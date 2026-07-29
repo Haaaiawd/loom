@@ -1,121 +1,71 @@
-## 诊断与恢复指南
+## 诊断与恢复
 
-## 健康检查
-
-\`\`\`bash
+```bash
 loom doctor
-\`\`\`
-
-检测 7 类问题：
-
-| 问题类型 | 严重度 | 说明 |
-|---|---|---|
-| cycle | fatal | 循环依赖（Intent Map 有环） |
-| orphan_philosophy_ref | high | 哲学锚点指向不存在的文件 |
-| orphan_dependency | high | depends_on 引用不存在的 Intent |
-| completed_no_record | high | completed 但无验证记录 |
-| completed_depends_blocked | high | completed 依赖 blocked 的 Intent |
-| inspiration_source | high/medium | 灵感来源质量不达标（源太少/全是 Wikipedia/缺理由） |
-| part_decomposition | high/medium | 缺少实现部分拆解清单（Weaver 跳过了拆解步骤） |
-| in_progress_no_record | medium | in_progress 但无验证记录（可能中断） |
-| zombie | medium | in_progress/blocked 超过 7 天无活动 |
-
-## 灵感来源校验
-
-\`\`\`bash
-loom philosophy check
-\`\`\`
-
-单独校验哲学文档的灵感来源质量。防止 Weaver 从训练数据"背"几个名字就交差。
-
-校验规则：
-- 至少 3 个独立源
-- 至少 2 个非 Wikipedia 链接
-- 每个源必须有选取理由（萃取/转译/启发关系）
-- Wikipedia 占比不超过 70%
-
-不达标时，需要重新织造哲学——真正走搜索漏斗，找原著、论文、工程博客等深度源。
-
-## 实现部分拆解校验
-
-\`\`\`bash
-loom philosophy check
-\`\`\`
-
-同时校验哲学文档是否包含"实现部分清单"——Weaver 是否按 PART_DECOMPOSITION.md 拆解了项目的实现部分。
-
-校验规则：
-- 哲学文档中必须有"实现部分清单"章节（或"部分拆解""Part Decomposition"等）
-- 至少识别到 2 个实现部分（小项目建议 3-5 个，大项目 6-10 个）
-
-缺少时，说明 Weaver 跳过了拆解步骤，需要重新织造——按 PART_DECOMPOSITION.md 的方法论识别项目的实现部分。
-
-## 上下文摘要
-
-\`\`\`bash
 loom context
-\`\`\`
+```
 
-一条命令获取：进度 + 下一个 Intent + 待验证 + 不一致项 + 风险。
-Agent 重启后先跑这个，快速知道"我在哪、接下来做什么"。
+`doctor` 只检查能够机械判断的系统一致性，不假装用规则替代专业判断。
 
-## 只读阶段诊断
+## 主要诊断
 
-\`\`\`bash
-loom guide --dry-run
-\`\`\`
+| 类型 | 严重度 | 含义 |
+|---|---|---|
+| `cycle` | fatal | Intent DAG 有环 |
+| `orphan_philosophy_ref` | high | Doctrine 引用不存在 |
+| `orphan_dependency` | high | Intent 依赖不存在 |
+| `completed_no_record` | high | completed 没有验证记录 |
+| `completed_verification_not_passed` | high | 最新记录不能闭合当前 revision |
+| `stale_verification` | high | passed 记录早于当前 revision |
+| `quality_dimension_missing` | high | 有质量契约，但缺少通过的质量维度 |
+| `preservation_dimension_missing` | high | 启用了状态守恒门，但缺少通过的守恒维度 |
+| `inspiration_source` | high/medium | Doctrine 证据不可追溯、缺理由或仍是模板 |
+| `verification_method_drift` | high | 声明的验证方式与复现证据不一致 |
+| `in_progress_no_record` | medium | 工作可能中断 |
+| `zombie` | medium | Intent 长时间无活动 |
 
-用于审计、子代理预演、只读探测。它输出和 `loom guide` 同样的阶段判断，但不写 `.loom/heartbeat.json`。
+## Doctrine 证据
 
-## Preview 新鲜度诊断
+```bash
+loom philosophy check
+```
 
-\`\`\`bash
-loom preview status
-\`\`\`
+校验只要求：
 
-检查 `loom-preview.html` 是否比当前 `.loom/v{N}` 源文件更新。人类要求看 preview 时，Agent 先跑这个命令：
-- `fresh=true`：可以 `loom preview`
-- `fresh=false`：不要打开旧投影，先 `loom preview --regen`
-- 必须看旧投影：`loom preview --stale`
+- 至少有实际使用的证据条目。
+- 每条证据有选择或转译理由。
+- 每条证据有 URL、`file://` 或 `local:` 可追溯位置。
 
-## 崩溃恢复
+不要求固定数量、不排斥 Wikipedia，也不强制来源多样性。来源是否足以支持主张由 Weaver 与审阅者
+判断；CLI 只阻止空白、装饰性名字和不可追溯引用。
 
-### Forge 崩溃（Intent 留在 in_progress）
+## Quality Proof
 
-1. 跑 \`loom doctor\` 确认哪些 Intent 状态不一致
-2. 跑 \`loom context\` 看整体状态
-3. 用户决定：
-   - 继续：重新激活 Forge，从当前代码接着做
-   - 重置：\`loom intent update <id> --status pending\`，从头来
+有 `quality_contract` 的 Intent 若写入 `passed`：
 
-### Intent Map 文件损坏
+- `dimensions.quality_achievement` 必须存在并通过。
+- 声明相对提升时，`dimensions.quality_achievement.quality_proof_ref` 指向基线比较与稳定性证据。
 
-1. \`loom intent validate\` 会检测到格式错误
-2. 从 Git 恢复（.loom/ 应纳入版本控制）
+快速命令：
 
-### 验证记录丢失
+```bash
+loom verify pass <id> --summary "<证据>" --quality-proof "<ref>"
+```
 
-1. \`loom doctor\` 会检测到 completed 无记录
-2. 重新验证该 Intent，或从 Git 恢复
+若只达到完成契约，写 `deviated` 或完整验证记录，不要伪造质量通过。
 
-## 追溯工具
+## 恢复
 
-\`\`\`bash
-# Intent 完整追溯链（依赖+验证+哲学+叙事）
+- Forge 中断：检查真实产物后继续，或把 Intent 回退到 `pending`。
+- Intent Map 损坏：从 Git 恢复，再运行 `loom intent validate`。
+- 验证记录丢失：重新独立验证，不从旧会话记忆补写。
+- Preview 过期：`loom preview status` 后使用 `loom preview --regen`。
+
+追溯入口：
+
+```bash
 loom intent trace <id>
-
-# 反向依赖（谁依赖这个 Intent → 变更影响评估）
 loom intent reverse-dep <id>
-
-# 反向哲学引用（哪些 Intent 引用这个锚点 → 哲学变更影响评估）
 loom intent reverse-ref <anchor>
-\`\`\`
-
-## 版本控制是前提
-
-LOOM 假设项目使用 Git。所有 .loom/ 下的文件都应纳入版本控制：
-- 文件损坏 → 从 Git 恢复
-- 误操作 → 从 Git 回滚
-- 变更追溯 → Git log 就是审计日志
-
-LOOM 不内置备份、审计、回滚——这些是版本控制的职责。
+loom verify history <id>
+```

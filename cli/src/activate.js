@@ -1,17 +1,16 @@
-// activate — 输出角色激活提示词
-// 把角色文件 + 哲学锚点 + 底线拼成激活上下文，供上层编排器使用。
+// activate — compile a role- and intent-scoped Context Pack.
 
 import { readFileSync, existsSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import { getLoomRoot } from './shared/paths.js';
+import { getIntent, getNarrative } from './intent-map.js';
+import { getIntentDraft } from './intent-draft.js';
+import { getPhilosophy } from './philosophy.js';
+import { getVerificationContract } from './verify.js';
+import { extractMdSection } from './shared/md-utils.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-/** 合法角色名 */
 const VALID_ROLES = ['weaver', 'visionary', 'architect', 'forge', 'keeper'];
 
-/** 角色文件映射 */
 const ROLE_FILES = {
   weaver: 'meta/PHILOSOPHY_WEAVER.md',
   visionary: 'roles/visionary.md',
@@ -20,54 +19,284 @@ const ROLE_FILES = {
   keeper: 'roles/keeper.md',
 };
 
+const ROLE_PHILOSOPHY_FILES = {
+  visionary: ['PRODUCT_PHILOSOPHY.md', 'DECISION_RUBRIC.md'],
+  architect: ['ENGINEERING_CREED.md', 'DECISION_RUBRIC.md'],
+  forge: ['ENGINEERING_CREED.md'],
+  keeper: ['PRODUCT_PHILOSOPHY.md', 'DECISION_RUBRIC.md'],
+};
+
+const BASELINE_SUMMARY = [
+  '- B1：实质修改前理解真实结构，不创建平行体系。',
+  '- B2：秘密、环境值和可变配置不写死。',
+  '- B3：用户或系统可观察的行为具有显式契约。',
+  '- B4：重要且会影响未来的判断可追溯。',
+  '- B5：完成关联原始意图和当前 revision 证据；质量提升具有基线相对证据。',
+].join('\n');
+
+function section(title, body) {
+  const content = String(body || '').trim();
+  return `## ${title}\n\n${content || '无。'}`;
+}
+
+function readRole(role) {
+  const filePath = join(getLoomRoot(), ROLE_FILES[role]);
+  if (!existsSync(filePath)) throw new Error(`角色文件不存在: ${filePath}`);
+  return readFileSync(filePath, 'utf-8');
+}
+
+function getVerificationMethod(intent) {
+  return intent?.verification_method || intent?._optional?.verification_method || null;
+}
+
+function resolveContractReference(versionDir, value, label) {
+  if (!value) return null;
+  if (typeof value !== 'string') return JSON.stringify(value, null, 2);
+  const match = value.trim().match(/^(?:see\s+)?([^#]+)#([\w-]+)$/i);
+  if (!match) return value;
+  const [, file, anchor] = match;
+  if (file.includes('/') || file.includes('\\') || file !== '05_VERIFICATION.md') {
+    throw new Error(`${label}引用必须位于 05_VERIFICATION.md: ${value}`);
+  }
+  const filePath = join(versionDir, file);
+  if (!existsSync(filePath)) throw new Error(`${label}引用的文件不存在: ${filePath}`);
+  return extractMdSection(readFileSync(filePath, 'utf-8'), anchor, label);
+}
+
+function compileEnvelope(role, intentId) {
+  const scope = intentId ? `仅 ${intentId}` : '当前角色的项目阶段';
+  const lines = [
+    `- role: ${role}`,
+    `- scope: ${scope}`,
+    '- 本 Context Pack 不会清除现有会话记忆。',
+    '- system、developer 与用户指令优先；项目事实冲突时报告，不静默混用。',
+    '- 只在当前角色权限和明确作用域内行动。',
+  ];
+  if (role === 'keeper') {
+    lines.push('- Keeper 必须在新的 Agent thread 中运行；同一会话切换角色不构成独立验证。');
+    lines.push('- 无法获得独立上下文时降低声明，关键判断使用 pending_human。');
+  }
+  return lines.join('\n');
+}
+
+function compileObjective(role, versionDir, intentId) {
+  if (!intentId) {
+    return {
+      body: role === 'weaver'
+        ? '织造当前项目的 Project Doctrine。先读取真实项目与完整 BASELINE，不预写产品或架构。'
+        : `履行 ${role} 的当前项目阶段职责；未指定 Intent，不得自行选择并处理实现任务。`,
+      intent: null,
+      draft: null,
+      narrative: null,
+    };
+  }
+
+  if (role === 'visionary' || role === 'architect') {
+    const draft = getIntentDraft(versionDir, intentId);
+    const match = draft.narrative_ref.match(/^([^#]+)#([\w-]+)$/);
+    if (!match || match[1] !== '01_VISION.md') throw new Error(`draft narrative_ref 非法: ${draft.narrative_ref}`);
+    const narrative = extractMdSection(
+      readFileSync(join(versionDir, match[1]), 'utf-8'),
+      match[2],
+      'draft 意图叙事',
+    );
+    const visibleDraft = role === 'visionary'
+      ? {
+          id: draft.id,
+          revision: draft.revision,
+          title: draft.title,
+          narrative_ref: draft.narrative_ref,
+          depends_on: draft.depends_on,
+        }
+      : draft;
+    return {
+      body: [
+        '只处理下面这个 draft。不要修改官方 Intent Map，不要处理其他 Intent，不要自行 finalize。',
+        '',
+        '### Draft',
+        '',
+        '```json',
+        JSON.stringify(visibleDraft, null, 2),
+        '```',
+        '',
+        '### Narrative',
+        '',
+        narrative,
+      ].join('\n'),
+      intent: null,
+      draft,
+      narrative,
+    };
+  }
+
+  const intent = getIntent(versionDir, intentId);
+  const narrative = getNarrative(versionDir, intentId);
+  const objectiveView = {
+    id: intent.id,
+    revision: intent.revision,
+    title: intent.title,
+    status: intent.status,
+    narrative_ref: intent.narrative_ref,
+    depends_on: intent.depends_on,
+  };
+  return {
+    body: [
+      '只实现或验证下面这个官方 Intent。不得加载或顺便处理其他 Intent。',
+      '',
+      '### Intent',
+      '',
+      '```json',
+      JSON.stringify(objectiveView, null, 2),
+      '```',
+      '',
+      '### Narrative',
+      '',
+      narrative,
+    ].join('\n'),
+    intent,
+    draft: null,
+    narrative,
+  };
+}
+
+function compileInvariants(role, versionDir) {
+  const blocks = [];
+  const baselinePath = join(getLoomRoot(), 'meta/BASELINE.md');
+  blocks.push(role === 'weaver' ? readFileSync(baselinePath, 'utf-8') : BASELINE_SUMMARY);
+  if (versionDir) {
+    const projectBaseline = join(versionDir, '00_PHILOSOPHY', 'PROJECT_BASELINE.md');
+    if (existsSync(projectBaseline)) {
+      blocks.push(`### Project Baseline\n\n${readFileSync(projectBaseline, 'utf-8')}`);
+    }
+  }
+  return blocks.join('\n\n');
+}
+
+function compileContracts(role, versionDir, objective) {
+  const subject = objective.intent || objective.draft;
+  if (!subject || role === 'visionary') {
+    return role === 'visionary'
+      ? 'Visionary 只定义目标、非目标和 narrative；不要编写 acceptance 或架构。'
+      : '按当前角色 Output Contract 交付。';
+  }
+
+  const blocks = [];
+  if (subject.acceptance) {
+    const acceptance = objective.intent
+      ? getVerificationContract(versionDir, subject.id)
+      : resolveContractReference(versionDir, subject.acceptance, 'draft 完成契约');
+    blocks.push(`### Acceptance / Reliability Floor\n\n${acceptance}`);
+  }
+  if (subject.quality_contract) {
+    blocks.push(
+      `### Quality Contract / Distinctive Ceiling\n\n` +
+      resolveContractReference(versionDir, subject.quality_contract, '质量契约'),
+    );
+  }
+  const verificationMethod = getVerificationMethod(subject);
+  blocks.push(`### Verification Method\n\n${verificationMethod || '未声明：Keeper 使用适当的静态检查；需要运行时或人类判断却缺少入口时回流 Architect。'}`);
+  const continuity = subject.continuity_required
+    ? '此 Intent 已启用状态守恒门：通过前必须证明“旧状态 → 本轮操作 → 新状态”的完整序列中，未获明确授权删除或替换的既有价值、数据和可见结果仍被保留。'
+    : '默认不启用状态守恒门；若本 Intent 会变更既有用户数据、持久状态、迁移结果或既有工作流，Architect 必须把 continuity_required 设为 true，并在 acceptance 写出保留项与时序验证。';
+  blocks.push(
+    '### Completion Gate / Codex Goal Alignment\n\n' +
+    '将当前 Intent 视为本轮 Codex goal 的可闭合单元。goal 保持 active，直到结果达成、适用的状态守恒和可复现证据同时成立；goal/status 只是运行记录，不能替代验证证据。\n\n' +
+    continuity,
+  );
+  return blocks.join('\n\n');
+}
+
+function compileProjectJudgment(role, versionDir, objective) {
+  if (!versionDir || role === 'weaver') {
+    return role === 'weaver'
+      ? '从用户目标、仓库事实与决策相关证据建立 Project Doctrine。'
+      : '当前版本目录不可用。';
+  }
+
+  const philosophyDir = join(versionDir, '00_PHILOSOPHY');
+  const blocks = [];
+  const missing = [];
+  const anchors = (objective.intent || objective.draft)?.philosophy_anchors || [];
+
+  if (anchors.length > 0) {
+    for (const anchor of anchors) {
+      blocks.push(`### ${anchor}\n\n${getPhilosophy(philosophyDir, anchor)}`);
+    }
+  } else {
+    for (const file of ROLE_PHILOSOPHY_FILES[role] || []) {
+      const filePath = join(philosophyDir, file);
+      if (!existsSync(filePath)) {
+        missing.push(file);
+        continue;
+      }
+      blocks.push(`### ${file}\n\n${readFileSync(filePath, 'utf-8')}`);
+    }
+    if (missing.length) {
+      blocks.push(
+        `### Context Warning\n\n缺少: ${missing.join(', ')}。` +
+        '不要用通用偏好伪造项目判断；回流 Weaver 或向用户索取必要决定。',
+      );
+    }
+  }
+  return blocks.join('\n\n');
+}
+
+function compileExpertiseInputs(role, objective) {
+  const subject = objective.intent || objective.draft;
+  if (!subject || !['architect', 'forge', 'keeper'].includes(role)) {
+    return '当前阶段不编译任务级 Expertise Pack。';
+  }
+  const needs = Array.isArray(subject.capability_needs) ? subject.capability_needs : [];
+  const lines = [
+    `- capability_needs: ${needs.length ? needs.join(', ') : '未声明；按当前任务发现必要能力'}`,
+    `- creative_scope: ${subject.creative_scope || '未声明；遵循最小完整干预'}`,
+    '- Skill、工具和资产名称只代表可发现入口；实际检查并加载后才进入 Expertise Pack。',
+  ];
+  if (role === 'keeper') {
+    lines.push('- 不继承 Forge Expertise Pack；按契约独立准备验证能力。');
+  }
+  return lines.join('\n');
+}
+
+function compileWorkingFacts(versionDir, objective) {
+  if (!versionDir) return '检查当前仓库、用户输入和可用工具。';
+  const subject = objective.intent || objective.draft;
+  const refs = [
+    '- architecture: `.loom/.../02_ARCHITECTURE.md`（只读取与当前决定相关部分）',
+    '- artifacts: 从真实工作区检查，不从会话记忆猜测。',
+  ];
+  const systemId = subject?._optional?.system_id || subject?.system_id;
+  if (systemId) refs.push(`- system_id: ${systemId}`);
+  if (subject?.quality_contract) refs.push('- baseline: 声明相对提升时，修改前证据必须在实现前保存。');
+  return refs.join('\n');
+}
+
 /**
- * 输出角色激活提示词。
- * @param {string} role — 角色名
- * @param {string} versionDir — .loom/v{N} 目录（可选，weaver 不需要）
- * @returns {string} 激活提示词
+ * Compile a role-scoped Context Pack.
+ * @param {string} role
+ * @param {string | null} versionDir
+ * @param {string | null} intentId
  */
-export function activateRole(role, versionDir) {
+export function activateRole(role, versionDir, intentId = null) {
   if (!VALID_ROLES.includes(role)) {
     throw new Error(`未知角色: ${role}\n合法角色: ${VALID_ROLES.join(', ')}`);
   }
-
-  const loomRoot = getLoomRoot();
-  const parts = [];
-
-  // 1. 角色文件
-  const roleFile = join(loomRoot, ROLE_FILES[role]);
-  if (!existsSync(roleFile)) {
-    throw new Error(`角色文件不存在: ${roleFile}`);
-  }
-  parts.push(readFileSync(roleFile, 'utf-8'));
-
-  // 2. BASELINE 摘要（不重复全文——全文见 meta/BASELINE.md）
-  //    5 条底线压缩成摘要，角色需要知道底线存在 + 一句话内容。
-  //    如果角色需要底线细节（如 Weaver 织造哲学时），自行 readFileSync 全文。
-  parts.push('\n---\n\n## 强制加载：BASELINE 摘要\n\n');
-  parts.push('> 完整底线见 `meta/BASELINE.md`。以下是 5 条底线的摘要——\n');
-  parts.push('> 角色激活时必须知道这些底线存在，违反任何一条必须立即停止。\n');
-  parts.push('> Philosophy Weaver 织造哲学时必须读取完整 BASELINE.md 作为硬约束输入。\n\n');
-  parts.push('| 编号 | 底线 | 一句话 |\n');
-  parts.push('|------|------|--------|\n');
-  parts.push('| B1 | 必须有结构设计 | 编码前必须有明确的目录结构 + 模块职责边界 + 显式依赖关系 |\n');
-  parts.push('| B2 | 禁止硬编码 | 密钥/配置/环境特定值/魔法数字不进代码，用环境变量或集中配置 |\n');
-  parts.push('| B3 | 接口契约必须显式 | API/CLI/配置/错误语义/跨系统协议必须有显式定义，变更可追溯 |\n');
-  parts.push('| B4 | 决策必须可追溯 | 影响架构/接口/技术栈/依赖的决策必须记录（ADR 或等效格式） |\n');
-  parts.push('| B5 | 意图必须可回溯 | 每个实现单元有意图叙事（"为什么存在"），可被 Keeper 引用对照 |\n');
-  parts.push('\n> 底线不可被哲学覆盖。如果织造的哲学与底线冲突，底线优先。\n');
-
-  // 3. 项目特定底线（如果有 versionDir）
-  if (versionDir) {
-    const projectBaseline = join(versionDir, '00_PHILOSOPHY/PROJECT_BASELINE.md');
-    if (existsSync(projectBaseline)) {
-      parts.push('\n---\n\n## 强制加载：项目特定底线\n\n' + readFileSync(projectBaseline, 'utf-8'));
-    }
-
-    // 4. 角色激活协议
-    const activationFile = join(loomRoot, 'meta/ROLE_ACTIVATION.md');
-    parts.push('\n---\n\n## 角色激活协议\n\n' + readFileSync(activationFile, 'utf-8'));
+  if (intentId && !versionDir) throw new Error('--intent 需要当前 LOOM 版本');
+  if (intentId && !['visionary', 'architect', 'forge', 'keeper'].includes(role)) {
+    throw new Error(`角色 ${role} 不支持 --intent；draft 用 visionary/architect，官方 Intent 用 forge/keeper`);
   }
 
-  return parts.join('\n');
+  const objective = compileObjective(role, versionDir, intentId);
+  const parts = [
+    '# LOOM Context Pack',
+    section('1. Execution Envelope', compileEnvelope(role, intentId)),
+    section('2. Active Objective', objective.body),
+    section('3. Hard Invariants', compileInvariants(role, versionDir)),
+    section('4. Success Contracts', compileContracts(role, versionDir, objective)),
+    section('5. Project Judgment', compileProjectJudgment(role, versionDir, objective)),
+    section('6. Expertise Inputs', compileExpertiseInputs(role, objective)),
+    section('7. Working Facts', compileWorkingFacts(versionDir, objective)),
+    section('8. Role Contract / Output / Reflow / Stop', readRole(role)),
+  ];
+  return `${parts.join('\n\n---\n\n')}\n`;
 }

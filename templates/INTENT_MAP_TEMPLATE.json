@@ -1,8 +1,9 @@
 {
   "_meta": {
     "_description": "Intent Map 起点骨架。由 Architect 产出。这是 JSON 结构定义——Architect 填充实际内容，可增减字段，但必须保留标注 [必须] 的字段。",
-    "_version": "1.0",
-    "_loom_version": "v{N}",
+    "_version": "1.2",
+    "_loom_version": "v1",
+    "_parent_version": null,
     "_generated_by": "architect",
     "_generated_at": "ISO 8601 时间戳",
     "_template": true
@@ -11,10 +12,15 @@
   "intents": {
     "INT-001": {
       "id": "INT-001",
+      "revision": 1,
       "title": "[必须] 一句话标题，intent next/status 输出时优先展示",
       "narrative_ref": "01_VISION.md#int-001",
       "depends_on": [],
-      "acceptance": "[必须] 什么算忠实实现。这是 Keeper 验证的唯一真相源。可以内联定义，也可以引用 05_VERIFICATION.md 的章节（如 'see 05_VERIFICATION.md#int-001'），但引用时 Keeper 通过 CLI `verify contract <id>` 命令解析引用获取实际内容。必须包含功能承诺 + 防御承诺（见 architect.md Pre-Mortem 设计法）。",
+      "acceptance": "[必须] 完成契约：什么算可观察地完成，包含功能承诺、关键失败边界和防御承诺。可内联或引用 05_VERIFICATION.md。",
+      "continuity_required": "[可选] true：本 Intent 改动既有用户/系统状态，必须在 acceptance 写明保留项与时序验证；验证时额外要求 preservation_achievement。一次性、无既有状态任务省略。",
+      "quality_contract": "see 05_VERIFICATION.md#int-001-quality",
+      "capability_needs": ["visual hierarchy", "responsive interaction"],
+      "creative_scope": "可以改变布局与动效；不得改变业务流程、数据结构和公开接口。",
       "philosophy_anchors": ["PRODUCT_PHILOSOPHY.md#core-belief", "ENGINEERING_CREED.md#anti-patterns"],
       "status": "pending",
       "_optional": {
@@ -27,6 +33,7 @@
     },
     "INT-002": {
       "id": "INT-002",
+      "revision": 1,
       "title": "...",
       "narrative_ref": "01_VISION.md#int-002",
       "depends_on": ["INT-001"],
@@ -40,12 +47,19 @@
 
   "_field_reference": {
     "id": "[必须] 稳定标识，项目生命周期内不变",
+    "revision": "[必须] 正整数，从 1 开始；Intent 语义或验收契约变化时递增，只有 status 变化时保持不变。旧 Map 缺失时兼容视为 1。",
     "title": "[必须] 一句话标题，intent next/status 输出时优先展示",
     "narrative_ref": "[必须] 指向愿景文档中意图叙事的章节锚点",
     "depends_on": "[必须] 前置 Intent ID 列表。空数组表示无依赖。",
-    "acceptance": "[必须] 验收契约，Keeper 判定 passed/deviated/blocked 的唯一真相源。内联或引用 05_VERIFICATION.md。",
+    "acceptance": "[必须] 完成契约的真相源。内联或引用 05_VERIFICATION.md。",
+    "continuity_required": "[可选] true：只作为状态守恒验证的开关；保留规则和验证序列仍写在 acceptance，避免制造第二份真相源。",
+    "quality_contract": "[可选] 质量契约。结果需要高于功能正确性时使用；声明相对提升时必须定义基线、质量主张、最小有意义差异和证据方式。",
+    "capability_needs": "[可选] Expertise Compiler 需要补齐的专业领域字符串数组。",
+    "creative_scope": "[可选] Forge 可以大胆改变什么、必须保持什么。",
     "philosophy_anchors": "[必须] 哲学文档引用列表。Forge 加载哲学的指引。",
-    "status": "[必须] pending | in_progress | completed | blocked",
+    "status": "[必须] pending | in_progress | completed | blocked | needs_review",
+    "lifecycle.deprecation": "[可选] { deprecated_at, reason, replacement }。与 status 分离；弃用后 status 保持 completed。",
+    "lineage": "[可选] { predecessors: [{ version: 'v1', intent_id: 'INT-003' }], change_summary, change_ref? }。只表达跨版本语义沿革，不得放入 depends_on。",
     "_optional.verification_method": "[可选] L2 运行时验证方式（如 'run tests/...'）或 L3 'human_review'。未定义时默认 L1 静态审查。",
     "_optional": "[自由] Architect 可根据项目需要增加字段"
   },

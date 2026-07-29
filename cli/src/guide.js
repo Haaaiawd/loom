@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { readCurrentPointer } from './version.js';
 import { loadIntentMap } from './intent-map.js';
 import { isAutoOn, getAutoMode, writeHeartbeat, needsHumanReview } from './auto.js';
+import { doctor } from './diagnostics.js';
 
 /**
  * 检测文件是否还是模板（未填充真实内容）。
@@ -60,7 +61,7 @@ export function guideProject(projectDir, options = {}) {
       verify_command: 'loom guide',
     },
     need_philosophy: {
-      inputs: ['meta/PHILOSOPHY_WEAVER.md', 'meta/BASELINE.md', 'dimensions/PART_DECOMPOSITION.md', 'dimensions/SEARCH_METHODOLOGY.md'],
+      inputs: ['meta/PHILOSOPHY_WEAVER.md', 'meta/BASELINE.md', 'dimensions/SEARCH_METHODOLOGY.md'],
       outputs: [`.loom/${current}/00_PHILOSOPHY/PRODUCT_PHILOSOPHY.md`, `.loom/${current}/00_PHILOSOPHY/ENGINEERING_CREED.md`, `.loom/${current}/00_PHILOSOPHY/DECISION_RUBRIC.md`],
       verify_command: 'loom philosophy check',
     },
@@ -89,9 +90,9 @@ export function guideProject(projectDir, options = {}) {
       outputs: ['代码文件', `.loom/${current}/verifications/INT-*.json`],
       verify_command: 'loom verify pending',
     },
-    all_done: {
-      inputs: [],
-      outputs: [],
+    done: {
+      inputs: [`.loom/${current}/04_INTENT_MAP.json`, `.loom/${current}/verifications/`],
+      outputs: [`.loom/${current}/06_CHANGELOG.json`, `.loom/${current}/06_CHANGELOG.md`],
       verify_command: 'loom doctor',
     },
     unknown: {
@@ -258,14 +259,35 @@ function diagnoseStage(cwd, loomRoot, auto) {
 
   // 状态 6: 全部 completed
   if (counts.completed === total && total > 0) {
+    const health = doctor(versionDir, join(versionDir, 'verifications'), philosophyDir);
+    const blocking = health.issues.filter((issue) => issue.severity === 'fatal' || issue.severity === 'high');
+    if (blocking.length) {
+      return {
+        stage: 'needs_review',
+        stage_num: 5.5,
+        details: { version: current, counts, blocking_issues: blocking.map((issue) => issue.type) },
+        auto,
+        next_action: '修复完成门或验证证据后重新运行 doctor',
+        next_command: 'loom doctor',
+        message: `当前版本 ${current} 的 Intent 均标为 completed，但健康检查仍有 ${blocking.length} 个高风险问题；不能宣告阶段完成。先运行 loom doctor。`,
+      };
+    }
+    const doneMessage = [
+      `当前版本 ${current}：全部 ${total} 个 Intent 已完成。`,
+      '',
+      '如果有新需求，先判断变更档位：',
+      '- Patch：不触及 Intent，只修 bug / 样式 / 实现细节；跑验证并记录 changelog。',
+      '- Minor：新增或修改 Intent，但不改变哲学前提、愿景北极星、架构边界；在当前版本内变更并重验受影响 Intent。',
+      '- Major：哲学前提、愿景北极星或架构边界变化；运行 loom version new。',
+    ].join('\n');
     return {
       stage: 'done',
       stage_num: 6,
       details: { version: current, counts, total },
       auto,
-      next_action: '项目阶段完成，考虑版本演进',
-      next_command: 'loom version new',
-      message: `当前版本 ${current}：全部 ${total} 个 Intent 已完成。可考虑 loom version new 开始新版本。`,
+      next_action: '项目阶段完成，按 Patch / Minor / Major 判断下一步',
+      next_command: 'loom help version',
+      message: doneMessage,
     };
   }
 

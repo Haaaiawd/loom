@@ -1,6 +1,6 @@
 # 参考案例：CLI 工具
 
-> 这份文件提供搜索起点和好实践样本。Weaver 按 PART_DECOMPOSITION.md 自行拆解，
+> 这份文件提供搜索起点和好实践样本。Weaver 只在相关 Doctrine 问题中使用，
 > 拆解出的部分和这里不同时，以 Weaver 的拆解为准。
 
 ---

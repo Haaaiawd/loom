@@ -1,100 +1,89 @@
 ## LOOM 工作流
 
-从零到交付的完整流程。每个阶段有明确的产出和验收标准。
+## 0. 诊断
 
-## 第一步：诊断当前阶段
-
-\`\`\`bash
+```bash
 loom guide
-\`\`\`
+loom context
+```
 
-guide 检测项目当前在哪个阶段，输出"你在阶段 X，下一步做 Y"。
-Agent 每完成一步都跑 guide 确认下一步。
-审计、预演、子代理探测时用 `loom guide --dry-run`，避免写 `.loom/heartbeat.json`。
+只读探测使用 `loom guide --dry-run`。
 
-## AUTO 模式
+## 1. Doctrine — Weaver
 
-\`\`\`bash
-loom auto on      # 开启：Agent 自动连续执行，不等确认
-loom auto off     # 关闭：每步需要用户确认
-\`\`\`
-
-AUTO on 时 Agent 一路跑到底，跑完生成 preview 给人看。
-AUTO off 时每步停下等用户说继续。
-
-## 阶段 1：织造哲学（Weaver）
-
-\`\`\`bash
+```bash
 loom activate weaver
-\`\`\`
+loom philosophy check
+```
 
-Weaver 根据项目特征从真实思想体系织造定制化哲学。产出：
-- PRODUCT_PHILOSOPHY.md — 产品价值观、反模式清单、决策取舍规则
-- ENGINEERING_CREED.md — 工程原则（按需）
-- DECISION_RUBRIC.md — 冲突时的优先级（按需）
-- PROJECT_BASELINE.md — 项目特定底线（按需）
+输出项目长期判断、卓越标准、决策原则、创作空间、反模式与 Evidence Map。
+研究数量不设配额；只保留真实改变判断、能够追溯的证据。
 
-**验收**：哲学有北极星、有反模式、有决策标准。全是空话就重做。
+## 2. Intent — Visionary
 
-## 阶段 2：定义愿景（Visionary）
-
-\`\`\`bash
+```bash
 loom activate visionary
-\`\`\`
+```
 
-基于哲学定义产品愿景，为每个 Intent 写意图叙事（"为什么存在"）。产出：
-- 01_VISION.md — 北极星 + 意图叙事列表
+输出产品目标、成功图景、非目标与 Intent narrative。Visionary 不写 acceptance、DAG 或架构。
 
-**验收**：叙事是"为什么"不是"做什么"。写成功能列表就重做。
+## 3. Contract — Architect
 
-## 阶段 3：设计系统（Architect）
-
-\`\`\`bash
+```bash
 loom activate architect
-\`\`\`
+loom intent validate
+loom doctor
+```
 
-基于愿景设计系统结构，绘制 Intent Map。产出：
-- 02_ARCHITECTURE.md — 系统设计
-- 04_INTENT_MAP.json — Intent 依赖图 + 验收契约 + 哲学锚点
+Architect 产出系统边界、Intent DAG、完成契约和可选质量契约，并声明
+`capability_needs` 与 `creative_scope`。
 
-**验收**：验收契约具体到可验证，依赖无环，每个 Intent 有叙事引用。
-跑 \`loom intent validate\` 校验结构，跑 \`loom doctor\` 检查完整性。
+完成契约定义 **Reliability Floor**：做到什么才算可靠完成。
+质量契约定义 **Distinctive Ceiling**：什么可观察差异让结果不止合格。
 
-## 阶段 4：Intent Loop
+## 4. Quality Engine — Forge 与 Keeper
 
-\`\`\`bash
-loom activate keeper    # Keeper 选 Intent、验证
-loom activate forge     # Forge 实现
-loom intent next        # 下一个可执行 Intent
-loom context            # 当前状态摘要
-\`\`\`
+```bash
+loom intent next
+loom intent update <id> --status in_progress
+loom activate forge --intent <id>
+loom activate keeper --intent <id>
+```
 
-每个 Intent 独立走一圈：选 → 实现 → 验证 → 闭合或修正。
-详细流程见 \`loom help loop\`。
+Forge 编译 Expertise Pack，在 Quality Arena 中实现与比较。
+Keeper 从当前磁盘事实和契约独立验证，不继承 Forge 的解释。
 
-## 阶段 5：人类预览
+无质量契约时，四个基础维度通过即可闭合。存在质量契约时，额外验证
+`quality_achievement`；声明相对提升时，在该维度中链接 Quality Proof：
 
-\`\`\`bash
-loom preview status
-loom preview
-loom preview --regen
-\`\`\`
+```bash
+loom verify pass <id> \
+  --summary "<具体证据>" \
+  --reproduction-command "<可复现命令>" \
+  --quality-proof "<基线、比较和稳定性证据的位置>"
 
-preview 是给人看的只读投影。Agent 应先跑 `loom preview status`：
-- `fresh=true` → 运行 `loom preview` 打开
-- `fresh=false` → 运行 `loom preview --regen`，按提示词重写 `loom-preview.html`，再打开
-- 用户明确要看旧版 → `loom preview --stale`
+loom intent done <id>
+```
 
-详细规则见 `loom help preview`。
+复杂或混合判定使用 `loom verify write --json-file <path>`。
 
-## 阶段 6：版本演进（按需）
+## 5. Reflow
 
-当哲学前提/愿景北极星/架构边界变了，需要 Major 升级。
-详细流程见 \`loom help version\`。
+验证偏离时，不要把所有问题都扔回 Forge：
 
-## 核心原则
+- Doctrine 不足 → Weaver
+- 产品目标错误 → Visionary
+- 契约、边界或依赖错误 → Architect
+- 专业判断或实现不足 → Forge
+- 证据不足 → Keeper 补证或 `pending_human`
 
-- **哲学是经线，意图是纬线** — 所有角色共享哲学锚点
-- **底线不可协商** — BASELINE 5 条 + 项目特定底线，角色激活时强制加载
-- **意图可回溯** — 每个 Intent 携带叙事，Keeper 独立验证忠实度
-- **文档开销不超过开发开销** — 小项目可以粗粒度，不必教条
+连续三次 `deviated` 自动升级为 `blocked`。所有当前 revision 和当前验证 epoch 的 Intent 都有最新 passed
+记录，且没有 `needs_review`、`loom doctor` 没有 fatal/high 风险时，本轮收敛。
+
+## 6. 演进
+
+- Patch：不改变 Intent 语义，验证后记录 changelog。
+- Minor：用 `loom intent add|revise` 创建 draft，经限定作用域的 Visionary/Architect 更新后 finalize。
+- Major：Doctrine、北极星或主要架构边界改变，使用 `loom version new`。
+
+原则只有一句：流程成本必须小于它降低的风险；质量声明必须小于等于它拥有的证据。

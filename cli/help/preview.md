@@ -43,7 +43,8 @@ preview_mtime >= source_latest_mtime → fresh
 - `03_DECISIONS/`
 - `04_INTENT_MAP.json`
 - `05_VERIFICATION.md`
-- `06_CHANGELOG.md`
+- `06_CHANGELOG.json`（Patch 唯一权威来源）
+- `06_CHANGELOG.md`（确定性生成投影）
 - `verifications/`
 
 ## 为什么不直接打开旧 preview

@@ -3,9 +3,10 @@
 // 这个库按锚点提取对应章节，不返回整个文件。
 // 另含灵感来源校验——防止 Weaver 从训练数据"背"几个名字就交差。
 
-import { readFileSync, existsSync, readdirSync } from 'node:fs';
-import { join } from 'node:path';
-import { extractMdSection } from './shared/md-utils.js';
+import { readFileSync, writeFileSync, existsSync, readdirSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { extractMdSection, readJsonFile } from './shared/md-utils.js';
+import { applyImpactReview, dependentClosure, validateImpactPartition, validateIntentMap } from './intent-map.js';
 
 /**
  * 解析锚点字符串。
@@ -14,7 +15,11 @@ import { extractMdSection } from './shared/md-utils.js';
  */
 export function parseAnchor(anchor) {
   const [file, section] = anchor.split('#');
-  return { file: file.trim(), section: section ? section.trim() : null };
+  const normalizedFile = file.trim();
+  if (!normalizedFile || basename(normalizedFile) !== normalizedFile || !normalizedFile.endsWith('.md')) {
+    throw new Error(`哲学锚点文件名非法: ${normalizedFile || '(empty)'}`);
+  }
+  return { file: normalizedFile, section: section ? section.trim() : null };
 }
 
 /**
@@ -46,16 +51,158 @@ export function listPhilosophyFiles(philosophyDir) {
   return dir.filter((f) => f.endsWith('.md'));
 }
 
+const REVISION_CLASSIFICATIONS = ['clarification', 'minor', 'major'];
+
+function normalizeAnchor(anchor) {
+  if (typeof anchor !== 'string' || anchor.trim() === '') throw new Error('哲学锚点必须是非空文本');
+  const parts = anchor.trim().split('#');
+  if (parts.length > 2 || !parts[0].trim()) throw new Error(`哲学锚点格式非法: ${anchor}`);
+  const { file, section } = parseAnchor(anchor.trim());
+  return section ? `${file}#${section}` : file;
+}
+
+function impactEntry(intent) {
+  return {
+    id: intent.id,
+    title: intent.title || '',
+    status: intent.status,
+    revision: intent.revision ?? 1,
+    acceptance: intent.acceptance,
+  };
+}
+
+/** Resolve an anchor and report direct references plus their dependent closure without mutation. */
+export function assessPhilosophyImpact(versionDir, anchor) {
+  const resolvedAnchor = normalizeAnchor(anchor);
+  getPhilosophy(join(versionDir, '00_PHILOSOPHY'), resolvedAnchor);
+  const data = readJsonFile(join(versionDir, '04_INTENT_MAP.json'), 'Intent Map');
+  validateIntentMap(data);
+  const directIds = Object.values(data.intents)
+    .filter((intent) => (intent.philosophy_anchors || []).some((item) => normalizeAnchor(item) === resolvedAnchor))
+    .map((intent) => intent.id);
+  const directSet = new Set(directIds);
+  const impacted = new Set(directIds);
+  for (const id of directIds) {
+    for (const dependent of dependentClosure(data.intents, id).all) impacted.add(dependent);
+  }
+  const ordered = (data.topo_order || Object.keys(data.intents)).filter((id) => impacted.has(id));
+  const transitiveIds = ordered.filter((id) => !directSet.has(id));
+  const describe = (ids) => ids.map((id) => impactEntry(data.intents[id]));
+  return {
+    anchor: resolvedAnchor,
+    direct: describe(directIds),
+    transitive: describe(transitiveIds),
+    impacted: describe(ordered),
+    impacted_ids: ordered,
+  };
+}
+
+function nextRevisionAdr(decisionsDir) {
+  if (!existsSync(decisionsDir)) return 'PHIL-REV-001.md';
+  const numbers = readdirSync(decisionsDir)
+    .map((name) => name.match(/^PHIL-REV-(\d{3,})\.md$/)?.[1])
+    .filter(Boolean)
+    .map(Number);
+  return `PHIL-REV-${String((numbers.length ? Math.max(...numbers) : 0) + 1).padStart(3, '0')}.md`;
+}
+
+function revisionGuidance(anchor, classification, reason, impactedIds) {
+  const escapedReason = reason.replace(/"/g, '\\"');
+  const base = `loom philosophy revise ${anchor} --classification ${classification} --reason "${escapedReason}" --confirm`;
+  if (classification === 'clarification') {
+    return impactedIds.length ? `${base} --unaffected ${impactedIds.join(',')}` : base;
+  }
+  if (!impactedIds.length) return base;
+  return `${base} --review <review IDs from ${impactedIds.join(',')}> --unaffected <remaining IDs from ${impactedIds.join(',')}>`;
+}
+
+/** Assess or confirm a philosophy revision while leaving philosophy prose to Weaver/the user. */
+export function revisePhilosophy(versionDir, anchor, options) {
+  if (!REVISION_CLASSIFICATIONS.includes(options.classification)) {
+    throw new Error(`--classification 非法: ${options.classification || '(missing)'}（合法: ${REVISION_CLASSIFICATIONS.join('|')}）`);
+  }
+  if (typeof options.reason !== 'string' || options.reason.trim() === '') throw new Error('--reason 必须是非空文本');
+  const reason = options.reason.trim();
+  const impact = assessPhilosophyImpact(versionDir, anchor);
+
+  if (options.classification === 'major') {
+    return {
+      mode: 'assessment',
+      mutated: false,
+      classification: 'major',
+      reason,
+      ...impact,
+      follow_up: { command: 'loom version new', guidance: 'Major philosophy revisions never mutate the current version. Create a new version, then have Weaver weave its philosophy.' },
+    };
+  }
+  if (!options.confirm) {
+    return {
+      mode: 'assessment',
+      mutated: false,
+      classification: options.classification,
+      reason,
+      ...impact,
+      required_partition: impact.impacted_ids,
+      follow_up: {
+        command: revisionGuidance(impact.anchor, options.classification, reason, impact.impacted_ids),
+        guidance: options.classification === 'clarification'
+          ? 'Clarification requires an empty --review set; classify every impacted Intent as --unaffected because all acceptance remains valid.'
+          : 'Classify every impacted Intent exactly once between --review and --unaffected; omit an empty group.',
+      },
+    };
+  }
+
+  const review = options.review || [];
+  const unaffected = options.unaffected || [];
+  if (options.classification === 'clarification' && review.length) throw new Error('clarification 的 --review 必须为空；所有 acceptance 必须仍然有效');
+  validateImpactPartition(impact.impacted_ids, review, unaffected);
+  const reviewSet = new Set(review);
+  const unaffectedSet = new Set(unaffected);
+  const orderedReview = impact.impacted_ids.filter((id) => reviewSet.has(id));
+  const orderedUnaffected = impact.impacted_ids.filter((id) => unaffectedSet.has(id));
+
+  const mapPath = join(versionDir, '04_INTENT_MAP.json');
+  const data = readJsonFile(mapPath, 'Intent Map');
+  validateIntentMap(data);
+  const { reviewed } = applyImpactReview(data, orderedReview, { incrementPassOnce: options.classification === 'minor' });
+  const unchanged = orderedUnaffected.map((id) => ({ id, status_before: data.intents[id].status, status_after: data.intents[id].status }));
+  validateIntentMap(data);
+
+  const decisionsDir = join(versionDir, '03_DECISIONS');
+  mkdirSync(decisionsDir, { recursive: true });
+  const adrName = nextRevisionAdr(decisionsDir);
+  const adrPath = join(decisionsDir, adrName);
+  const timestamp = new Date().toISOString();
+  const list = (ids) => ids.length ? ids.map((id) => `- ${id}`).join('\n') : '- None';
+  const adr = `# Philosophy Revision ${adrName.slice(9, -3)}\n\n` +
+    `- Timestamp: ${timestamp}\n- Anchor: ${impact.anchor}\n- Classification: ${options.classification}\n- Reason: ${reason}\n\n` +
+    `## Reviewed\n\n${list(orderedReview)}\n\n## Unaffected\n\n${list(orderedUnaffected)}\n\n` +
+    '## Prose Ownership\n\nPhilosophy prose is edited by Weaver/user separately. This ADR is an impact audit record, not a second philosophy truth source.\n';
+  const token = `${process.pid}-${Date.now()}`;
+  const mapTemp = `${mapPath}.tmp-${token}`;
+  const adrTemp = `${adrPath}.tmp-${token}`;
+  writeFileSync(mapTemp, `${JSON.stringify(data, null, 2)}\n`, 'utf-8');
+  writeFileSync(adrTemp, adr, 'utf-8');
+  try {
+    renameSync(adrTemp, adrPath);
+    try {
+      renameSync(mapTemp, mapPath);
+    } catch (error) {
+      try { unlinkSync(adrPath); } catch {}
+      throw error;
+    }
+  } catch (error) {
+    try { unlinkSync(mapTemp); } catch {}
+    try { unlinkSync(adrTemp); } catch {}
+    throw error;
+  }
+  return { mode: 'confirmed', mutated: true, classification: options.classification, reason, ...impact, reviewed, unaffected: unchanged, audit_adr: `03_DECISIONS/${adrName}`, timestamp };
+}
+
 // ─── 灵感来源校验 ───────────────────────────────────────
 // 防止 Weaver 从训练数据"背"几个名字就交差。
-// 校验规则：
-//   1. 至少 3 个独立源
-//   2. 至少 2 个非 Wikipedia 链接（Wikipedia 是常识入口，不是深度源）
-//   3. 每个源必须有"为什么选它"的理由（萃取/理由/为什么 等关键词）
-//   4. 源不能全是同一类型（如全是 Wikipedia、全是博客）
-
-const MIN_SOURCES = 3;
-const MIN_NON_WIKI = 2;
+// 校验原则：只检查证据能否追溯，以及为何影响了项目判断。
+// 来源数量与类型不设固定配额；一个直接证据可以胜过十个装饰性链接。
 const REASON_KEYWORDS = ['萃取', '理由', '为什么', '因为', '启发', '借鉴', '参考理由', '选取理由', '转译'];
 
 /**
@@ -116,14 +263,7 @@ function parseInspirationSources(content) {
  * 用来区分"没有章节"和"有章节但没条目"两种情况。
  */
 function hasInspirationSection(content) {
-  return /^##\s+(?:灵感来源|Inspiration|参考来源|References?|参考文献|参考资料|Sources|Bibliography)/m.test(content);
-}
-
-/**
- * 判断 URL 是否为 Wikipedia 链接。
- */
-function isWikipediaUrl(url) {
-  return /wikipedia\.org/i.test(url);
+  return /^##\s+(?:证据地图|Evidence Map|灵感来源|Inspiration|参考来源|References?|参考文献|参考资料|Sources|Bibliography)/m.test(content);
 }
 
 /**
@@ -145,22 +285,6 @@ export function validateInspirationSources(philosophyDir) {
 
     allSources.push({ file, sources });
 
-    // 校验每个文件的灵感来源
-    if (sources.length < MIN_SOURCES) {
-      issues.push({
-        severity: 'high',
-        msg: `${file}: 灵感来源仅 ${sources.length} 条，要求至少 ${MIN_SOURCES} 条。可能从训练数据"背"了几个名字就交差。`,
-      });
-    }
-
-    const nonWikiUrls = sources.filter((s) => s.urls.length > 0 && !s.urls.every(isWikipediaUrl));
-    if (nonWikiUrls.length < MIN_NON_WIKI) {
-      issues.push({
-        severity: 'high',
-        msg: `${file}: 非 Wikipedia 链接仅 ${nonWikiUrls.length} 个，要求至少 ${MIN_NON_WIKI} 个。Wikipedia 是常识入口，不是深度源——需要原著、论文、工程博客、标准文档等。`,
-      });
-    }
-
     for (const src of sources) {
       if (!src.hasReason) {
         issues.push({
@@ -177,18 +301,6 @@ export function validateInspirationSources(philosophyDir) {
     }
   }
 
-  // 全局校验：所有文件的灵感来源加起来，源类型不能单一
-  const totalUrls = allSources.flatMap((s) => s.sources).flatMap((s) => s.urls);
-  if (totalUrls.length > 0) {
-    const wikiCount = totalUrls.filter(isWikipediaUrl).length;
-    if (wikiCount / totalUrls.length > 0.7) {
-      issues.push({
-        severity: 'medium',
-        msg: `全部灵感来源中 Wikipedia 占比 ${Math.round((wikiCount / totalUrls.length) * 100)}%——源类型过于单一。需要原著、论文、标准文档、工程博客等多元源。`,
-      });
-    }
-  }
-
   // 如果没有任何文件提取到灵感来源条目
   if (allSources.length === 0) {
     // 区分两种情况：完全没有章节 vs 有章节但没条目
@@ -201,12 +313,12 @@ export function validateInspirationSources(philosophyDir) {
     if (filesWithSection.length > 0) {
       issues.push({
         severity: 'high',
-        msg: `${filesWithSection.join(', ')} 有"灵感来源"章节但没有可识别的条目。章节里可能是模板占位符。需要 Weaver 真正走搜索漏斗，填入至少 ${MIN_SOURCES} 个源（- **源名** — 理由。来源：URL 格式）。`,
+        msg: `${filesWithSection.join(', ')} 有证据章节但没有可识别的条目。请只填入实际改变了原则或取舍的来源，并写明选择理由与可追溯位置。`,
       });
     } else {
       issues.push({
         severity: 'high',
-        msg: '所有哲学文档都没有"灵感来源"章节。PHILOSOPHY_WEAVER.md 要求哲学文档必须包含灵感来源（参考了哪些机构、人物、流派——附 URL 和理由）。支持的标题：灵感来源 / Inspiration / 参考来源 / References / 参考文献 / 参考资料 / Sources / Bibliography。',
+        msg: '所有哲学文档都没有证据地图或灵感来源。Doctrine 必须说明哪些项目事实或外部资料实际改变了原则与取舍，并提供理由和可追溯位置。',
       });
     }
   }
@@ -215,94 +327,5 @@ export function validateInspirationSources(philosophyDir) {
     passed: issues.length === 0,
     issues,
     sources: allSources,
-  };
-}
-
-// ─── 实现部分清单校验 ───────────────────────────────────
-// 检查哲学文档是否包含"实现部分清单"——Weaver 是否走了拆解流程。
-// PHILOSOPHY_WEAVER.md Step 2 要求产出"实现部分清单"。
-
-/**
- * 校验哲学文档是否包含实现部分拆解清单。
- * Weaver 按 PART_DECOMPOSITION.md 拆解后，必须在哲学文档里显式列出拆解出的部分。
- * @param {string} philosophyDir — 00_PHILOSOPHY/ 目录路径
- * @returns {{ passed: boolean, issues: Array<{severity: string, msg: string}>, parts: string[] }}
- */
-export function validatePartDecomposition(philosophyDir) {
-  const issues = [];
-  const parts = [];
-
-  const files = listPhilosophyFiles(philosophyDir);
-
-  // 搜索"实现部分"相关章节——支持 {#anchor} 后缀和多种标题变体
-  const PART_SECTION_PATTERNS = [
-    /^##\s+实现部分清单/m,
-    /^##\s+部分拆解/m,
-    /^##\s+实现部分/m,
-    /^##\s+Part Decomposition/m,
-    /^##\s+Implementation Parts/m,
-    /^##\s+拆解出的部分/m,
-    /^##\s+Implementation Decomposition/m,
-    /^##\s+Parts? /m,
-  ];
-
-  // 搜索部分条目——支持无序列表、有序列表、树形符号
-  const PART_ITEM_PATTERNS = [
-    /^\s*[-*]\s+\*\*(.+?)\*\*/gm,    // - **CLI 交互设计**
-    /^\s*\d+\.\s+\*\*(.+?)\*\*/gm,   // 1. **CLI 交互设计**
-    /^\s*\d+\.\s+(.+)/gm,            // 1. CLI 交互设计
-    /^\s*├──\s+(.+)/gm,              // ├── CLI 交互设计
-    /^\s*└──\s+(.+)/gm,              // └── 产物设计
-  ];
-
-  let foundSection = false;
-
-  for (const file of files) {
-    const content = readFileSync(join(philosophyDir, file), 'utf-8');
-
-    // 检查是否有实现部分章节
-    for (const pattern of PART_SECTION_PATTERNS) {
-      if (pattern.test(content)) {
-        foundSection = true;
-        // 提取该章节的部分条目
-        const sectionMatch = content.match(pattern);
-        if (sectionMatch) {
-          const startIdx = sectionMatch.index + sectionMatch[0].length;
-          const nextSection = content.slice(startIdx).match(/\n##\s/m);
-          const sectionText = nextSection
-            ? content.slice(startIdx, startIdx + nextSection.index)
-            : content.slice(startIdx);
-
-          for (const itemPattern of PART_ITEM_PATTERNS) {
-            const matches = [...sectionText.matchAll(itemPattern)];
-            for (const m of matches) {
-              const partName = m[1].trim().replace(/[—\-–].*$/, '').trim();
-              if (partName && !parts.includes(partName)) {
-                parts.push(partName);
-              }
-            }
-          }
-        }
-        break;
-      }
-    }
-  }
-
-  if (!foundSection) {
-    issues.push({
-      severity: 'high',
-      msg: '哲学文档没有"实现部分清单"章节。PHILOSOPHY_WEAVER.md Step 2 要求按 PART_DECOMPOSITION.md 拆解实现部分，并在哲学文档中显式列出。支持的标题：实现部分清单 / 部分拆解 / 实现部分 / Part Decomposition / Implementation Parts / 拆解出的部分。',
-    });
-  } else if (parts.length < 2) {
-    issues.push({
-      severity: 'medium',
-      msg: `找到"实现部分清单"章节但仅识别到 ${parts.length} 个部分。可能章节里是模板占位符，或条目格式不被识别（用 - **部分名** 或 ├── 部分名 格式）。PART_DECOMPOSITION.md 建议小项目 3-5 个部分，大项目 6-10 个。`,
-    });
-  }
-
-  return {
-    passed: issues.length === 0,
-    issues,
-    parts,
   };
 }
