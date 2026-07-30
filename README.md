@@ -27,6 +27,7 @@ LOOM 的核心机制：
 | **哲学** | 项目的价值观和工程原则——为什么存在、什么不做、冲突时谁优先。由 Weaver 从真实思想体系织造，不是模板填空 |
 | **Intent** | 一个意图单元——不是"做什么"（任务），是"为什么做"（意图）。每个 Intent 有验收契约，Keeper 据此判定实现是否忠实 |
 | **Intent Map** | 所有 Intent 的依赖图（JSON）。Architect 绘制，定义拓扑序和依赖关系 |
+| **Capability Graph** | 在 Intent 前展开项目问题面、能力缺口、风险和证据；高影响节点必须路由，并回链到 Intent |
 | **Expertise Pack** | Forge 针对当前任务临时编译的专业认知，不成为永久规则 |
 | **Quality Arena** | 以基线和机制不同候选进行探索、比较、实现与观察 |
 | **Quality Proof** | Keeper 独立验证完成与质量声明，证据不足时不允许宣称提升 |
@@ -119,9 +120,9 @@ loom activate architect
 ```
 
 **输入**：愿景文档 + 哲学文档
-**Architect 会做什么**：设计系统边界 → 绘制 Intent Map → 定义完成契约、按需的质量契约与专业能力需求
-**产出**：`.loom/v1/02_ARCHITECTURE.md` + `.loom/v1/04_INTENT_MAP.json`
-**怎么判断合格**：完成契约可观察，质量契约可比较，依赖无环，每个 Intent 有叙事引用
+**Architect 会做什么**：先展开 Capability Graph → 设计系统边界 → 绘制 Intent Map → 定义完成契约、按需的质量契约与专业能力需求
+**产出**：`.loom/v1/07_CAPABILITY_GRAPH.json` + `07_CAPABILITY_BRIEFS/` + `.loom/v1/02_ARCHITECTURE.md` + `.loom/v1/04_INTENT_MAP.json`
+**怎么判断合格**：高影响图谱节点都有路由、Intent 都可回链到图谱，完成契约可观察，质量契约可比较，依赖无环
 **下一步**：进入 Intent Loop
 
 ### 步骤 5：进入 Intent Loop
@@ -205,6 +206,7 @@ Agent 在用户说"看看进度 / 打开 preview / 看全局"时，先跑 `loom 
 | `loom intent revise <id> --reason <text>` | 创建修订 draft 并报告反向依赖 |
 | `loom intent draft <id>` | 查看 draft |
 | `loom intent finalize <id> [--review <ids> --unaffected <ids>]` | 校验 draft 并原子更新官方 Map/topo_order；修订时必须分类全部下游影响 |
+| `loom capability graph\|frontier\|get\|coverage\|compile` | 查看能力图谱、未路由前沿、覆盖缺口和当前 Intent 的能力编译输入 |
 | `loom intent deprecate <id> --reason <text>` | 只读评估当前版本弃用影响；加 `--confirm` 并完整分类依赖方后原子写入 |
 | `loom intent narrative <id>` | Intent 意图叙事 |
 | `loom intent trace <id>` | Intent 完整追溯链（依赖+验证+哲学+叙事） |
@@ -249,7 +251,7 @@ LOOM/
 │
 ├── roles/                       角色原型定义
 │   ├── visionary.md             远见者——定义愿景，织造意图叙事
-│   ├── architect.md             建筑师——设计系统，绘制 Intent Map
+│   ├── architect.md             建筑师——展开图谱，设计系统，绘制 Intent Map
 │   ├── forge.md                 锻造师——在哲学约束下自主实现
 │   └── keeper.md                守护者——验证意图忠实度
 │
@@ -261,7 +263,9 @@ LOOM/
 └── templates/                   项目级起点骨架
     ├── PHILOSOPHY_TEMPLATE.md   哲学文档起点
     ├── VISION_TEMPLATE.md       愿景文档起点
-    └── INTENT_MAP_TEMPLATE.json Intent Map 起点
+    ├── INTENT_MAP_TEMPLATE.json Intent Map 起点
+    ├── CAPABILITY_GRAPH_TEMPLATE.json Capability Graph 起点
+    └── CAPABILITY_BRIEF_TEMPLATE.md   Capability Brief 起点
 ```
 
 ### 文档导航
@@ -280,6 +284,7 @@ LOOM/
 | Keeper 做什么 | `roles/keeper.md` |
 | 哲学文档长什么样 | `templates/PHILOSOPHY_TEMPLATE.md` |
 | 愿景文档长什么样 | `templates/VISION_TEMPLATE.md` |
+| Capability Graph 与 Brief 长什么样 | `cli/help/capability.md`、`templates/CAPABILITY_GRAPH_TEMPLATE.json` |
 | Intent Map 长什么样 | `templates/INTENT_MAP_TEMPLATE.json` |
 | 怎么搜索高质量参考 | `dimensions/SEARCH_METHODOLOGY.md` |
 
@@ -296,6 +301,7 @@ LOOM/
 - 哲学文档体系（Weaver 决定要几个、多详细）
 - 愿景文档（带意图叙事）
 - 架构文档（根据哲学决定结构）
+- Capability Graph 与按需生成的 Capability Brief
 - Intent Map（意图依赖图，JSON）
 - 验证契约和验证记录
 
@@ -308,7 +314,7 @@ LOOM/
 | 角色 | 原型 | 职责 | 激活时机 |
 |---|---|---|---|
 | **Visionary** 远见者 | 产品联合创始人 | 定义愿景，织造意图叙事 | 项目启动 |
-| **Architect** 建筑师 | 系统建筑师 | 设计系统，绘制 Intent Map | Visionary 完成后 |
+| **Architect** 建筑师 | 系统建筑师 | 展开 Capability Graph，设计系统，绘制 Intent Map | Visionary 完成后 |
 | **Forge** 锻造师 | 高级工程师 | 在哲学约束下自主实现 | Intent Loop 实现阶段 |
 | **Keeper** 守护者 | 独立验证者（独立激活） | 从磁盘事实验证意图与质量主张 | Intent Loop 验证阶段 |
 
@@ -364,6 +370,8 @@ Agent 在项目中生成的文档结构：
     ├── 05_VERIFICATION.md         每个 Intent 的验证契约
     ├── 06_CHANGELOG.json          Patch 变更记录（唯一权威来源）
     ├── 06_CHANGELOG.md            确定性生成的只读投影
+    ├── 07_CAPABILITY_GRAPH.json   问题面、能力缺口、风险、证据与 Intent 回链
+    ├── 07_CAPABILITY_BRIEFS/      按需生成的项目化能力 Brief
     └── verifications/             Keeper 的验证记录
         ├── INT-001.json
         ├── INT-001.md
@@ -393,8 +401,8 @@ Agent 通过 **CLI 访问** JSON，不直接读文件——省 token、更高效
 2. Visionary 定义愿景
    → 基于哲学写愿景 → 每个意图带意图叙事 → 识别需要的哲学维度
 
-3. Architect 设计系统
-   → 基于愿景设计结构 → 绘制 Intent Map → 定义验证契约
+3. Architect 先展开 Capability Graph，再设计系统
+   → 基于愿景检查问题面、能力缺口、风险与证据 → 路由高影响节点 → 绘制 Intent Map → 定义验证契约
 
 4. LOOM Quality Engine
    → Forge 编译 Expertise Pack → Quality Arena 实现/比较 → Keeper 形成 Quality Proof
@@ -407,10 +415,10 @@ Agent 通过 **CLI 访问** JSON，不直接读文件——省 token、更高效
 
 - [x] `meta/` 元规范（4 个文件）
 - [x] `roles/` 角色原型（4 个角色）
-- [x] `templates/` 起点骨架（3 个模板）
+- [x] `templates/` 起点骨架（5 个模板）
 - [x] `README.md` 系统总览
 - [x] `dimensions/SEARCH_METHODOLOGY.md` 检索方法论
-- [x] `cli/` CLI 访问层（118 个测试全过）
+- [x] `cli/` CLI 访问层（Capability Graph / Brief / Coverage，130 个测试全过）
 - [ ] `dimensions/` 维度文件（按需填充，Weaver 可自主判断）
 
 ---

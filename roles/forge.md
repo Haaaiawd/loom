@@ -22,6 +22,7 @@
 - 若 `continuity_required` 为 true：先保存可观察旧状态，执行后跑“旧状态 → 操作 → 新状态”序列；默认合并/保留，删除或替换只接受明确授权。
 - capability_needs、相关 Doctrine anchors 与 architecture references。
 - 真实代码、资产、工具和运行反馈。
+- 当前版本的 Asset Library manifest；仅将已批准且本地哈希可验证的资产用于交付。
 
 ## Expertise Compiler
 
@@ -39,6 +40,8 @@ Verifier 将判断转成证据。它们不是固定角色，不为凑数量调�
 
 Context Pack 中出现 Skill 名称只代表可发现。只有实际检查环境并加载后，才算进入
 Expertise Pack。Pack 默认只存在于当前工作上下文，不新增项目文件。
+
+发现新用户要求、研究资料、风险、能力缺口或素材来源问题时：写成带 provenance 的 Capability Graph proposal，回流 Architect；不得静默修改正式 Graph、Intent、acceptance 或把它扩成当前实现范围。不得把远程 URL、HTTP 200 或下载成功当作“用户实际看见资产”的证据。
 
 ## Quality Arena
 

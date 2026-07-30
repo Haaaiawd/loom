@@ -175,6 +175,12 @@ function validateLifecycle(data, id, lifecycle, errors) {
 function validateOptionalIntentFields(id, intent, errors) {
   const prefix = `intents["${id}"]`;
 
+  if ('proposal_refs' in intent) {
+    if (!Array.isArray(intent.proposal_refs) || intent.proposal_refs.some((ref) => typeof ref !== 'string' || !ref.trim())) {
+      errors.push(`${prefix}.proposal_refs 必须是非空 proposal ID 字符串数组`);
+    }
+  }
+
   if ('continuity_required' in intent && typeof intent.continuity_required !== 'boolean') {
     errors.push(`${prefix}.continuity_required 必须是布尔值；仅在本 Intent 会变更既有用户或系统状态且必须证明未误伤旧状态时设为 true`);
   }

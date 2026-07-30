@@ -3,7 +3,7 @@
 Intent Loop 将一个产品意图变成可验证结果，并在证据不足时回流到真正负责的层。
 
 ```text
-Doctrine → Intent → Contract
+Doctrine → Intent narrative → Capability Graph → Contract
 → Expertise Compiler → Quality Arena → Quality Proof
 → Close or Reflow
 ```
@@ -14,7 +14,7 @@ Doctrine → Intent → Contract
 |---|---|
 | 长期价值、卓越标准、反模式 | Weaver |
 | 产品目标、非目标、Intent narrative | Visionary |
-| 系统边界、Intent DAG、完成/质量契约 | Architect |
+| Capability Graph、系统边界、Intent DAG、完成/质量契约 | Architect |
 | Expertise Pack、候选、实现、自测 | Forge |
 | 独立判定、Quality Proof | Keeper |
 
@@ -43,6 +43,16 @@ Keeper 不修改契约；Forge 不以实现困难改写 Intent；Visionary 不�
 `acceptance` 是 Reliability Floor；`quality_contract` 是 Distinctive Ceiling。二者不能合并成一串模糊
 “高质量要求”，否则完成与卓越都无法诚实判定。
 
+### 2.1 Capability Graph Gate
+
+Capability Graph 在 Vision 与 Intent Map 之间展开：`outcome`、`concern`、`capability`、`risk`、`evidence` 节点及其关系。它不是执行 DAG；未知、调研和分叉留在 Graph，只有边界清楚、可独立验收的结果才进入 Intent。
+
+- 所有高影响节点必须路由为 `expand`、`brief`、`intent`、`defer`、`exclude` 或 `covered_by`，不能停留在 `open`。
+- 每个高影响 `outcome` 必须以 `validated_by` 连接到一个有验证计划的 `evidence` 节点。该计划至少声明：结果在何处被观察（`target`）、怎么复现（`procedure`）、什么算通过（`pass_criteria`）、留下什么证据（`artifact`）和由哪个 Intent 产出它。`artifact` 必须是当前版本内 `verifications/` 或 `08_ASSET_LIBRARY/files/` 下真实存在的普通文件；接口可用、文件存在于版本外或 URL 可访问都不能替代目标宿主、用户界面、外部接收方或交付物中的实际可观察结果。
+- 每个当前 Intent 必须由至少一个 Graph 节点的 `intent_refs` 回链；Graph 是这份关联的唯一真相源，避免双写漂移。
+- 需要专业方法、外部知识、研究或即将进入当前 Intent 的能力节点，才使用 `.loom/vN/07_CAPABILITY_BRIEFS/<node-id>.md` 写项目化 Brief。
+- `loom capability coverage` 是 Architect 完成图谱后的门；`loom capability compile <id>` 是 Forge 的只读编译入口。Forge 发现新的缺口必须回流 Architect，不能把猜测静默变成实现范围。
+
 ## 3. 状态与 revision
 
 状态：
@@ -68,7 +78,7 @@ completed → needs_review → in_progress
 3. Hard Invariants
 4. Success Contracts
 5. Project Judgment
-6. Expertise Inputs
+6. Expertise Inputs（含当前 Intent 编译得到的 Capability Graph 节点与 Brief）
 7. Working Facts
 8. Role Contract / Output / Reflow / Stop
 
@@ -83,6 +93,7 @@ loom intent update <id> --status in_progress
 ```
 
 只选择 pending、所有依赖 completed、未弃用的 Intent。一次 Forge 作用域只包含一个当前 Intent。
+进入选择前，Graph coverage 必须没有未路由的高影响节点、无计划能力节点和未映射 Intent。
 
 ## 6. Expertise Compiler
 
@@ -94,6 +105,20 @@ Forge 在实现前形成临时 Expertise Pack：
 - **Verifier**：如何观察、比较和复现。
 
 这四项是认知功能，不是必须创建四个角色或四份文档。
+
+Capability Graph 先提供当前 Intent 相关的项目事实、风险、约束和 Capability Brief；Expertise Compiler 再按 Brief 的获取计划加载真实技能、工具或资料。它不把整张图或历史会话当成当前任务上下文。
+
+### 2.2 Graph Change Proposal Gate
+
+新用户要求是 `outcome` 或 `constraint` 候选；论文、资料与运行发现是带 provenance 的 `capability`、`risk` 或 `evidence` 候选。它们先写入 `.loom/vN/07_GRAPH_PROPOSALS/CGP-*.json`，必须记录来源、观察时间、具体证据、为什么现在需要处理。Proposal 不是正式 Graph，Forge/Keeper 不得借它静默扩大当前 Intent。
+
+Architect 必须把每个 proposal 判定为：已覆盖、Graph 更新、Intent 变更、acceptance 变更、Minor、Major 或拒绝；关闭时必须提交与决策相符的结构化 resolution，CLI 会从决策时磁盘基线验证 Graph / Intent / acceptance / 决策记录的真实变化或现有有效覆盖，不能以任意 implementation_ref 文本关闭。`constraint` 若决定为 Graph 更新，必须进入正式 Graph 的 `constraints` 字段并回链受影响节点。`covered_by` 必须显式指向另一个已覆盖、非 `covered_by` 路由的节点，并同时保留同目标的关系。`loom guide` 与 `loom doctor` 对未闭合 proposal 回流 Architect。
+
+### 2.3 Asset Library Protocol
+
+若项目使用图片、音频、视频、模型或其他交付素材，`.loom/vN/08_ASSET_LIBRARY/manifest.json` 与同目录 `files/` 是版本化的一等真相源。每条资产必须有内容派生稳定 ID、kind、中文/其他标签、来源/作者/许可、SHA-256、库内相对路径、status 与 approval。`loom asset import` 只接受明确的本地普通文件、复制后校验哈希，并拒绝路径逃逸、重复字节和未批准/缺少许可元数据。
+
+素材字节能下载不等于素材可呈现；远程 URL 不是呈现证据。资产若用于 Capability Graph 的 evidence，资产 `evidence_refs` 与 evidence 节点 `asset_refs` 必须双向一致，Keeper 仍需在目标宿主验证实际呈现。
 
 技能、工具和资料必须经历：
 
@@ -210,6 +235,7 @@ Codex 的 goal/status 用于驱动循环与恢复工作，不是替代上述证�
 | 长期价值或质量观缺失 | Weaver |
 | 产品目标、非目标或 narrative 错误 | Visionary |
 | 系统边界、依赖、契约不可成立 | Architect |
+| 图谱分支遗漏、能力缺口或高影响节点未路由 | Architect 更新 Capability Graph |
 | 专业能力、候选或实现不足 | Forge |
 | 证据不足、验证偏差或需人类感知 | Keeper |
 

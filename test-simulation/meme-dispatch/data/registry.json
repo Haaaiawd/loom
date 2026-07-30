@@ -1,0 +1,32 @@
+{
+  "schema": "reaction-media-registry/v1",
+  "purpose": "Small, attributable reaction-media index. Remote sources are explicit providers; local packs are the offline fallback and may be extended only through a reviewed manifest.",
+  "assets": [
+    {
+      "id": "openmoji-party-popper",
+      "name": "Party Popper",
+      "provider": "openmoji",
+      "kind": "remote",
+      "source_url": "https://raw.githubusercontent.com/hfg-gmuend/openmoji/master/color/72x72/1F389.png",
+      "licence": {
+        "name": "CC BY-SA 4.0",
+        "url": "https://creativecommons.org/licenses/by-sa/4.0/",
+        "attribution": "OpenMoji — the open-source emoji and icon project"
+      },
+      "tags": ["celebrate", "launch", "success", "party", "庆祝", "上线", "成功", "开香槟", "好耶"]
+    },
+    {
+      "id": "vela-celebrate-robot",
+      "name": "Vela Celebration Robot",
+      "provider": "local_pack",
+      "kind": "local",
+      "file": "vela/celebrate-robot.png",
+      "licence": {
+        "name": "Project-owned asset",
+        "url": "local-pack",
+        "attribution": "Original asset generated for Meme Dispatch"
+      },
+      "tags": ["robot", "celebrate", "success", "庆祝", "成功"]
+    }
+  ]
+}

@@ -2,7 +2,7 @@
 // loom — LOOM 框架的 CLI 传感器层
 // Agent 通过这个 CLI 访问 Intent Map / 哲学 / 验证记录，不直接读文件。
 
-import { argv, cwd, exit } from 'node:process';
+import { argv, cwd, env, exit } from 'node:process';
 import { resolve, join, dirname } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +24,9 @@ import { generatePreviewPrompt, getPreviewStatus } from '../src/preview.js';
 import { getPatch, listPatches, recordPatch, validatePatches } from '../src/patch.js';
 import { addIntentDraft, finalizeIntentDraft, getIntentDraft, reviseIntentDraft } from '../src/intent-draft.js';
 import { resolveIntentRef } from '../src/shared/intent-ref.js';
+import { compileCapabilityInputs, getCapabilityCoverage, getCapabilityFrontier, getCapabilityGraphProjection, getCapabilityNode } from '../src/capability-graph.js';
+import { getAsset, importAsset, listAssets, recoverAssetImportTransaction, searchAssets, validateAssetLibrary } from '../src/asset-library.js';
+import { closeCapabilityProposal, decideCapabilityProposal, getCapabilityProposal, listCapabilityProposals, submitCapabilityProposal } from '../src/capability-proposals.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // findLoomRoot / findVersionDir / readCurrentPointer 已提取到 shared/paths.js
@@ -64,6 +67,99 @@ try {
       const pkgPath = resolve(__dirname, '..', '..', 'package.json');
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
       console.log(`loom ${pkg.version}`);
+      break;
+    }
+
+    case 'capability': {
+      const versionDir = findVersionDir();
+      switch (sub) {
+        case 'graph':
+          output(getCapabilityGraphProjection(versionDir));
+          break;
+        case 'frontier':
+          output(getCapabilityFrontier(versionDir));
+          break;
+        case 'get': {
+          const id = rest[0];
+          if (!id) die('用法: loom capability get <node-id>');
+          output(getCapabilityNode(versionDir, id));
+          break;
+        }
+        case 'coverage':
+          output(getCapabilityCoverage(versionDir));
+          break;
+        case 'compile': {
+          const intentId = rest[0];
+          if (!intentId) die('用法: loom capability compile <intent-id>');
+          output(compileCapabilityInputs(versionDir, intentId));
+          break;
+        }
+        case 'proposal': {
+          const action = rest[0];
+          if (action === 'list') output(listCapabilityProposals(versionDir));
+          else if (action === 'get') {
+            if (!rest[1]) die('用法: loom capability proposal get <CGP-ID>');
+            output(getCapabilityProposal(versionDir, rest[1]));
+          } else if (action === 'submit') {
+            const fileIndex = argv.indexOf('--json-file');
+            const path = fileIndex === -1 ? null : argv[fileIndex + 1];
+            if (!path) die('用法: loom capability proposal submit --json-file <proposal.json>');
+            output(submitCapabilityProposal(versionDir, JSON.parse(readFileSync(path, 'utf-8'))));
+          } else if (action === 'decide') {
+            const rationaleIndex = argv.indexOf('--rationale');
+            if (!rest[1] || !rest[2] || rationaleIndex === -1 || !argv[rationaleIndex + 1]) die('用法: loom capability proposal decide <CGP-ID> <decision> --rationale <text>');
+            output(decideCapabilityProposal(versionDir, rest[1], rest[2], argv[rationaleIndex + 1]));
+          } else if (action === 'close') {
+            const resolutionIndex = argv.indexOf('--resolution-file');
+            if (!rest[1] || resolutionIndex === -1 || !argv[resolutionIndex + 1]) die('用法: loom capability proposal close <CGP-ID> --resolution-file <resolution.json>');
+            output(closeCapabilityProposal(versionDir, rest[1], JSON.parse(readFileSync(argv[resolutionIndex + 1], 'utf-8'))));
+          } else die('用法: loom capability proposal [list|get|submit|decide|close]');
+          break;
+        }
+        default:
+          die(`未知 capability 子命令: ${sub}\n用法: loom capability [graph|frontier|get|coverage|compile|proposal]`);
+      }
+      break;
+    }
+
+    case 'asset': {
+      const versionDir = findVersionDir();
+      switch (sub) {
+        case 'import': {
+          const filePath = rest[0];
+          const option = (name) => {
+            const index = argv.indexOf(name);
+            return index === -1 ? undefined : argv[index + 1];
+          };
+          if (!filePath || filePath.startsWith('--')) die('用法: loom asset import <本地文件> --tags <标签,...> --source <来源> --author <作者> --license <许可> --approval approved [--kind image] [--evidence <节点,...>]');
+          output(importAsset(versionDir, filePath, {
+            tags: option('--tags'), source: option('--source'), author: option('--author'), license: option('--license'),
+            approval: option('--approval'), kind: option('--kind'), evidenceRefs: option('--evidence'),
+            failureInjection: env.NODE_ENV === 'test' && option('--test-fail-after') === 'manifest' ? 'after_manifest'
+              : env.NODE_ENV === 'test' && option('--test-fail-after') === 'crash-manifest' ? 'crash_after_manifest' : undefined,
+          }));
+          break;
+        }
+        case 'list': output(listAssets(versionDir)); break;
+        case 'search': {
+          const query = rest[0];
+          if (!query) die('用法: loom asset search <查询>');
+          output(searchAssets(versionDir, query));
+          break;
+        }
+        case 'get': {
+          const id = rest[0];
+          if (!id) die('用法: loom asset get <asset-id>');
+          output(getAsset(versionDir, id));
+          break;
+        }
+        case 'validate': {
+          const recovery = recoverAssetImportTransaction(versionDir);
+          output({ valid: true, assets: Object.keys(validateAssetLibrary(versionDir).assets).length, recovered_transaction: recovery.recovered ? recovery : null });
+          break;
+        }
+        default: die(`未知 asset 子命令: ${sub}\n用法: loom asset [import|list|search|get|validate]`);
+      }
       break;
     }
 
@@ -796,6 +892,12 @@ To Human:
   loom patch list               列出当前版本的 Patch
   loom patch get <id>           返回指定 Patch
   loom patch validate           校验 Patch ledger 和 Markdown 投影
+
+  loom capability graph         输出 Capability Graph 的 Mermaid 投影与摘要
+  loom capability frontier      列出尚未路由的高影响节点
+  loom capability get <id>      返回节点、关系、Brief 与 Intent 回链
+  loom capability coverage      检查图谱覆盖、Brief 和 Intent 回链
+  loom capability compile <id>  只读显示会进入该 Intent 的能力输入
 
   loom intent next              返回下一个可执行 Intent
   loom intent add --title <text> [--depends-on <ids>]  创建新增 draft

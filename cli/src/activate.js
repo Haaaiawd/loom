@@ -8,6 +8,7 @@ import { getIntentDraft } from './intent-draft.js';
 import { getPhilosophy } from './philosophy.js';
 import { getVerificationContract } from './verify.js';
 import { extractMdSection } from './shared/md-utils.js';
+import { compileCapabilityInputs } from './capability-graph.js';
 
 const VALID_ROLES = ['weaver', 'visionary', 'architect', 'forge', 'keeper'];
 
@@ -130,6 +131,12 @@ function compileObjective(role, versionDir, intentId) {
   }
 
   const intent = getIntent(versionDir, intentId);
+  if (['forge', 'keeper'].includes(role)) {
+    const unfinishedDependencies = intent.depends_on.filter((dependencyId) => getIntent(versionDir, dependencyId).status !== 'completed');
+    if (unfinishedDependencies.length) {
+      throw new Error(`Intent ${intentId} 的依赖尚未闭合: ${unfinishedDependencies.join(', ')}。不得通过 activate --intent 绕过执行顺序；先运行 loom intent next 或完成依赖 Intent。`);
+    }
+  }
   const narrative = getNarrative(versionDir, intentId);
   const objectiveView = {
     id: intent.id,
@@ -241,7 +248,7 @@ function compileProjectJudgment(role, versionDir, objective) {
   return blocks.join('\n\n');
 }
 
-function compileExpertiseInputs(role, objective) {
+function compileExpertiseInputs(role, versionDir, objective) {
   const subject = objective.intent || objective.draft;
   if (!subject || !['architect', 'forge', 'keeper'].includes(role)) {
     return '当前阶段不编译任务级 Expertise Pack。';
@@ -252,6 +259,23 @@ function compileExpertiseInputs(role, objective) {
     `- creative_scope: ${subject.creative_scope || '未声明；遵循最小完整干预'}`,
     '- Skill、工具和资产名称只代表可发现入口；实际检查并加载后才进入 Expertise Pack。',
   ];
+  if (versionDir && objective.intent) {
+    const compiled = compileCapabilityInputs(versionDir, objective.intent.id);
+    if (!compiled.available) {
+      lines.push(`- Capability Graph: ${compiled.warnings.join(' ')}`);
+    } else if (compiled.nodes.length === 0) {
+      lines.push('- Capability Graph: 当前 Intent 没有回链节点；不得凭任务标题猜测能力，回流 Architect 补图谱或明确兼容原因。');
+    } else {
+      lines.push('- Capability Graph: 以下节点是本 Intent 的能力与风险输入：');
+      for (const node of compiled.nodes) {
+        lines.push(`  - ${node.id} [${node.kind}/${node.impact}] ${node.title}${node.question ? ` — ${node.question}` : ''}`);
+      }
+      for (const brief of compiled.briefs) {
+        lines.push(`\n### Capability Brief: ${brief.node_id}\n\n${brief.content.trim()}`);
+      }
+      for (const warning of compiled.warnings) lines.push(`- Capability Graph warning: ${warning}`);
+    }
+  }
   if (role === 'keeper') {
     lines.push('- 不继承 Forge Expertise Pack；按契约独立准备验证能力。');
   }
@@ -263,6 +287,7 @@ function compileWorkingFacts(versionDir, objective) {
   const subject = objective.intent || objective.draft;
   const refs = [
     '- architecture: `.loom/.../02_ARCHITECTURE.md`（只读取与当前决定相关部分）',
+    '- capability_graph: 从 `07_CAPABILITY_GRAPH.json` 查询与当前 Intent 回链的能力、风险与 Brief；不能用会话记忆补全未路由分支。',
     '- artifacts: 从真实工作区检查，不从会话记忆猜测。',
   ];
   const systemId = subject?._optional?.system_id || subject?.system_id;
@@ -294,7 +319,7 @@ export function activateRole(role, versionDir, intentId = null) {
     section('3. Hard Invariants', compileInvariants(role, versionDir)),
     section('4. Success Contracts', compileContracts(role, versionDir, objective)),
     section('5. Project Judgment', compileProjectJudgment(role, versionDir, objective)),
-    section('6. Expertise Inputs', compileExpertiseInputs(role, objective)),
+    section('6. Expertise Inputs', compileExpertiseInputs(role, versionDir, objective)),
     section('7. Working Facts', compileWorkingFacts(versionDir, objective)),
     section('8. Role Contract / Output / Reflow / Stop', readRole(role)),
   ];

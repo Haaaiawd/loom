@@ -3,7 +3,7 @@
 LOOM 用一条完整链路把长期判断、当前意图、专业能力、创造性探索和独立证明连起来：
 
 ```text
-Doctrine → Intent → Contract
+Doctrine → Intent narrative → Capability Graph → Contract
 → Expertise Compiler → Quality Arena → Quality Proof
 → Reflow
 ```
@@ -31,6 +31,12 @@ Weaver 从项目事实和决策相关证据中织造 Doctrine；它不预写产�
 
 Architect 是 Intent DAG 与两类契约的唯一负责人。
 
+## Capability Graph
+
+Capability Graph 位于 Vision 和 Intent Map 之间。它将项目初衷展开成 `outcome`、`concern`、`capability`、`risk`、`evidence` 五类节点，描述哪些问题必须被理解、设计、实现或证明。
+
+它不是执行 DAG，也不替代 Intent Map：Graph 保留未知、研究与分叉；Intent 只保留边界明确、能独立验收的承诺。高影响节点必须有明确路由（继续展开、Brief、Intent、延后或排除），每个 Intent 必须回链至少一个图谱节点。只有需要专业方法、调研或即将进入当前 Intent 的节点才创建短小的项目化 Capability Brief。
+
 ## System Boundary
 
 LOOM 不假装能够清除宿主 Agent 的既有记忆。`loom activate` 生成有序 Context Pack，
@@ -38,7 +44,7 @@ LOOM 不假装能够清除宿主 Agent 的既有记忆。`loom activate` 生成�
 
 ## Expertise Compiler
 
-Forge 针对当前 Intent 临时组装一个 Expertise Pack，回答：
+Forge 针对当前 Intent 临时组装一个 Expertise Pack。先由 Capability Graph 编译关联节点和 Capability Brief，再回答：
 
 1. 这是什么专业问题。
 2. 优秀作品的判断标准是什么。
@@ -81,6 +87,7 @@ Keeper 在独立上下文中验证：
 - 长期价值判断 → Weaver
 - 产品目标与 narrative → Visionary
 - 系统边界、Intent、契约 → Architect
+- 图谱遗漏、未路由高影响节点或新的能力缺口 → Architect 更新 Capability Graph
 - 专业能力与实现 → Forge
 - 证据不足或判定偏离 → Keeper
 

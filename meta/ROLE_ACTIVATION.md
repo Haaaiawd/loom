@@ -3,7 +3,7 @@
 角色是决策权边界，不是人格表演。LOOM 的执行链是：
 
 ```text
-Doctrine → Intent → Contract → Expertise Compiler
+Doctrine → Intent narrative → Capability Graph → Contract → Expertise Compiler
 → Quality Arena → Quality Proof → Reflow
 ```
 
@@ -18,11 +18,11 @@ Doctrine → Intent → Contract → Expertise Compiler
 3. Hard Invariants：BASELINE 摘要与命中的项目底线。
 4. Success Contracts：acceptance、按需的 continuity_required / quality_contract、verification_method；其中状态守恒规则仍只写在 acceptance。
 5. Project Judgment：相关 Doctrine anchors 与决策记录。
-6. Expertise Inputs：capability_needs、可发现的 Skill / 工具 / 资产入口和获取边界。
+6. Expertise Inputs：当前 Intent 编译得到的 Capability Graph 节点与 Brief、`capability_needs`、可发现的 Skill / 工具 / 资产入口和获取边界。
 7. Working Facts：相关架构、代码、资产、基线和产物路径。
 8. Output / Reflow / Stop：交付、证据、回流与停止条件。
 
-Context Pack 编译器只选择事实和能力入口。Expertise Compiler 在角色激活后检查真实环境，
+Context Pack 编译器只选择事实和能力入口。Capability Graph 保留项目问题面、能力缺口、风险、证据与 Intent 回链；它不是任务列表，只有当前 Intent 关联的节点和 Brief 会进入 Context Pack。Expertise Compiler 在角色激活后检查真实环境，
 再形成 Expertise Pack；看见 Skill 名称不等于已经加载能力。
 
 Context Pack 不会清除 Agent 既有记忆。发生冲突时，以 system、developer 和用户指令
@@ -42,8 +42,8 @@ Context Pack 不会清除 Agent 既有记忆。发生冲突时，以 system、de
 
 ### Architect
 
-- 拥有系统边界、Intent DAG、公共契约、质量契约和验证入口。
-- 声明 capability_needs 与 creative_scope。
+- 拥有 Capability Graph、系统边界、Intent DAG、公共契约、质量契约和验证入口。
+- 先路由高影响图谱节点并保证每个 Intent 回链，再声明 capability_needs 与 creative_scope。
 - 不实现，也不给出通过结论。
 
 ### Forge
@@ -79,6 +79,7 @@ Reliability Floor，质量契约是 Distinctive Ceiling。没有候选胜过基�
 
 - 实现错误、遗漏或局部质量不足 → Forge。
 - acceptance、verification_method、依赖或架构错误 → Architect。
+- 项目问题面遗漏、能力缺口或图谱回链缺失 → Architect 更新 Capability Graph。
 - 目标、非目标或 narrative 错误 → Visionary。
 - 长期项目原则持续失效 → Weaver / 新版本。
 - 缺少外部授权或主观裁决 → 人类。

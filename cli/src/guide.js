@@ -6,6 +6,8 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { readCurrentPointer } from './version.js';
 import { loadIntentMap } from './intent-map.js';
+import { getCapabilityCoverage } from './capability-graph.js';
+import { listCapabilityProposals } from './capability-proposals.js';
 import { isAutoOn, getAutoMode, writeHeartbeat, needsHumanReview } from './auto.js';
 import { doctor } from './diagnostics.js';
 
@@ -74,6 +76,21 @@ export function guideProject(projectDir, options = {}) {
       inputs: ['roles/architect.md', `.loom/${current}/01_VISION.md`],
       outputs: [`.loom/${current}/02_ARCHITECTURE.md`, `.loom/${current}/04_INTENT_MAP.json`],
       verify_command: 'loom doctor',
+    },
+    need_capability_graph: {
+      inputs: ['roles/architect.md', `.loom/${current}/01_VISION.md`],
+      outputs: [`.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/07_CAPABILITY_BRIEFS/`],
+      verify_command: 'loom capability coverage',
+    },
+    capability_graph_incomplete: {
+      inputs: ['roles/architect.md', `.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/04_INTENT_MAP.json`],
+      outputs: [`.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/07_CAPABILITY_BRIEFS/`],
+      verify_command: 'loom capability coverage',
+    },
+    capability_graph_proposals_pending: {
+      inputs: ['roles/architect.md', `.loom/${current}/07_GRAPH_PROPOSALS/`, `.loom/${current}/07_CAPABILITY_GRAPH.json`],
+      outputs: [`.loom/${current}/07_GRAPH_PROPOSALS/`, `.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/04_INTENT_MAP.json`],
+      verify_command: 'loom capability proposal list',
     },
     intent_map_broken: {
       inputs: [`.loom/${current}/04_INTENT_MAP.json`],
@@ -171,6 +188,7 @@ function diagnoseStage(cwd, loomRoot, auto) {
   const philosophyDir = join(versionDir, '00_PHILOSOPHY');
   const visionPath = join(versionDir, '01_VISION.md');
   const intentMapPath = join(versionDir, '04_INTENT_MAP.json');
+  const capabilityGraphPath = join(versionDir, '07_CAPABILITY_GRAPH.json');
 
   // 状态 1: 哲学未织造
   const philosophyFile = join(philosophyDir, 'PRODUCT_PHILOSOPHY.md');
@@ -199,16 +217,77 @@ function diagnoseStage(cwd, loomRoot, auto) {
     };
   }
 
-  // 状态 3: 愿景已定义，Intent Map 未设计
-  if (isTemplate(intentMapPath)) {
+  // 状态 3: 愿景已定义，先展开项目问题面与能力缺口，再承诺 Intent。
+  if (existsSync(capabilityGraphPath) && isTemplate(capabilityGraphPath)) {
     return {
-      stage: 'need_architecture',
+      stage: 'need_capability_graph',
       stage_num: 3,
       details: { version: current },
       auto,
-      next_action: '设计系统架构 + Intent Map',
+      next_action: '展开 Capability Graph，路由高影响问题与能力缺口',
       next_command: 'loom activate architect',
-      message: `当前版本 ${current}：愿景已定义，Intent Map 还是模板，需要 Architect 设计。`,
+      message: `当前版本 ${current}：愿景已定义，但 Capability Graph 还是模板。Architect 必须先判断哪些体验、系统、资产、风险与能力适用，再创建正式 Intent。`,
+    };
+  }
+
+  // 图谱一旦存在，就不能把不完整路由悄悄跨过去。旧项目缺少该文件仍保留兼容路径。
+  if (existsSync(capabilityGraphPath)) {
+    try {
+      const pendingProposals = listCapabilityProposals(versionDir, { unresolvedOnly: true });
+      if (pendingProposals.length) {
+        return {
+          stage: 'capability_graph_proposals_pending',
+          stage_num: 3,
+          details: { version: current, proposals: pendingProposals.map((proposal) => proposal.id) },
+          auto,
+          next_action: '审计新信息对 Capability Graph、Intent 和契约的影响',
+          next_command: 'loom capability proposal list',
+          message: `当前版本 ${current} 有 ${pendingProposals.length} 个未闭合的 Capability Graph proposal。它们是新要求、研究或实现发现，不得由 Forge 静默变成当前 Intent 范围。`,
+        };
+      }
+    } catch (error) {
+      return {
+        stage: 'capability_graph_proposals_pending', stage_num: 3, details: { version: current, error: error.message }, auto,
+        next_action: '修复 Capability Graph proposal', next_command: 'loom capability proposal list',
+        message: `Capability Graph proposal 无法审计: ${error.message}`,
+      };
+    }
+    try {
+      const coverage = getCapabilityCoverage(versionDir);
+      if (!coverage.summary.ready) {
+        return {
+          stage: 'capability_graph_incomplete',
+          stage_num: 3.1,
+          details: { version: current, coverage: coverage.summary },
+          auto,
+          next_action: '补齐 Capability Graph 的路由、可观察验证入口与 Intent 回链',
+          next_command: 'loom capability coverage',
+          message: `当前版本 ${current}：Capability Graph 尚未闭合（高影响前沿 ${coverage.summary.high_unrouted}、路由缺口 ${coverage.summary.routing_gaps}、不可观察 outcome ${coverage.summary.high_outcomes_without_observable_evidence}、未映射 Intent ${coverage.summary.unmapped_intents}）。先由 Architect 补图谱，再继续设计 Intent。`,
+        };
+      }
+    } catch (error) {
+      return {
+        stage: 'capability_graph_incomplete',
+        stage_num: 3.1,
+        details: { version: current, error: error.message },
+        auto,
+        next_action: '修复 Capability Graph',
+        next_command: 'loom capability coverage',
+        message: `Capability Graph 无法通过校验: ${error.message}`,
+      };
+    }
+  }
+
+  // 状态 3.5: 图谱已建立，Intent Map 未设计。
+  if (isTemplate(intentMapPath)) {
+    return {
+      stage: 'need_architecture',
+      stage_num: 3.5,
+      details: { version: current },
+      auto,
+      next_action: '从 Capability Graph 编译系统架构 + Intent Map',
+      next_command: 'loom activate architect',
+      message: `当前版本 ${current}：Capability Graph 已建立，Intent Map 还是模板。Architect 需要将已路由的问题面编译为系统架构与可闭合 Intent。`,
     };
   }
 

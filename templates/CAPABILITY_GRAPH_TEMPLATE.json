@@ -1,0 +1,11 @@
+{
+  "_meta": {
+    "_description": "Capability Graph 起点：从项目初衷展开问题面、能力缺口、风险与证据，再编译为 Intent。不是待办列表。",
+    "_version": "1.0",
+    "_loom_version": "v1",
+    "_generated_by": "architect",
+    "_template": true
+  },
+  "nodes": {},
+  "constraints": []
+}
