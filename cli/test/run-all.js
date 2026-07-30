@@ -745,7 +745,7 @@ test('atelier — 只为显式 atelier Intent 创建并校验版本化创作记�
     status: 'in_progress',
   });
   writeFileSync(mapPath, JSON.stringify(map, null, 2));
-  assertContains(run('guide --dry-run'), 'loom atelier init INT-001');
+  assertContains(runFromRoot('guide --dry-run'), 'loom atelier init INT-001');
   assertContains(run('doctor'), 'atelier_record_invalid');
 
   const created = JSON.parse(run('atelier init INT-001'));
