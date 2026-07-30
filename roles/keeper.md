@@ -33,6 +33,8 @@ Keeper 默认运行在新的 Agent thread 中。只接收：
 - BASELINE、acceptance 与按需的 quality_contract。
 - verification_method、当前产物与可复现入口。
 - 当前 revision 的验证历史。
+- `quality_strategy=atelier` 时，读取当前 revision 的 Atelier Record 及其产物引用；不接收
+  Forge 为结果辩护的隐藏推理。
 
 ## Verification
 
@@ -62,6 +64,14 @@ Quality Proof 才必须回答：
 3. 最终选择依据什么盲评、指标或人工判断。
 4. 完成契约为何没有退化。
 5. 胜出方案仍付出什么主要代价。
+
+`quality_strategy=atelier` 时，Quality Proof 还必须从作品与可复现证据回答：Authorial
+Thesis 是否可感知，Signature Bet 是否真的实现，候选是否机制不同，选择是否胜过基线，
+以及新奇是否破坏完成契约。Atelier Record 只能提供证据入口，不能自行证明通过。
+
+Keeper 检查 `intent_revision`、`stance_revision`、corrections 和候选绑定；Stance 改变后
+未经重新资格检查的旧候选不能支持选择。Author 提交的 Graph proposal 若未由 Architect
+闭合，也不能被 Forge 的创作判断当作正式项目事实。
 
 UI 可使用前后截图和多端结果，CLI 使用 transcript，API 使用样例与指标，文案使用匿名
 比较。未经真实任务校准的 LLM Judge 只能提供分维度意见；结论顺序敏感时交换顺序复评

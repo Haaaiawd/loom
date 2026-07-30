@@ -18,7 +18,7 @@
 ## Inputs
 
 - 当前 Intent、revision 与 narrative。
-- acceptance、按需的 quality_contract 与 creative_scope。
+- acceptance、按需的 quality_contract、creative_scope 与 `quality_strategy`；缺失等价于 `adaptive`。
 - 若 `continuity_required` 为 true：先保存可观察旧状态，执行后跑“旧状态 → 操作 → 新状态”序列；默认合并/保留，删除或替换只接受明确授权。
 - capability_needs、相关 Doctrine anchors 与 architecture references。
 - 真实代码、资产、工具和运行反馈。
@@ -35,13 +35,24 @@
 5. 哪个用户可感知或可测量的质量主张值得探索。
 6. 如何从结果上验证这些判断。
 
-按需使用四种认知职能：Domain 保证领域正确，Taste 建立标杆，Critic 暴露伪提升，
-Verifier 将判断转成证据。它们不是固定角色，不为凑数量调用较弱或不匹配的来源。
+按需使用五种认知职能：Domain 保证领域正确，Taste 建立标杆，Author 提出可反驳的创作
+命题并做出选择，Critic 暴露伪提升，Verifier 将判断转成证据。它们不是固定角色，不为凑
+数量调用较弱或不匹配的来源。
+
+当 `quality_strategy=atelier` 时，在探索前运行 Identity Compiler：把 Doctrine、Intent、
+Capability Graph / Brief、质量契约、创作空间、真实参考机制和媒介约束编译成 Authorial
+Stance。Stance 至少包含 creative thesis、gaze、tension、signature bet、refusals、
+medium grammar、surprise budget、anti-fixation 与 verification lens。人格故事、设计师
+名号和风格形容词不能替代这些决策。
 
 Context Pack 中出现 Skill 名称只代表可发现。只有实际检查环境并加载后，才算进入
 Expertise Pack。Pack 默认只存在于当前工作上下文，不新增项目文件。
 
-发现新用户要求、研究资料、风险、能力缺口或素材来源问题时：写成带 provenance 的 Capability Graph proposal，回流 Architect；不得静默修改正式 Graph、Intent、acceptance 或把它扩成当前实现范围。不得把远程 URL、HTTP 200 或下载成功当作“用户实际看见资产”的证据。
+Author 的观察先分流：当前命题、机制、媒介语法或候选选择失效，写入 Atelier Record 的
+`corrections[]` 并递增 `stance_revision`；新的用户结果、约束、研究证据、风险、能力缺口
+或素材来源问题，才写成带 provenance 的 Capability Graph proposal，回流 Architect。
+不得静默修改正式 Graph、Intent、acceptance 或把它扩成当前实现范围，也不得裁决自己的
+proposal。不得把远程 URL、HTTP 200 或下载成功当作“用户实际看见资产”的证据。
 
 ## Quality Arena
 
@@ -57,6 +68,10 @@ Orient → Compile Expertise → Explore → Compare → Realize
 - 质量契约是 Distinctive Ceiling；只在站稳地板后比较用户感知与专业水准。
 - 候选只需说明质量主张、实现机制、主要代价和最小验证，不另建文档。
 - 没有候选胜过基线时保留原版、收窄假设或回流契约，不强行制造变化。
+- `quality_strategy=atelier` 时使用 `.loom/vN/09_ATELIER/<intent-id>.json`：冻结基线、
+  定义差异轴、独立形成媒介原型、先过 Reliability Floor，再匿名比较或保留基线。
+- 每个候选绑定产生它的 `stance_revision`；Stance 改变后，旧候选必须重新资格检查或归档，
+  不能静默与新候选比较。
 
 观察必须来自测试、运行结果、截图、指标或其他外部反馈。没有新证据时，不进行仪式化
 自我反思。

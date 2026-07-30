@@ -290,6 +290,7 @@ test('intent validate — 质量契约与专业能力字段按最小结构校验
     map.intents['INT-002'].continuity_required = true;
     map.intents['INT-002'].capability_needs = ['交互设计', '可用性测量'];
     map.intents['INT-002'].creative_scope = '允许调整信息层级和反馈机制，不改变项目创建业务规则。';
+    map.intents['INT-002'].quality_strategy = 'atelier';
     writeFileSync(mapPath, JSON.stringify(map, null, 2));
     assertContains(run('intent validate'), '校验通过');
 
@@ -299,8 +300,13 @@ test('intent validate — 质量契约与专业能力字段按最小结构校验
     writeFileSync(mapPath, JSON.stringify(map, null, 2));
     const out = run('intent validate', true);
     assertContains(out, 'quality_contract');
+    assertContains(out, 'quality_strategy=atelier');
     assertContains(out, 'continuity_required');
     assertContains(out, '重复专业领域');
+
+    map.intents['INT-002'].quality_strategy = 'persona';
+    writeFileSync(mapPath, JSON.stringify(map, null, 2));
+    assertContains(run('intent validate', true), '合法: adaptive|atelier');
   } finally {
     writeFileSync(mapPath, original);
   }
@@ -675,6 +681,8 @@ test('activate --intent — draft 与官方角色都只加载对应作用域', (
   assertContains(officialPrompt, '身份自治的入口');
   assertContains(officialPrompt, '注册并登录');
   assertContains(officialPrompt, '掌控自己的数据');
+  assertContains(officialPrompt, 'quality_strategy: adaptive');
+  assert(!officialPrompt.includes('Authorship Method'), 'adaptive Intent 不应注入 Atelier 方法');
   assert(!officialPrompt.includes('协作是产品的核心'), '官方 Intent 只应加载精确 Doctrine anchor');
   assertContains(run('activate forge --intent INT-004', true), 'Intent 不存在');
 });
@@ -691,6 +699,7 @@ test('activate forge — Context Pack 顺序稳定并注入质量与专业能力
   const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
   Object.assign(map.intents['INT-001'], {
     quality_contract: '相对当前基线，首次登录理解时间至少降低 20%，安全行为与错误率不回退。',
+    quality_strategy: 'atelier',
     capability_needs: ['身份安全', '交互反馈设计'],
     creative_scope: '允许探索信息层级和反馈机制，不改变认证业务语义与安全边界。',
   });
@@ -713,8 +722,143 @@ test('activate forge — Context Pack 顺序稳定并注入质量与专业能力
   assertContains(out, '身份安全');
   assertContains(out, '交互反馈设计');
   assertContains(out, '首次登录理解时间');
+  assertContains(out, 'quality_strategy: atelier');
+  assertContains(out, 'Authorship Method');
+  assertContains(out, 'Authorial Stance');
+  assertContains(out, '09_ATELIER/INT-001.json');
+  assertContains(out, 'provenance-backed Capability Graph proposal');
   assertContains(out, '只代表可发现入口');
   assert(!out.includes('协作者邀请'), '当前 Intent 不应注入无关 Intent');
+  setup();
+});
+
+test('atelier — 只为显式 atelier Intent 创建并校验版本化创作记录', () => {
+  setup();
+  assertContains(run('atelier init INT-001', true), '未启用 quality_strategy=atelier');
+
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  Object.assign(map.intents['INT-001'], {
+    quality_contract: '相对当前基线，用户对核心命题的复述准确率提高，且登录任务成功率不回退。',
+    quality_strategy: 'atelier',
+    creative_scope: '允许改变登录入口的构图、节奏和反馈；不得改变认证语义与安全边界。',
+    status: 'in_progress',
+  });
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  assertContains(run('guide --dry-run'), 'loom atelier init INT-001');
+  assertContains(run('doctor'), 'atelier_record_invalid');
+
+  const created = JSON.parse(run('atelier init INT-001'));
+  assert(created.status === 'draft' && created.stance_revision === 1, 'atelier init 必须创建 revision=1 的 draft');
+  assertContains(run('atelier validate INT-001'), '"valid": true');
+  assertContains(run('atelier init INT-001', true), '不会覆盖');
+
+  const atelierDir = join(LOOM_DIR, '09_ATELIER');
+  const filesDir = join(atelierDir, 'files', 'INT-001');
+  const recordPath = join(atelierDir, 'INT-001.json');
+  const blocked = JSON.parse(readFileSync(recordPath, 'utf-8'));
+  blocked.status = 'blocked';
+  writeFileSync(recordPath, JSON.stringify(blocked, null, 2));
+  assertContains(run('atelier validate INT-001', true), 'blocker 对象');
+  blocked.blocker = {
+    reason: '缺少目标宿主的可访问测试环境。',
+    recovery_condition: '获得测试环境权限并能保存真实基线。',
+  };
+  writeFileSync(recordPath, JSON.stringify(blocked, null, 2));
+  assertContains(run('atelier validate INT-001'), '"status": "blocked"');
+
+  for (const file of ['baseline.png', 'candidate-a.png', 'candidate-b.png', 'comparison.md']) {
+    writeFileSync(join(filesDir, file), file.endsWith('.png')
+      ? Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      : '# comparison\n\n匿名顺序交换比较记录。\n');
+  }
+  const record = JSON.parse(readFileSync(recordPath, 'utf-8'));
+  Object.assign(record, {
+    status: 'selected',
+    blocker: null,
+    stance: {
+      creative_thesis: '让身份确认像一次清晰的交接，而不是填写表单。',
+      gaze: ['先确认控制权，再输入凭证'],
+      tension: '明确的安全感与轻盈的完成节奏同时成立',
+      signature_bet: {
+        claim: '用连续确认过程替代等权字段堆叠',
+        mechanism: '分阶段显露信息并持续反馈当前控制状态',
+        cost: '首次流程增加一个明确确认动作',
+      },
+      refusals: ['默认居中卡片表单'],
+      reference_mechanisms: [],
+      medium_grammar: { composition: '连续单路径', motion: '只反馈状态变化' },
+      surprise_budget: {
+        level: 'medium',
+        allowed: '改变布局与反馈节奏',
+        protected: '认证语义、安全边界和键盘可用性',
+      },
+      anti_fixation: ['至少一个候选禁止使用卡片容器'],
+      verification_lens: ['用户能否复述当前控制权状态'],
+    },
+    baseline: {
+      artifact_refs: ['09_ATELIER/files/INT-001/baseline.png'],
+      observed_limit: '字段可靠但全部等权，用户无法先确认控制权。',
+    },
+    diversity_axes: [
+      { id: 'structure', low: '离散字段', high: '连续确认', why: '改变理解顺序' },
+      { id: 'guidance', low: '一次展示', high: '渐进显露', why: '改变首次理解成本' },
+    ],
+    candidates: [
+      {
+        id: 'CAND-A',
+        stance_revision: 1,
+        mechanism: '连续确认路径',
+        artifact_refs: ['09_ATELIER/files/INT-001/candidate-a.png'],
+        floor_check: 'passed',
+        floor_evidence: '认证回归与键盘路径通过。',
+      },
+      {
+        id: 'CAND-B',
+        stance_revision: 1,
+        mechanism: '分区控制面板',
+        artifact_refs: ['09_ATELIER/files/INT-001/candidate-b.png'],
+        floor_check: 'passed',
+        floor_evidence: '认证回归与键盘路径通过。',
+      },
+    ],
+    selection: {
+      status: 'selected',
+      selected_candidate: 'CAND-A',
+      method: '匿名顺序交换比较',
+      evidence_refs: ['09_ATELIER/files/INT-001/comparison.md'],
+      why: '核心命题复述更准确，任务成功率未回退。',
+      remaining_tradeoff: '首次流程多一个确认动作。',
+    },
+  });
+  writeFileSync(recordPath, JSON.stringify(record, null, 2));
+  assertContains(run('atelier validate INT-001'), '"status": "selected"');
+  assertContains(run('atelier get INT-001'), '"selected_candidate": "CAND-A"');
+  const keeper = run('activate keeper --intent INT-001');
+  assertContains(keeper, 'Atelier Record');
+  assertContains(keeper, '"selected_candidate": "CAND-A"');
+  writeFileSync(join(TEST_ROOT, 'artifacts', 'quality-proof-int001.md'), '# INT-001 {#INT-001}\n\n基线、候选、作者命题、稳定性与取舍证据。\n');
+  run('verify pass INT-001 --summary "匿名比较证明作者命题可被复述，认证回归与键盘路径均未退化" --quality-proof "artifacts/quality-proof-int001.md#INT-001"');
+  const verification = JSON.parse(readFileSync(join(VERIFICATIONS_DIR, 'INT-001.json'), 'utf-8'));
+  const latest = verification.records[verification.records.length - 1];
+  assert(latest.atelier?.stance_revision === 1, 'Atelier passed 验证必须绑定 stance_revision');
+  assert(latest.atelier?.record_ref === '09_ATELIER/INT-001.json', 'Atelier passed 验证必须绑定 Record');
+
+  record.intent_revision = 99;
+  record.candidates[0].floor_check = 'failed';
+  writeFileSync(recordPath, JSON.stringify(record, null, 2));
+  const invalid = run('atelier validate INT-001', true);
+  assertContains(invalid, '已过期');
+  assertContains(invalid, 'selected candidate 必须通过 Reliability Floor');
+  assertContains(
+    run('verify pass INT-001 --summary "再次验证作者命题与认证回归，准备写入新一轮结果" --quality-proof "artifacts/quality-proof-int001.md#INT-001"', true),
+    '必须有当前且合法的 Atelier Record',
+  );
+  assertContains(run('intent done INT-001', true), 'Atelier Record 校验失败');
+  record.intent_revision = 1;
+  record.candidates[0].floor_check = 'passed';
+  writeFileSync(recordPath, JSON.stringify(record, null, 2));
+  assertContains(run('intent done INT-001'), '已完成');
   setup();
 });
 

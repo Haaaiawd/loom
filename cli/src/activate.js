@@ -9,6 +9,7 @@ import { getPhilosophy } from './philosophy.js';
 import { getVerificationContract } from './verify.js';
 import { extractMdSection } from './shared/md-utils.js';
 import { compileCapabilityInputs } from './capability-graph.js';
+import { getAtelierRecord } from './atelier.js';
 
 const VALID_ROLES = ['weaver', 'visionary', 'architect', 'forge', 'keeper'];
 
@@ -254,9 +255,11 @@ function compileExpertiseInputs(role, versionDir, objective) {
     return '当前阶段不编译任务级 Expertise Pack。';
   }
   const needs = Array.isArray(subject.capability_needs) ? subject.capability_needs : [];
+  const qualityStrategy = subject.quality_strategy ?? 'adaptive';
   const lines = [
     `- capability_needs: ${needs.length ? needs.join(', ') : '未声明；按当前任务发现必要能力'}`,
     `- creative_scope: ${subject.creative_scope || '未声明；遵循最小完整干预'}`,
+    `- quality_strategy: ${qualityStrategy}`,
     '- Skill、工具和资产名称只代表可发现入口；实际检查并加载后才进入 Expertise Pack。',
   ];
   if (versionDir && objective.intent) {
@@ -278,6 +281,25 @@ function compileExpertiseInputs(role, versionDir, objective) {
   }
   if (role === 'keeper') {
     lines.push('- 不继承 Forge Expertise Pack；按契约独立准备验证能力。');
+    if (qualityStrategy === 'atelier') {
+      const record = getAtelierRecord(versionDir, subject.id);
+      lines.push(
+        '- 当前 Intent 使用 Atelier：以下 Record 是创作证据入口，不是通过结论。',
+        `\n### Atelier Record\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\``,
+      );
+    }
+  }
+  if (role === 'forge' && qualityStrategy === 'atelier') {
+    const authorshipPath = join(getLoomRoot(), 'dimensions', 'AUTHORSHIP.md');
+    if (!existsSync(authorshipPath)) {
+      throw new Error(`Atelier 方法文件不存在: ${authorshipPath}`);
+    }
+    lines.push(
+      '- 当前 Intent 进入 Atelier Path：先冻结基线并形成 Authorial Stance，再生成机制不同的候选。',
+      `- Atelier Record: \`09_ATELIER/${subject.id}.json\`；候选必须绑定 stance_revision。`,
+      '- Author 只能修正局部创作假设；结构性发现提交 provenance-backed Capability Graph proposal，由 Architect 裁决。',
+      `\n### Authorship Method\n\n${readFileSync(authorshipPath, 'utf-8').trim()}`,
+    );
   }
   return lines.join('\n');
 }

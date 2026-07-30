@@ -431,6 +431,8 @@ Intent 新增可选字段：
 | 产品要产生的用户结果 | Visionary |
 | `quality_contract`、`creative_scope`、`quality_strategy` | Architect |
 | Authorial Stance、候选、原型、选择建议 | Forge / Expertise Compiler / Atelier |
+| 局部创作假设修正与 `stance_revision` | Forge / Atelier Record |
+| 结构性新发现的 Capability Graph proposal | Forge 提交，Architect 裁决 |
 | 临时 Curator 意见 | 隔离评价能力，无状态所有权 |
 | 实现与自测 | Forge |
 | Quality Proof 与 Authorship Evidence 判定 | Keeper |
@@ -639,6 +641,7 @@ Decision Question
   "intent_id": "INT-001",
   "intent_revision": 1,
   "status": "exploring",
+  "stance_revision": 2,
   "stance": {
     "creative_thesis": "让复杂数据像一张正在呼吸的航海图，而不是 KPI 卡片墙。",
     "gaze": [
@@ -705,6 +708,7 @@ Decision Question
   "candidates": [
     {
       "id": "CAND-A",
+      "stance_revision": 2,
       "thesis_delta": "叙事主导的连续数据旅程",
       "mechanism": "时间轨迹与分段聚焦",
       "artifact_refs": [
@@ -722,6 +726,18 @@ Decision Question
       "major_cost": "高级用户需要额外的快速跳转"
     }
   ],
+  "corrections": [
+    {
+      "round": 1,
+      "trigger": "目标用户在原型观察中把流向误读为进度",
+      "evidence_ref": "09_ATELIER/files/INT-001/candidate-a-observation.md",
+      "classification": "local_stance",
+      "change": "将 motion grammar 从连续流动改为只在状态变化时显现",
+      "from_stance_revision": 1,
+      "to_stance_revision": 2
+    }
+  ],
+  "blocker": null,
   "selection": {
     "status": "selected",
     "selected_candidate": "CAND-A",
@@ -754,14 +770,59 @@ draft → exploring → compared → selected
 - `baseline_retained`：没有候选胜过基线，合法停止或重开命题。
 - `blocked`：缺少媒介工具、素材、目标宿主、权限或关键人类选择。
 
+`blocked` 可以发生在 Stance 或基线完成前，因此不强制要求完整候选结构，但必须写
+`blocker.reason` 与 `blocker.recovery_condition`，避免把“先停一下”伪装成可恢复阻塞。
+
 Atelier 状态不能使 Intent 自动 completed，也不能替代 Keeper。
 
 ### 7.4 Revision 与新鲜度
 
 - `intent_revision` 必须等于当前 Intent revision。
+- `stance_revision` 从 1 开始；只有证据触发的创作命题、机制、拒绝项或媒介语法变化才递增。
+- 每个候选必须记录产生它的 `stance_revision`。
+- 不同 `stance_revision` 下形成的候选不得静默横向比较；旧候选必须在新 Stance 下重新资格检查，
+  并写入 `requalified_for_stance_revision`，或以 `archived: true` 明确归档并说明不再可比。
 - Intent 语义、质量契约、创作空间或关键 Doctrine anchor 变化时，旧 Atelier Record 失效。
 - 纯实现修正不必重做 Stance，但必须重新观察受影响候选和最终产物。
 - 旧 Record 保留为历史证据，不覆盖写成当前事实。
+
+### 7.5 Author 与系统自我更正
+
+Author 是 Capability Graph 和 Capability Brief 的消费者，不是它们的隐形编辑器。它可以根据
+真实作品和观察证据修正当前创作假设，但不能借“审美判断”修改项目问题面、Intent、契约或
+验收标准。
+
+每次修正先分类：
+
+| 发现类型 | 记录位置 | 后续动作 |
+|---|---|---|
+| 当前命题、机制、媒介语法或候选选择失效 | Atelier Record `corrections[]` | 递增 `stance_revision`，重做受影响候选 |
+| 新用户结果、约束、能力缺口、风险或项目证据 | `07_GRAPH_PROPOSALS/CGP-*.json` | Forge 提交 provenance，Architect 裁决 |
+| Intent、acceptance、质量契约或 Doctrine 本身错误 | LOOM reflow | 回流 Architect、Visionary 或 Weaver |
+| 经多个任务和 Quality Proof 重复验证的可复用方法 | Quality Proof learning candidate | 人工晋升为 Skill；跨 Intent 创作判断才考虑 Creative Lineage |
+
+`corrections[]` 至少记录 `round`、触发证据、分类、具体变化和 revision 迁移。若分类为
+`graph_candidate`，还必须记录 `proposal_ref`；但只有真正改变项目问题面的发现才允许创建
+proposal。局部配色、构图、动效节奏或某个候选失败，不得为了显得系统会学习而污染
+Capability Graph。
+
+Author 不能裁决或关闭自己的 proposal。安全闭环是：
+
+```text
+Capability Graph / Brief
+→ Identity Compiler
+→ Authorial Stance
+→ 作品与观察
+→ local correction 或 Graph proposal
+→ Architect decision / reflow
+→ 新 Graph、Intent 或 Contract revision
+→ Capability compile
+→ 新 Stance
+```
+
+这不是把自我更正和 Author 合并成一个“更聪明的 Agent”。前者负责系统事实的受控更新，
+后者负责在既定边界内提出可反驳的创作判断。二者只通过磁盘证据和正式裁决相连，避免
+Author 先改考纲、再宣布自己答对。
 
 ---
 
@@ -1301,6 +1362,9 @@ Atelier 不能绕过 `continuity_required`：
 | `quality_strategy`、质量契约或创作空间不成立 | Architect | 修订 Contract / revision |
 | 缺少作者性能力或媒介工具 | Forge / Capability Graph | 补能力或提交 proposal |
 | Stance 只有风格词 | Forge | 重编 Identity |
+| 局部创作修正被误报为系统能力缺口 | Forge | 留在 `corrections[]`，撤回无效 proposal |
+| 结构性发现被埋在创作记录 | Forge / Architect | 提交 provenance-backed Graph proposal |
+| Stance 改变后继续比较旧候选 | Forge | 重新资格检查或归档旧候选 |
 | 候选只是换皮 | Forge | 重设差异轴和 Signature Bet |
 | 候选都未胜过基线 | Forge / Architect | `baseline_retained` 或重开质量命题 |
 | 真实实现丢失原型机制 | Forge | 回到 Realize / Observe |
@@ -1369,8 +1433,8 @@ Atelier 不能绕过 `continuity_required`：
 |---|---|
 | `roles/forge.md` | 增加 Author、Identity Compiler 和 Atelier Path |
 | `roles/keeper.md` | 增加 Atelier Quality Proof 边界 |
-| `roles/architect.md` | 增加 `quality_strategy` 责任 |
-| `meta/INTENT_LOOP.md` | 定义路径、Record 和回流 |
+| `roles/architect.md` | 增加 `quality_strategy` 责任与 Author proposal 裁决边界 |
+| `meta/INTENT_LOOP.md` | 定义路径、Record、自我更正分流和回流 |
 | `meta/ROLE_ACTIVATION.md` | 定义 Context Pack 注入 |
 | `dimensions/AUTHORSHIP.md` | 新增按需方法，不常驻全局 |
 | `templates/ATELIER_RECORD_TEMPLATE.json` | 提供单一 Record 模板 |
@@ -1438,6 +1502,9 @@ Atelier 不能绕过 `continuity_required`：
 - `atelier` 缺少 `creative_scope` 时拒绝 finalize。
 - Atelier Record 的 Intent、revision 和版本必须匹配。
 - 候选 ID 唯一，selection 必须指向存在候选。
+- `stance_revision` 必须为正整数，候选必须绑定当前或已记录的 Stance revision。
+- Stance 变化必须有带证据的 correction；不同 revision 的候选不能静默可比。
+- `graph_candidate` correction 必须引用有效 Capability Graph proposal。
 - 未通过 Floor Gate 或缺少 `floor_evidence` 的候选不能被 selected。
 - artifact 引用不能越出当前版本。
 - `selected` / `baseline_retained` 具有对应证据。

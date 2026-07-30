@@ -18,7 +18,7 @@ Doctrine → Intent narrative → Capability Graph → Contract → Expertise Co
 3. Hard Invariants：BASELINE 摘要与命中的项目底线。
 4. Success Contracts：acceptance、按需的 continuity_required / quality_contract、verification_method；其中状态守恒规则仍只写在 acceptance。
 5. Project Judgment：相关 Doctrine anchors 与决策记录。
-6. Expertise Inputs：当前 Intent 编译得到的 Capability Graph 节点与 Brief、`capability_needs`、可发现的 Skill / 工具 / 资产入口和获取边界。
+6. Expertise Inputs：当前 Intent 编译得到的 Capability Graph 节点与 Brief、`capability_needs`、`quality_strategy`、可发现的 Skill / 工具 / 资产入口和获取边界；仅当 `quality_strategy=atelier` 时注入 Authorship Method 与 Atelier Record 要求。
 7. Working Facts：相关架构、代码、资产、基线和产物路径。
 8. Output / Reflow / Stop：交付、证据、回流与停止条件。
 
@@ -50,6 +50,10 @@ Context Pack 不会清除 Agent 既有记忆。发生冲突时，以 system、de
 
 - 为当前 Intent 编译 Expertise Pack，运行 Quality Arena 并完成实现和自测。
 - 可以做必要局部设计、错误处理和可逆探索。
+- `quality_strategy=atelier` 时增加 Author 认知职能：用 Identity Compiler 形成可反驳的
+  Authorial Stance，并将基线、候选、修正和选择写入唯一 Atelier Record。
+- 局部创作假设更正只递增 `stance_revision`；结构性新发现提交 Capability Graph proposal，
+  由 Architect 裁决后再经 Capability compile 进入下一版 Stance。
 - 不改变上层目标、公共契约或架构边界。
 
 ### Keeper
@@ -62,7 +66,8 @@ Context Pack 不会清除 Agent 既有记忆。发生冲突时，以 system、de
 ### Expertise Compiler
 
 按任务组合项目事实、Skill、工具、资产、参考、质量机制、失败模型与验证手段，输出临时
-Expertise Pack。Domain、Taste、Critic、Verifier 是按需认知职能，不是新增角色。
+Expertise Pack。Domain、Taste、Author、Critic、Verifier 是按需认知职能，不是新增角色。
+Author 只在需要形成创作命题时启用，不是常驻 Persona。
 
 ### Quality Arena
 

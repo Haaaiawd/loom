@@ -373,6 +373,20 @@ function diagnoseStage(cwd, loomRoot, auto) {
   // 状态 5: 有 in_progress
   if (counts.in_progress > 0) {
     const inProgressIds = allIntents.filter((i) => i.status === 'in_progress').map((i) => i.id);
+    const atelierWithoutRecord = allIntents.find((intent) => intent.status === 'in_progress'
+      && intent.quality_strategy === 'atelier'
+      && !existsSync(join(versionDir, '09_ATELIER', `${intent.id}.json`)));
+    if (atelierWithoutRecord) {
+      return {
+        stage: 'in_loop',
+        stage_num: 5,
+        details: { version: current, counts, in_progress_ids: inProgressIds, atelier_intent: atelierWithoutRecord.id },
+        auto,
+        next_action: '创建 Atelier Record 并冻结基线',
+        next_command: `loom atelier init ${atelierWithoutRecord.id}`,
+        message: `${atelierWithoutRecord.id} 已进入 Atelier Path，但还没有唯一创作记录。先创建 Record，再按 Forge Context Pack 形成 Authorial Stance。`,
+      };
+    }
     return {
       stage: 'in_loop',
       stage_num: 5,

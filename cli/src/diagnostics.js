@@ -14,6 +14,7 @@ import { resolveQualityProofReference } from './shared/proof-reference.js';
 import { getCapabilityCoverage, getCapabilityGraphPath, loadCapabilityGraph } from './capability-graph.js';
 import { listCapabilityProposals } from './capability-proposals.js';
 import { getAssetManifestPath, validateAssetLibrary } from './asset-library.js';
+import { validateAtelierRecord } from './atelier.js';
 
 function readIntentMapRaw(versionDir) {
   const filePath = join(versionDir, '04_INTENT_MAP.json');
@@ -175,6 +176,8 @@ const FIX_HINTS = {
   intent_graph_unmapped: '将该 Intent 回链到至少一个 Capability Graph 节点；不要让执行承诺失去项目初衷和能力来源',
   capability_proposal_pending: '由 Architect 审核 proposal：判定已覆盖、更新 Graph、生成/修订 Intent、改变 acceptance，或升级 Minor/Major；Forge 不得静默把候选写进正式图谱。',
   asset_library_invalid: '修复 08_ASSET_LIBRARY/manifest.json 的来源、许可、哈希、库内路径或 evidence 双向引用，然后运行 loom asset validate。',
+  atelier_record_invalid: '运行 loom atelier init {id} 创建记录，或按校验错误修正后运行 loom atelier validate {id}。',
+  atelier_verification_missing: '重新运行独立 Keeper 验证，让 passed 记录绑定当前 Atelier Record 与 stance_revision。',
 };
 
 /**
@@ -211,6 +214,20 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
   }
 
   const { intents } = mapState.validMap;
+  const atelierRecords = new Map();
+
+  for (const [id, intent] of Object.entries(intents)) {
+    if (intent.quality_strategy !== 'atelier' || intent.status === 'pending' || intent.status === 'blocked') continue;
+    try {
+      const record = validateAtelierRecord(versionDir, id);
+      atelierRecords.set(id, record);
+      if (intent.status === 'completed' && !['selected', 'baseline_retained'].includes(record.status)) {
+        issues.push({ id, type: 'atelier_record_invalid', severity: 'high', msg: `${id} 已 completed，但 Atelier Record 仍是 ${record.status}` });
+      }
+    } catch (error) {
+      issues.push({ id, type: 'atelier_record_invalid', severity: 'high', msg: error.message });
+    }
+  }
 
   // 0. Incoming Graph changes are an Architect gate, not Forge implementation scope.
   try {
@@ -295,6 +312,20 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
         } catch (error) {
           issues.push({ id, type: 'quality_proof_invalid', severity: 'high', msg: `${id} 的 Quality Proof 无效: ${error.message}` });
         }
+      }
+    }
+    if (intent.quality_strategy === 'atelier' && latest?.verdict === 'passed') {
+      const atelier = atelierRecords.get(id);
+      if (!atelier
+        || latest.atelier?.record_ref !== `09_ATELIER/${id}.json`
+        || latest.atelier?.stance_revision !== atelier.stance_revision
+        || latest.atelier?.status !== atelier.status) {
+        issues.push({
+          id,
+          type: 'atelier_verification_missing',
+          severity: 'high',
+          msg: `${id} 的最新 passed 未绑定当前 Atelier Record、status 与 stance_revision`,
+        });
       }
     }
     if (intent.continuity_required && latest?.verdict === 'passed') {

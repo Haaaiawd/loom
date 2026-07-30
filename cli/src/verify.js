@@ -7,6 +7,7 @@ import { extractMdSection, readJsonFile } from './shared/md-utils.js';
 import { getIntent, getEffectiveVerificationEpoch, hasLegacyIntentRevision } from './intent-map.js';
 import { formatIntentRef, resolveIntentRef } from './shared/intent-ref.js';
 import { resolveQualityProofReference } from './shared/proof-reference.js';
+import { validateAtelierRecord } from './atelier.js';
 
 /** 合法判定结果 */
 const VALID_VERDICTS = ['passed', 'deviated', 'blocked', 'pending_human'];
@@ -44,6 +45,7 @@ function getRequiredDimensions(intent) {
  */
 export function writeVerification(versionDir, verificationsDir, record) {
   const errors = [];
+  let atelierEvidence = null;
   if (!record.intent_id) errors.push('缺少 intent_id');
   if (!record.verdict || !VALID_VERDICTS.includes(record.verdict)) {
     errors.push(`verdict 非法: "${record.verdict}" (合法: ${VALID_VERDICTS.join('|')})`);
@@ -102,6 +104,16 @@ export function writeVerification(versionDir, verificationsDir, record) {
       errors.push(error.message);
     }
   }
+  if (intent?.quality_strategy === 'atelier' && record.verdict === 'passed') {
+    try {
+      atelierEvidence = validateAtelierRecord(versionDir, record.intent_id);
+      if (!['selected', 'baseline_retained'].includes(atelierEvidence.status)) {
+        errors.push(`quality_strategy=atelier 通过前，Atelier Record 必须是 selected 或 baseline_retained（当前: ${atelierEvidence.status}）`);
+      }
+    } catch (error) {
+      errors.push(`quality_strategy=atelier 通过前必须有当前且合法的 Atelier Record: ${error.message}`);
+    }
+  }
   if (errors.length > 0) {
     throw new Error(`验证记录校验失败:\n  - ${errors.join('\n  - ')}`);
   }
@@ -145,6 +157,11 @@ export function writeVerification(versionDir, verificationsDir, record) {
     timestamp: record.timestamp,
     summary: record.summary,
     dimensions: record.dimensions,
+    atelier: atelierEvidence ? {
+      record_ref: `09_ATELIER/${record.intent_id}.json`,
+      stance_revision: atelierEvidence.stance_revision,
+      status: atelierEvidence.status,
+    } : undefined,
     reproduction_command: record.reproduction_command,
     deviation_detail: record.deviation_detail,
     reset_suggested: record.reset_suggested,

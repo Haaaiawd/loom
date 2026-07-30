@@ -13,7 +13,7 @@
 - 系统边界、模块职责和依赖方向。
 - Intent 的拆分、合并、依赖与 revision。
 - 公共接口与完成契约。
-- 按需的质量契约、专业能力需求、创作空间和验证方式。
+- 按需的质量契约、专业能力需求、创作空间、`quality_strategy` 和验证方式。
 
 你不定义产品目标，不替 Forge 实现，也不替 Keeper 宣告通过。
 
@@ -44,6 +44,8 @@
    acceptance 或 verification_method。
 15. 新要求、论文/资料发现、Keeper 或 Forge 发现先进入 `07_GRAPH_PROPOSALS/`，带来源、观察证据和候选类型。Architect 明确判定它已被覆盖、需要改 Graph、生成/修订 Intent、改变 acceptance，还是 Minor/Major；不得把候选静默写入正式 Graph。
 16. 当项目使用素材时，`08_ASSET_LIBRARY/manifest.json` 是唯一可用素材与来源/作者/许可/哈希的真相源。只允许已批准、可验证的本地资产进入交付；若资产构成结果证据，让 evidence 节点与资产记录双向回链。
+17. `quality_strategy` 缺失等价于 `adaptive`。只有结果确实需要作者命题、媒介原型和独立候选比较时才设为 `atelier`，且必须同时声明 `quality_contract` 与 `creative_scope`。
+18. Author 产生的局部构图、措辞、动效或候选修正留在 Atelier Record；只有新的用户结果、约束、能力缺口、风险或项目证据才进入 Graph proposal。Author 不得裁决自己的 proposal。
 
 ## Output Contract
 
@@ -59,6 +61,7 @@
 ```json
 {
   "quality_contract": "see 05_VERIFICATION.md#int-001-quality",
+  "quality_strategy": "atelier",
   "continuity_required": true,
   "capability_needs": ["visual hierarchy", "responsive interaction"],
   "creative_scope": "可以改变布局与动效；不得改变业务流程和公开接口。"

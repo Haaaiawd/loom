@@ -15,7 +15,7 @@ Doctrine → Intent narrative → Capability Graph → Contract
 | 长期价值、卓越标准、反模式 | Weaver |
 | 产品目标、非目标、Intent narrative | Visionary |
 | Capability Graph、系统边界、Intent DAG、完成/质量契约 | Architect |
-| Expertise Pack、候选、实现、自测 | Forge |
+| Expertise Pack、Authorial Stance、Atelier 候选、实现、自测 | Forge |
 | 独立判定、Quality Proof | Keeper |
 
 Keeper 不修改契约；Forge 不以实现困难改写 Intent；Visionary 不写 acceptance；Weaver 不拆实施模块。
@@ -38,6 +38,7 @@ Keeper 不修改契约；Forge 不以实现困难改写 Intent；Visionary 不�
 - `quality_contract`：相对基线可观察的质量主张与最小有意义差异。
 - `capability_needs`：任务需要的专业认知、工具或审美能力。
 - `creative_scope`：允许探索与不得改变的边界。
+- `quality_strategy`：`adaptive | atelier`，缺失等价于 `adaptive`；Atelier 只用于明确需要作者命题、媒介原型与独立候选比较的结果。
 - `verification_method`：可复现验证方法。
 
 `acceptance` 是 Reliability Floor；`quality_contract` 是 Distinctive Ceiling。二者不能合并成一串模糊
@@ -101,18 +102,28 @@ Forge 在实现前形成临时 Expertise Pack：
 
 - **Domain**：领域机制、失败边界和项目事实。
 - **Taste**：什么区分普通、可靠和出众。
+- **Author**：这次提出什么可反驳的创作命题，选择什么并拒绝什么。
 - **Critic**：最可能出现的平庸方案、自我欺骗与反例。
 - **Verifier**：如何观察、比较和复现。
 
-这四项是认知功能，不是必须创建四个角色或四份文档。
+这五项是认知功能，不是必须创建五个角色或五份文档。
 
 Capability Graph 先提供当前 Intent 相关的项目事实、风险、约束和 Capability Brief；Expertise Compiler 再按 Brief 的获取计划加载真实技能、工具或资料。它不把整张图或历史会话当成当前任务上下文。
+
+`quality_strategy=atelier` 时运行 Identity Compiler：将项目判断编译为可执行的 Authorial
+Stance，而不是模仿名人的 Persona。Forge 在 `.loom/vN/09_ATELIER/<intent-id>.json`
+保存唯一 Atelier Record；普通 Intent 不创建该文件。
 
 ### 2.2 Graph Change Proposal Gate
 
 新用户要求是 `outcome` 或 `constraint` 候选；论文、资料与运行发现是带 provenance 的 `capability`、`risk` 或 `evidence` 候选。它们先写入 `.loom/vN/07_GRAPH_PROPOSALS/CGP-*.json`，必须记录来源、观察时间、具体证据、为什么现在需要处理。Proposal 不是正式 Graph，Forge/Keeper 不得借它静默扩大当前 Intent。
 
 Architect 必须把每个 proposal 判定为：已覆盖、Graph 更新、Intent 变更、acceptance 变更、Minor、Major 或拒绝；关闭时必须提交与决策相符的结构化 resolution，CLI 会从决策时磁盘基线验证 Graph / Intent / acceptance / 决策记录的真实变化或现有有效覆盖，不能以任意 implementation_ref 文本关闭。`constraint` 若决定为 Graph 更新，必须进入正式 Graph 的 `constraints` 字段并回链受影响节点。`covered_by` 必须显式指向另一个已覆盖、非 `covered_by` 路由的节点，并同时保留同目标的关系。`loom guide` 与 `loom doctor` 对未闭合 proposal 回流 Architect。
+
+Author 的自我更正不得绕过该门：局部命题、机制、媒介语法或候选选择变化写入 Atelier
+Record `corrections[]` 并递增 `stance_revision`；只有新的用户结果、约束、能力缺口、风险
+或项目证据才提交 Graph proposal。Architect 裁决并修订磁盘真相源后，Capability compile
+把新输入交回 Author。Author 不得裁决自己的 proposal，也不得修改考纲后自证通过。
 
 ### 2.3 Asset Library Protocol
 
@@ -147,6 +158,16 @@ Discover → Load → Translate → Use
 7. **Self-check**：Forge 先排除明显失败，再交 Keeper。
 
 候选不强制落盘，不设置固定数量。没有候选胜过基线时，保留原方案或回流契约。
+
+### Atelier Path
+
+当 `quality_strategy=atelier` 时，Arena 增加明确作者命题与落盘证据：
+
+1. 编译 Authorial Stance 并冻结修改前基线。
+2. 定义质量差异轴，独立形成机制不同的媒介原型。
+3. 候选先过 Reliability Floor，再匿名比较或保留基线。
+4. 每个候选绑定 `stance_revision`；Stance 改变后重新资格检查或归档旧候选。
+5. 选择证据、主要代价和 corrections 写入唯一 Atelier Record，再进入完整实现。
 
 ## 8. Independent Quality Proof
 

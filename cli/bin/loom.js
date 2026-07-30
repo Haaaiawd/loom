@@ -27,6 +27,7 @@ import { resolveIntentRef } from '../src/shared/intent-ref.js';
 import { compileCapabilityInputs, getCapabilityCoverage, getCapabilityFrontier, getCapabilityGraphProjection, getCapabilityNode } from '../src/capability-graph.js';
 import { getAsset, importAsset, listAssets, recoverAssetImportTransaction, searchAssets, validateAssetLibrary } from '../src/asset-library.js';
 import { closeCapabilityProposal, decideCapabilityProposal, getCapabilityProposal, listCapabilityProposals, submitCapabilityProposal } from '../src/capability-proposals.js';
+import { getAtelierRecord, initAtelierRecord, validateAtelierRecord } from '../src/atelier.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // findLoomRoot / findVersionDir / readCurrentPointer 已提取到 shared/paths.js
@@ -159,6 +160,26 @@ try {
           break;
         }
         default: die(`未知 asset 子命令: ${sub}\n用法: loom asset [import|list|search|get|validate]`);
+      }
+      break;
+    }
+
+    case 'atelier': {
+      const versionDir = findVersionDir();
+      const intentId = rest[0];
+      if (!intentId) die(`用法: loom atelier ${sub || '<init|get|validate>'} <intent-id>`);
+      switch (sub) {
+        case 'init':
+          output(initAtelierRecord(versionDir, intentId));
+          break;
+        case 'get':
+          output(getAtelierRecord(versionDir, intentId));
+          break;
+        case 'validate':
+          output(validateAtelierRecord(versionDir, intentId));
+          break;
+        default:
+          die(`未知 atelier 子命令: ${sub}\n用法: loom atelier [init|get|validate] <intent-id>`);
       }
       break;
     }
@@ -322,6 +343,17 @@ try {
           const intent = getIntent(versionDir, id);
           if (!isVerificationCurrent(intent, latest)) {
             die(`${id} 最新 passed 验证不属于当前 Intent revision ${intent.revision ?? 1}。先重新验证。`);
+          }
+          if (intent.quality_strategy === 'atelier') {
+            const atelier = validateAtelierRecord(versionDir, id);
+            if (!['selected', 'baseline_retained'].includes(atelier.status)) {
+              die(`${id} 的 Atelier Record 尚未完成选择（当前: ${atelier.status}）`);
+            }
+            if (latest.atelier?.record_ref !== `09_ATELIER/${id}.json`
+              || latest.atelier?.stance_revision !== atelier.stance_revision
+              || latest.atelier?.status !== atelier.status) {
+              die(`${id} 最新 passed 未绑定当前 Atelier Record 与 stance_revision。请在新的 Keeper task 中重新验证。`);
+            }
           }
           const currentStatus = intent.status;
           if (currentStatus === 'completed') {
@@ -898,6 +930,9 @@ To Human:
   loom capability get <id>      返回节点、关系、Brief 与 Intent 回链
   loom capability coverage      检查图谱覆盖、Brief 和 Intent 回链
   loom capability compile <id>  只读显示会进入该 Intent 的能力输入
+  loom atelier init <id>        为 atelier Intent 创建唯一创作记录
+  loom atelier get <id>         返回并校验当前 Atelier Record
+  loom atelier validate <id>    校验 Record、revision、候选与证据引用
 
   loom intent next              返回下一个可执行 Intent
   loom intent add --title <text> [--depends-on <ids>]  创建新增 draft
