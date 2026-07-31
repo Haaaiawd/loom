@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.2 — 2026-07-31
+
+### Fixed
+
+- `guide` 不再把阶段输入伪装成需要 Agent 手动逐个查找的待办；当下一步是角色激活时，会明确说明由该命令装配 Context Pack。
+- `activate weaver` 直接注入检索方法与哲学维度目录；`activate architect` 在无 Intent 的设计阶段直接注入愿景、当前 Capability Graph、Intent Map 与未闭合 proposal。
+- Capability Graph 未闭合或 proposal 待裁决时，`guide` 重新指向可推进工作的 Architect Context Pack，而不是重复运行只读检查。
+- `loom intent next` 返回开始该 Intent 和获取 Forge Context Pack 的明确后续命令。
+
 ## 1.2.1 — 2026-07-31
 
 ### Fixed

@@ -88,6 +88,9 @@ guide 检测项目当前在哪个阶段，输出"你在阶段 X，下一步做 Y
 Agent 每完成一步都跑 guide 确认下一步。
 如果只是审计或探测，不希望产生任何状态写入，用 `loom guide --dry-run`。
 
+当 `guide` 的下一步是 `loom activate <role>` 时，先运行这条命令：它会把该阶段需要的
+规范与版本化输入编译为 Context Pack。不要把 guide 列出的输入路径误读成需要逐个手动搜索的待办。
+
 ### AUTO 模式
 
 ```bash

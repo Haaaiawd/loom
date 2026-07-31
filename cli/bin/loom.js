@@ -275,7 +275,17 @@ try {
           break;
         }
         case 'next':
-          output(getNextIntent(versionDir) ?? '没有可执行的 Intent');
+          {
+            const next = getNextIntent(versionDir);
+            output(next ? {
+              ...next,
+              suggested_flow: {
+                start: `loom intent update ${next.id} --status in_progress`,
+                forge_context: `loom activate forge --intent ${next.id}`,
+                note: '先显式开始 Intent，再由 activate 命令装配该 Intent 的叙事、契约、图谱路由与专业输入。',
+              },
+            } : '没有可执行的 Intent');
+          }
           break;
         case 'status': {
           const s = getStatus(versionDir);
@@ -791,7 +801,10 @@ try {
       console.log(`\n下一步: ${result.next_action}`);
       console.log(`  → ${result.next_command}`);
       if (result.inputs && result.inputs.length > 0) {
-        console.log(`\n需要读取:`);
+        const assembled = result.input_delivery === 'context_pack';
+        console.log(assembled
+          ? '\n下一步命令将装配的阶段输入（请先直接运行它，不要逐个手动查找）:'
+          : '\n相关输入（本命令不会自动装配；仅在下一步确实需要时读取）:');
         for (const f of result.inputs) console.log(`  - ${f}`);
       }
       if (result.outputs && result.outputs.length > 0) {

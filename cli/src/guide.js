@@ -67,31 +67,37 @@ export function guideProject(projectDir, options = {}) {
       inputs: ['meta/PHILOSOPHY_WEAVER.md', 'meta/BASELINE.md', 'dimensions/SEARCH_METHODOLOGY.md'],
       outputs: [`.loom/${current}/00_PHILOSOPHY/PRODUCT_PHILOSOPHY.md`, `.loom/${current}/00_PHILOSOPHY/ENGINEERING_CREED.md`, `.loom/${current}/00_PHILOSOPHY/DECISION_RUBRIC.md`],
       verify_command: 'loom philosophy check',
+      input_delivery: 'context_pack',
     },
     need_vision: {
       inputs: ['roles/visionary.md', `.loom/${current}/00_PHILOSOPHY/`],
       outputs: [`.loom/${current}/01_VISION.md`],
       verify_command: 'loom guide',
+      input_delivery: 'context_pack',
     },
     need_architecture: {
       inputs: ['roles/architect.md', `.loom/${current}/01_VISION.md`],
       outputs: [`.loom/${current}/02_ARCHITECTURE.md`, `.loom/${current}/04_INTENT_MAP.json`],
       verify_command: 'loom doctor',
+      input_delivery: 'context_pack',
     },
     need_capability_graph: {
       inputs: ['roles/architect.md', `.loom/${current}/01_VISION.md`],
       outputs: [`.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/07_CAPABILITY_BRIEFS/`],
       verify_command: 'loom capability coverage',
+      input_delivery: 'context_pack',
     },
     capability_graph_incomplete: {
       inputs: ['roles/architect.md', `.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/04_INTENT_MAP.json`],
       outputs: [`.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/07_CAPABILITY_BRIEFS/`],
       verify_command: 'loom capability coverage',
+      input_delivery: 'context_pack',
     },
     capability_graph_proposals_pending: {
       inputs: ['roles/architect.md', `.loom/${current}/07_GRAPH_PROPOSALS/`, `.loom/${current}/07_CAPABILITY_GRAPH.json`],
       outputs: [`.loom/${current}/07_GRAPH_PROPOSALS/`, `.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/04_INTENT_MAP.json`],
       verify_command: 'loom capability proposal list',
+      input_delivery: 'context_pack',
     },
     intent_map_broken: {
       inputs: [`.loom/${current}/04_INTENT_MAP.json`],
@@ -123,6 +129,7 @@ export function guideProject(projectDir, options = {}) {
   result.inputs = meta.inputs || [];
   result.outputs = meta.outputs || [];
   result.verify_command = meta.verify_command || null;
+  result.input_delivery = meta.input_delivery || null;
   // 统一后处理：写心跳 + 加 AUTO 提示词 + 判断是否需要人类 review
   if (existsSync(loomRoot) && !options.dryRun) {
     try {
@@ -242,14 +249,14 @@ function diagnoseStage(cwd, loomRoot, auto) {
           details: { version: current, proposals: pendingProposals.map((proposal) => proposal.id) },
           auto,
           next_action: '审计新信息对 Capability Graph、Intent 和契约的影响',
-          next_command: 'loom capability proposal list',
+          next_command: 'loom activate architect',
           message: `当前版本 ${current} 有 ${pendingProposals.length} 个未闭合的 Capability Graph proposal。它们是新要求、研究或实现发现，不得由 Forge 静默变成当前 Intent 范围。`,
         };
       }
     } catch (error) {
       return {
         stage: 'capability_graph_proposals_pending', stage_num: 3, details: { version: current, error: error.message }, auto,
-        next_action: '修复 Capability Graph proposal', next_command: 'loom capability proposal list',
+        next_action: '修复 Capability Graph proposal', next_command: 'loom activate architect',
         message: `Capability Graph proposal 无法审计: ${error.message}`,
       };
     }
@@ -262,7 +269,7 @@ function diagnoseStage(cwd, loomRoot, auto) {
           details: { version: current, coverage: coverage.summary },
           auto,
           next_action: '补齐 Capability Graph 的路由、可观察验证入口与 Intent 回链',
-          next_command: 'loom capability coverage',
+          next_command: 'loom activate architect',
           message: `当前版本 ${current}：Capability Graph 尚未闭合（高影响前沿 ${coverage.summary.high_unrouted}、路由缺口 ${coverage.summary.routing_gaps}、不可观察 outcome ${coverage.summary.high_outcomes_without_observable_evidence}、未映射 Intent ${coverage.summary.unmapped_intents}）。先由 Architect 补图谱，再继续设计 Intent。`,
         };
       }
@@ -273,7 +280,7 @@ function diagnoseStage(cwd, loomRoot, auto) {
         details: { version: current, error: error.message },
         auto,
         next_action: '修复 Capability Graph',
-        next_command: 'loom capability coverage',
+        next_command: 'loom activate architect',
         message: `Capability Graph 无法通过校验: ${error.message}`,
       };
     }

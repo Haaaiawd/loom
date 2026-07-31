@@ -1,7 +1,7 @@
 // activate — compile a role- and intent-scoped Context Pack.
 
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { getLoomRoot } from './shared/paths.js';
 import { getIntent, getNarrative } from './intent-map.js';
 import { getIntentDraft } from './intent-draft.js';
@@ -11,6 +11,7 @@ import { extractMdSection } from './shared/md-utils.js';
 import { compileCapabilityInputs } from './capability-graph.js';
 import { getAtelierRecord } from './atelier.js';
 import { formatExpertisePackForPrompt, getExpertisePack, getExpertisePackState } from './expertise-pack.js';
+import { listCapabilityProposals } from './capability-proposals.js';
 
 const VALID_ROLES = ['weaver', 'visionary', 'architect', 'forge', 'keeper'];
 
@@ -354,6 +355,92 @@ function compileWorkingFacts(versionDir, objective) {
   return refs.join('\n');
 }
 
+function readStageFile(path, label) {
+  if (!existsSync(path)) return `> ${label} 当前不存在；不要猜测其内容。按角色契约创建或回流。`;
+  return readFileSync(path, 'utf-8').trim();
+}
+
+function listMarkdownFiles(root, current = root) {
+  if (!existsSync(current)) return [];
+  return readdirSync(current, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((entry) => {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) return listMarkdownFiles(root, path);
+      return entry.isFile() && entry.name.endsWith('.md')
+        ? [relative(root, path).replaceAll('\\', '/')]
+        : [];
+    });
+}
+
+/**
+ * Compile the stage inputs that used to be merely named by `loom guide`.
+ * These are intentionally separate from Working Facts: they are the source
+ * material for a role's immediate decision, not a request to hunt for paths.
+ */
+function compileStageInputs(role, versionDir, objective) {
+  if (role === 'weaver') {
+    const dimensionsRoot = join(getLoomRoot(), 'dimensions');
+    const catalog = listMarkdownFiles(dimensionsRoot)
+      .filter((path) => path !== 'SEARCH_METHODOLOGY.md')
+      .map((path) => `- dimensions/${path}`);
+    return [
+      '本节由 `loom activate weaver` 直接装配。不要为了取得这些输入而搜索 CLI 安装目录。',
+      '',
+      '### Search Methodology',
+      '',
+      readStageFile(join(dimensionsRoot, 'SEARCH_METHODOLOGY.md'), 'SEARCH_METHODOLOGY.md'),
+      '',
+      '### Available Dimension Catalog',
+      '',
+      catalog.length
+        ? `${catalog.join('\n')}\n\n只打开会实质改变当前项目原则或取舍的维度；目录本身不是要求逐个阅读。`
+        : '> 当前没有可用的 dimensions 文档。',
+    ].join('\n');
+  }
+
+  if (role === 'architect' && versionDir && !objective.intent && !objective.draft) {
+    let proposals = [];
+    let proposalsError = null;
+    try {
+      proposals = listCapabilityProposals(versionDir, { unresolvedOnly: true });
+    } catch (error) {
+      proposalsError = error.message;
+    }
+    return [
+      '本节由 `loom activate architect` 直接装配。以下是当前设计决策所需的版本化输入，不要先手动查找路径。',
+      '',
+      '### Vision Input (01_VISION.md)',
+      '',
+      readStageFile(join(versionDir, '01_VISION.md'), '01_VISION.md'),
+      '',
+      '### Capability Graph Input (07_CAPABILITY_GRAPH.json)',
+      '',
+      readStageFile(join(versionDir, '07_CAPABILITY_GRAPH.json'), '07_CAPABILITY_GRAPH.json'),
+      '',
+      '### Intent Map Input (04_INTENT_MAP.json)',
+      '',
+      readStageFile(join(versionDir, '04_INTENT_MAP.json'), '04_INTENT_MAP.json'),
+      '',
+      '### Open Capability Graph Proposals',
+      '',
+      proposalsError
+        ? `> Proposal 记录无法读取：${proposalsError}。先修复这份记录，不要猜测其状态。`
+        : proposals.length
+        ? `\`\`\`json\n${JSON.stringify(proposals, null, 2)}\n\`\`\``
+        : '无。',
+    ].join('\n');
+  }
+
+  if (role === 'visionary') {
+    return '产品哲学与决策准则已在上方 Project Judgment 中装配；不要重新搜索 `.loom` 目录。';
+  }
+  if (role === 'forge' || role === 'keeper') {
+    return '当前 Intent 的叙事、契约、图谱路由与已就绪的 Expertise 输入已在上方装配；只有产物本身需要按 Working Facts 检查。';
+  }
+  return '当前角色没有额外的阶段输入。';
+}
+
 /**
  * Compile a role-scoped Context Pack.
  * @param {string} role
@@ -377,9 +464,10 @@ export function activateRole(role, versionDir, intentId = null) {
     section('3. Hard Invariants', compileInvariants(role, versionDir)),
     section('4. Success Contracts', compileContracts(role, versionDir, objective)),
     section('5. Project Judgment', compileProjectJudgment(role, versionDir, objective)),
-    section('6. Expertise Inputs', compileExpertiseInputs(role, versionDir, objective)),
-    section('7. Working Facts', compileWorkingFacts(versionDir, objective)),
-    section('8. Role Contract / Output / Reflow / Stop', readRole(role)),
+    section('6. Stage Inputs (command-assembled)', compileStageInputs(role, versionDir, objective)),
+    section('7. Expertise Inputs', compileExpertiseInputs(role, versionDir, objective)),
+    section('8. Working Facts', compileWorkingFacts(versionDir, objective)),
+    section('9. Role Contract / Output / Reflow / Stop', readRole(role)),
   ];
   return `${parts.join('\n\n---\n\n')}\n`;
 }

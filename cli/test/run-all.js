@@ -753,7 +753,7 @@ test('activate --intent — draft 与官方角色都只加载对应作用域', (
 
   const officialPrompt = run('activate forge --intent INT-001');
   assertContains(officialPrompt, '## 2. Active Objective');
-  assertContains(officialPrompt, '## 6. Expertise Inputs');
+  assertContains(officialPrompt, '## 7. Expertise Inputs');
   assertContains(officialPrompt, '用户注册与登录');
   assertContains(officialPrompt, '身份自治的入口');
   assertContains(officialPrompt, '注册并登录');
@@ -789,9 +789,10 @@ test('activate forge — Context Pack 顺序稳定并注入质量与专业能力
     '## 3. Hard Invariants',
     '## 4. Success Contracts',
     '## 5. Project Judgment',
-    '## 6. Expertise Inputs',
-    '## 7. Working Facts',
-    '## 8. Role Contract / Output / Reflow / Stop',
+    '## 6. Stage Inputs (command-assembled)',
+    '## 7. Expertise Inputs',
+    '## 8. Working Facts',
+    '## 9. Role Contract / Output / Reflow / Stop',
   ];
   for (let i = 1; i < headings.length; i++) {
     assert(out.indexOf(headings[i - 1]) < out.indexOf(headings[i]), `Context Pack 顺序错误: ${headings[i]}`);
@@ -1875,6 +1876,17 @@ test('activate weaver — 输出激活提示词', () => {
   const out = run('activate weaver');
   assertContains(out, 'Project Doctrine');
   assertContains(out, 'BASELINE');
+  assertContains(out, 'Search Methodology');
+  assertContains(out, 'Available Dimension Catalog');
+  assertContains(out, '不要为了取得这些输入而搜索 CLI 安装目录');
+});
+
+test('activate architect — 设计阶段直接装配愿景、图谱与 Intent Map', () => {
+  const out = run('activate architect');
+  assertContains(out, 'Stage Inputs (command-assembled)');
+  assertContains(out, 'Vision Input (01_VISION.md)');
+  assertContains(out, 'Capability Graph Input (07_CAPABILITY_GRAPH.json)');
+  assertContains(out, 'Intent Map Input (04_INTENT_MAP.json)');
 });
 
 test('activate keeper — 输出激活提示词', () => {
@@ -2056,7 +2068,7 @@ console.log('\n测试 version 命令');
 
 test('--version / -v — 输出版本号', () => {
   const out2 = execSync(`node "${CLI}" --version`, { encoding: 'utf-8' });
-  assertContains(out2, '1.2.1');
+  assertContains(out2, '1.2.2');
   assertContains(out2, 'loom');
   const out3 = execSync(`node "${CLI}" -v`, { encoding: 'utf-8' });
   assertContains(out3, 'loom');
@@ -2529,6 +2541,7 @@ test('guide — 刚 init 完引导 activate weaver', () => {
   const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
   assertContains(out, 'need_philosophy');
   assertContains(out, 'loom activate weaver');
+  assertContains(out, '下一步命令将装配的阶段输入');
   rmSync(guideRoot, { recursive: true, force: true });
 });
 
@@ -2569,7 +2582,7 @@ test('guide — 愿景完成后先要求 Capability Graph，再允许设计 Inte
   }, null, 2));
   const incomplete = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
   assertContains(incomplete, 'capability_graph_incomplete');
-  assertContains(incomplete, 'loom capability coverage');
+  assertContains(incomplete, 'loom activate architect');
   rmSync(guideRoot, { recursive: true, force: true });
 });
 
