@@ -528,7 +528,7 @@ try {
               const icon = issue.severity === 'high' ? '⚠' : '·';
               console.log(`  ${icon} [${issue.severity}] ${issue.msg}`);
             }
-            console.log('\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/SEARCH_METHODOLOGY.md。');
+            console.log('\n下一步: 运行 loom activate weaver；命令会重新输出哲学阶段所需的 Context Pack。');
             exit(1);
           }
           break;
@@ -748,7 +748,7 @@ try {
             console.log(`    → 修复: ${issue.fix_hint}`);
           }
         }
-        console.log(`\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/SEARCH_METHODOLOGY.md。`);
+        console.log('\n下一步: 运行 loom guide；它会根据当前状态给出可执行动作与所需 Context Pack。');
       }
       break;
     }

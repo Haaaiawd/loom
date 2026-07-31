@@ -1253,6 +1253,8 @@ test('philosophy check — 无灵感来源章节报 high', () => {
   const out = run('philosophy check', true);
   assertContains(out, '哲学文档校验未通过');
   assertContains(out, '灵感来源');
+  assertContains(out, 'loom activate weaver');
+  assert(!out.includes('参见 meta/PHILOSOPHY_WEAVER.md'), '哲学恢复不应让 Agent 手动寻找框架文件');
 });
 
 test('philosophy check — 单个决策相关的 Wikipedia 来源可以通过', () => {
@@ -2137,6 +2139,8 @@ test('doctor — 健康检查（INT-001 completed 无验证记录 → 应报告�
   // INT-001 是 completed 但无验证记录，应该被检测到
   assertContains(out, 'completed_no_record');
   assertContains(out, '问题');
+  assertContains(out, 'loom guide');
+  assert(!out.includes('参见 meta/PHILOSOPHY_WEAVER.md'), 'doctor 应回到可执行引导，不应暴露框架路径');
 });
 
 test('doctor — completed 的最后一条非 passed 验证必须报 high', () => {
