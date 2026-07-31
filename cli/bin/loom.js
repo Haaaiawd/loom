@@ -592,7 +592,7 @@ try {
         }
         case 'pass':
         case 'fail': {
-          // loom verify pass <id> --summary "..." [--reproduction-command "..."] [--preservation-evidence "..."] [--quality-proof "..."]
+          // loom verify pass <id> --summary "..." --verified-by <id> --verification-context <independent_thread|human_review>
           // loom verify fail <id> --summary "..." [--deviation "..."] [--reproduction-command "..."]
           const id = rest[0];
           if (!id) die(`用法: loom verify ${sub} <id> --summary "..." [--reproduction-command "..."]${sub === 'pass' ? ' [--preservation-evidence "..."] [--quality-proof "..."]' : ' [--deviation "..."]'}`);
@@ -601,6 +601,8 @@ try {
           const deviationIdx = argv.indexOf('--deviation');
           const qualityProofIdx = argv.indexOf('--quality-proof');
           const preservationIdx = argv.indexOf('--preservation-evidence');
+          const verifiedByIdx = argv.indexOf('--verified-by');
+          const verificationContextIdx = argv.indexOf('--verification-context');
           const summary = summaryIdx !== -1 ? argv[summaryIdx + 1] : null;
           if (!summary) die(`缺少 --summary: loom verify ${sub} ${id} --summary "..."`);
           const intent = getIntent(versionDir, id);
@@ -610,11 +612,15 @@ try {
           if (sub === 'pass' && intent.quality_contract && !(qualityProofIdx !== -1 && argv[qualityProofIdx + 1])) {
             die(`Intent ${id} 声明了 quality_contract；通过前必须提供 --quality-proof，指向项目内真实的 Quality Proof Markdown 锚点。`);
           }
+          if (sub === 'pass' && !(verifiedByIdx !== -1 && argv[verifiedByIdx + 1] && verificationContextIdx !== -1 && argv[verificationContextIdx + 1])) {
+            die(`Intent ${id} 通过前必须声明独立验证来源：--verified-by <thread/run/人类标识> --verification-context <independent_thread|human_review>。同一会话自检请记录为自检，不得写 passed。`);
+          }
           const extras = {};
           if (reproIdx !== -1 && argv[reproIdx + 1]) extras.reproduction_command = argv[reproIdx + 1];
           if (sub === 'fail' && deviationIdx !== -1 && argv[deviationIdx + 1]) extras.deviation_detail = argv[deviationIdx + 1];
           if (sub === 'pass' && qualityProofIdx !== -1 && argv[qualityProofIdx + 1]) extras.quality_proof_ref = argv[qualityProofIdx + 1];
           if (sub === 'pass' && preservationIdx !== -1 && argv[preservationIdx + 1]) extras.preservation_evidence = argv[preservationIdx + 1];
+          if (sub === 'pass') extras.verification_provenance = { verified_by: argv[verifiedByIdx + 1], context: argv[verificationContextIdx + 1] };
           const verdict = sub === 'pass' ? 'passed' : 'deviated';
           const result = createQuickVerification(versionDir, verificationsDir, id, verdict, summary, extras);
           console.log(`验证记录已写入: ${result.filePath}`);

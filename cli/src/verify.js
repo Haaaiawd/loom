@@ -12,6 +12,7 @@ import { assertExpertiseReady } from './expertise-pack.js';
 
 /** 合法判定结果 */
 const VALID_VERDICTS = ['passed', 'deviated', 'blocked', 'pending_human'];
+const VALID_VERIFICATION_CONTEXTS = ['independent_thread', 'human_review'];
 
 /** 每个 Intent 都必须覆盖的基础验证维度。 */
 const BASE_DIMENSIONS = [
@@ -59,6 +60,15 @@ export function writeVerification(versionDir, verificationsDir, record) {
     errors.push(`Intent ${record.intent_id} 当前状态为 ${intent.status}；只能为 in_progress 或 needs_review 的 Intent 写入验证记录`);
   }
   const requiredDimensions = getRequiredDimensions(intent);
+  if (record.verdict === 'passed') {
+    const provenance = record.verification_provenance;
+    if (!provenance || typeof provenance !== 'object') {
+      errors.push('passed 必须声明 verification_provenance（verified_by + context）；实现者自检不能单独闭合 Intent');
+    } else {
+      if (typeof provenance.verified_by !== 'string' || !provenance.verified_by.trim()) errors.push('verification_provenance.verified_by 必须是非空验证者标识');
+      if (!VALID_VERIFICATION_CONTEXTS.includes(provenance.context)) errors.push(`verification_provenance.context 非法: ${provenance.context}（合法: ${VALID_VERIFICATION_CONTEXTS.join('|')}）`);
+    }
+  }
   // dimensions 结构校验：每个维度必须是 { verdict, evidence } 对象
   if (record.dimensions) {
     for (const dim of requiredDimensions) {
@@ -165,6 +175,7 @@ export function writeVerification(versionDir, verificationsDir, record) {
     verdict: record.verdict,
     timestamp: record.timestamp,
     summary: record.summary,
+    verification_provenance: record.verification_provenance,
     dimensions: record.dimensions,
     atelier: atelierEvidence ? {
       record_ref: `09_ATELIER/${record.intent_id}.json`,
@@ -243,7 +254,7 @@ export function getAcrossVersionVerificationHistory(currentVersionDir, inputRef)
 
 /**
  * 快捷创建验证记录——Agent 不用手动构造完整 JSON。
- * 内部用 summary 填充适用维度的 evidence，生成标准记录格式。
+ * 快捷记录只能用于低风险的结构化核验；passed 仍必须显式声明独立验证来源。
  * @param {string} versionDir — 当前 .loom/v{N}/ 目录
  * @param {string} verificationsDir — verifications/ 目录路径
  * @param {string} intentId — 如 "INT-001"
@@ -279,6 +290,7 @@ export function createQuickVerification(versionDir, verificationsDir, intentId, 
     summary,
     dimensions,
     reproduction_command: extras.reproduction_command || null,
+    verification_provenance: extras.verification_provenance || null,
     deviation_detail: extras.deviation_detail || null,
   });
 }

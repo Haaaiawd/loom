@@ -169,6 +169,7 @@ export function initProject(projectDir) {
       '3. 只在当前角色的权限内行动；发现目标、契约或架构需要改变时，按 LOOM 回流，不要静默扩展范围。',
       '4. 完成前运行当前 Intent 的验证方法与 `loom doctor`；声称质量提升时必须提供基线相对 Quality Proof，以磁盘证据而非会话记忆判断状态。',
       '5. Keeper 验证必须运行在新的 Agent thread 中；同一会话切换角色不构成独立验证。',
+      '6. 协作节奏默认是手动；需要让 Agent 在已允许阶段连续推进时，显式运行 `loom auto on`。AUTO 不会跳过契约、证据或 Keeper 门禁。',
       '',
       '常用入口：',
       '- `loom --help`',

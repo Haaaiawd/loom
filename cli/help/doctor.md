@@ -49,7 +49,9 @@ loom philosophy check
 快速命令：
 
 ```bash
-loom verify pass <id> --summary "<证据>" --quality-proof "<ref>"
+loom verify pass <id> --summary "<证据>" --quality-proof "<ref>" \
+  --verified-by "<keeper-thread-or-human>" \
+  --verification-context independent_thread
 ```
 
 若只达到完成契约，写 `deviated` 或完整验证记录，不要伪造质量通过。

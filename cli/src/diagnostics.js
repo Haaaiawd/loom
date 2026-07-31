@@ -274,6 +274,9 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
         for (const item of coverage.high_outcomes_without_observable_evidence) {
           issues.push({ id: item.node_id, type: 'capability_outcome_unobservable', severity: 'high', msg: `${item.node_id} 缺少真实呈现或交付的验证入口: ${item.reason}` });
         }
+        for (const item of coverage.evidence_artifact_gaps || []) {
+          issues.push({ id: item.node_id, type: 'capability_evidence_artifact_missing', severity: 'high', msg: `${item.node_id} 的完成证据不可用: ${item.reason}` });
+        }
         for (const item of coverage.orphan_intent_refs) {
           issues.push({ id: item.node_id, type: 'intent_graph_unmapped', severity: 'high', msg: `${item.node_id} 引用了不存在的 Intent: ${item.intent_id}` });
         }

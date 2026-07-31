@@ -91,7 +91,7 @@ Agent 每完成一步都跑 guide 确认下一步。
 ### AUTO 模式
 
 ```bash
-loom auto on      # Agent 自动连续执行，不等确认
+loom auto on      # Agent 在允许阶段连续推进；不会跳过契约、证据或 Keeper 门禁
 loom auto off     # 每步需要用户确认
 ```
 

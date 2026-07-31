@@ -110,6 +110,7 @@ function setup() {
         id: 'CAP-PROJECT-CREATION', kind: 'capability', title: '设计项目创建的可理解流程',
         status: 'researched', impact: 'high', route: 'brief', intent_refs: ['INT-002'],
         acquisition_mode: 'adaptive',
+        acquisition_rationale: '测试基线：当前项目已有可复现的内部实现与验证夹具，不需要额外来源。',
         brief_ref: '07_CAPABILITY_BRIEFS/CAP-PROJECT-CREATION.md',
         question: '用户能否理解输入、错误反馈和创建后的下一步？', relationships: [],
       },
@@ -247,7 +248,10 @@ function completeAllIntents() {
 
 function run(args, allowFailure = false) {
   try {
-    return execSync(`node "${CLI}" ${args} --loom-dir "${LOOM_DIR}"`, {
+    const verifiedArgs = args.startsWith('verify pass ') && !args.includes('--verified-by')
+      ? `${args} --verified-by "keeper-test-thread" --verification-context independent_thread`
+      : args;
+    return execSync(`node "${CLI}" ${verifiedArgs} --loom-dir "${LOOM_DIR}"`, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
       env: { ...process.env, NODE_ENV: 'test' },
@@ -1166,11 +1170,32 @@ test('capability acquisition_mode — 显式 required 生效，project_only 必�
   assert(JSON.parse(run('capability compile INT-002')).acquisition.required === true, '显式 external_required 应生效');
 
   graph.nodes['CAP-PROJECT-CREATION'].acquisition_mode = 'project_only';
+  delete graph.nodes['CAP-PROJECT-CREATION'].acquisition_rationale;
   writeFileSync(graphPath, JSON.stringify(graph, null, 2));
   assertContains(run('capability coverage', true), 'acquisition_rationale');
   graph.nodes['CAP-PROJECT-CREATION'].acquisition_rationale = '这是对未公开内部协议的机械迁移，不存在可适用的外部专业知识。';
   writeFileSync(graphPath, JSON.stringify(graph, null, 2));
   assert(JSON.parse(run('capability compile INT-002')).acquisition.required === false, '有理由的 project_only 不应强制外部获取');
+});
+
+test('1.2.1 — 高影响 adaptive 必须留下不获取的理由，完成后丢失 evidence artifact 必须被 doctor 发现', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  delete graph.nodes['CAP-PROJECT-CREATION'].acquisition_rationale;
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('capability coverage', true), 'adaptive');
+  graph.nodes['CAP-PROJECT-CREATION'].acquisition_rationale = '当前任务已有经验证的项目内方法，外部获取不会改变本轮判断。';
+  graph.nodes['EVIDENCE-IDENTITY-HOST'].verification.artifact = 'verifications/missing-proof.png';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('doctor'), 'capability_evidence_artifact_missing');
+  setup();
+});
+
+test('1.2.1 — 快捷 passed 必须声明可审计的独立验证来源', () => {
+  setup();
+  const out = run('verify pass INT-002 --summary "独立复现项目创建的完整行为与失败边界" --verified-by "keeper-test-thread"', true);
+  assertContains(out, '--verification-context');
 });
 
 console.log('\n测试 philosophy 命令');
@@ -1517,6 +1542,10 @@ test('verify write — 写入验证记录（追加模式）', () => {
     timestamp: '2026-06-26T12:00:00Z',
     summary: '实现忠实于意图',
     reproduction_command: 'npm test',
+    verification_provenance: {
+      verified_by: 'keeper-write-test',
+      context: 'independent_thread',
+    },
     dimensions: {
       intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事第 2 段，实现忠实于原始意图' },
       philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2/AP3 均未违反' },
@@ -1585,6 +1614,10 @@ test('verify write — deviated 连续计数遇到 passed 会重置', () => {
       verdict,
       timestamp: `2026-06-26T13:0${i}:00Z`,
       summary: `第 ${i + 1} 轮 ${verdict}`,
+      verification_provenance: {
+        verified_by: 'keeper-reset-test',
+        context: 'independent_thread',
+      },
       dimensions: {
         intent_fidelity: { verdict, evidence: '对照意图叙事第 2 段，记录连续偏离计数行为' },
         philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2 均未违反' },
@@ -2023,7 +2056,7 @@ console.log('\n测试 version 命令');
 
 test('--version / -v — 输出版本号', () => {
   const out2 = execSync(`node "${CLI}" --version`, { encoding: 'utf-8' });
-  assertContains(out2, '1.2.0');
+  assertContains(out2, '1.2.1');
   assertContains(out2, 'loom');
   const out3 = execSync(`node "${CLI}" -v`, { encoding: 'utf-8' });
   assertContains(out3, 'loom');

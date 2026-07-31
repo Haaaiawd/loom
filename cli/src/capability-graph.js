@@ -78,6 +78,10 @@ function validateNode(id, node, allIds, errors) {
     && (typeof node.acquisition_rationale !== 'string' || !node.acquisition_rationale.trim())) {
     errors.push(`nodes["${id}"].acquisition_mode=project_only 必须声明 acquisition_rationale`);
   }
+  if (node.impact === 'high' && node.acquisition_mode === 'adaptive'
+    && (typeof node.acquisition_rationale !== 'string' || !node.acquisition_rationale.trim())) {
+    errors.push(`nodes["${id}"] 为高影响 capability 且选择 adaptive 时必须声明 acquisition_rationale；说明为何此处不启用 external_required`);
+  }
   if (node.verification !== undefined) {
     if (node.kind !== 'evidence') {
       errors.push(`nodes["${id}"].verification 只允许写在 evidence 节点`);
@@ -267,6 +271,7 @@ export function getCapabilityCoverage(versionDir) {
   const capabilitiesWithoutPlan = [];
   const routingGaps = [];
   const outcomesWithoutConcern = [];
+  const evidenceArtifactGaps = [];
 
   for (const node of nodes) {
     for (const intentId of node.intent_refs || []) {
@@ -305,6 +310,12 @@ export function getCapabilityCoverage(versionDir) {
     if (node.kind === 'outcome' && !(node.relationships || []).some((relation) => graph.nodes[relation.target]?.kind === 'concern')) {
       outcomesWithoutConcern.push({ node_id: node.id, reason: 'outcome 没有连接到 concern，项目初衷尚未展开为问题面' });
     }
+    if (node.kind === 'evidence' && node.verification?.artifact) {
+      const ownedCompletedIntent = (node.intent_refs || []).some((intentId) => intentMap.intents[intentId]?.status === 'completed');
+      if (ownedCompletedIntent && !resolveEvidenceArtifact(versionDir, node.verification.artifact)) {
+        evidenceArtifactGaps.push({ node_id: node.id, reason: `已完成 Intent 的 evidence artifact 不存在或不可读: ${node.verification.artifact}` });
+      }
+    }
     if (node.brief_ref) {
       try { resolveBrief(versionDir, node.brief_ref); } catch (error) {
         capabilitiesWithoutPlan.push({ node_id: node.id, reason: error.message });
@@ -326,6 +337,7 @@ export function getCapabilityCoverage(versionDir) {
       routing_gaps: routingGaps.length,
       outcomes_without_concern: outcomesWithoutConcern.length,
       high_outcomes_without_observable_evidence: highOutcomesWithoutObservableEvidence.length,
+      evidence_artifact_gaps: evidenceArtifactGaps.length,
       intent_mapping_required: intentMappingRequired,
       unmapped_intents: unmappedIntents.length,
       ready: highUnrouted.length === 0
@@ -334,6 +346,7 @@ export function getCapabilityCoverage(versionDir) {
         && routingGaps.length === 0
         && outcomesWithoutConcern.length === 0
         && highOutcomesWithoutObservableEvidence.length === 0
+        && evidenceArtifactGaps.length === 0
         && unmappedIntents.length === 0,
     },
     high_unrouted: highUnrouted,
@@ -342,6 +355,7 @@ export function getCapabilityCoverage(versionDir) {
     routing_gaps: routingGaps,
     outcomes_without_concern: outcomesWithoutConcern,
     high_outcomes_without_observable_evidence: highOutcomesWithoutObservableEvidence,
+    evidence_artifact_gaps: evidenceArtifactGaps,
     unmapped_intents: unmappedIntents,
   };
 }

@@ -41,7 +41,9 @@
 12. `creative_scope` 说明 Forge 可以大胆改变什么、必须保持什么。
 13. 每个高影响 `outcome` 必须用 `validated_by` 连接到一个 `evidence` 节点。该节点必须写出 `verification.method`、`target`、`procedure`、`pass_criteria` 和 `artifact`，并回链负责把证据真正产出的 Intent。`artifact` 必须是当前版本 `verifications/` 或 `08_ASSET_LIBRARY/files/` 中实际存在的文件。`target` 是结果实际被接收、呈现或消费的位置：用户界面、目标宿主、外部系统、交付物或人工验收现场。不能用“接口返回成功”“URL 可访问”替代目标宿主中的可观察结果。
 14. 对每个重要 Intent 做简短 Pre-Mortem：最可能出现什么“表面完成”，并将其转成
-   acceptance 或 verification_method。
+   acceptance 或 verification_method。当 narrative 的核心现象可能被一个更容易实现、但
+   语义不同的代理替换时，写 `semantic_guard`：明确哪种替代不算完成，以及 Keeper 应
+   使用什么反例验证它。它不把 Intent 切成技术碎片，只防止“看似相近”偷换用户结果。
 15. 新要求、论文/资料发现、Keeper 或 Forge 发现先进入 `07_GRAPH_PROPOSALS/`，带来源、观察证据和候选类型。Architect 明确判定它已被覆盖、需要改 Graph、生成/修订 Intent、改变 acceptance，还是 Minor/Major；不得把候选静默写入正式 Graph。
 16. 当项目使用素材时，`08_ASSET_LIBRARY/manifest.json` 是唯一可用素材与来源/作者/许可/哈希的真相源。只允许已批准、可验证的本地资产进入交付；若资产构成结果证据，让 evidence 节点与资产记录双向回链。
 17. `quality_strategy` 缺失等价于 `adaptive`。只有结果确实需要作者命题、媒介原型和独立候选比较时才设为 `atelier`，且必须同时声明 `quality_contract` 与 `creative_scope`。

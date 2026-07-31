@@ -146,7 +146,7 @@ export function guideProject(projectDir, options = {}) {
     }
   } else if (result.stage_num >= 4) {
     if (auto) {
-      result.message += '\n\n> AUTO 模式开启——直接执行 next_command，无需人类确认。';
+      result.message += '\n\n> AUTO 模式开启——可继续进入下一阶段；契约、证据与 Keeper 门禁仍不会被跳过。';
     } else {
       result.message += '\n\n> ⚠ AUTO 模式关闭——执行 next_command 后等人类确认再继续。';
     }

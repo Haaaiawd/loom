@@ -52,6 +52,8 @@ Keeper 默认运行在新的 Agent thread 中。只接收：
 | quality_achievement | 仅在存在质量契约时，目标水准是否有证据成立？ |
 
 每个维度都必须记录“对照了什么、观察到什么、如何复现”。“合规”“没问题”不是证据。
+若 Intent 声明 `semantic_guard`，Keeper 必须执行其中的反例检查；实现看起来拥有相近
+控件或数据，不能代替叙事要求的真实现象。
 
 若 `continuity_required` 为 true，缺少明确的旧状态、操作和新状态证据时，`preservation_achievement` 不得通过；“页面目前看起来正常”不构成守恒证据。
 实现方式与 Architect 设想不同不构成偏差，只要公共契约和意图仍成立。
