@@ -66,3 +66,8 @@ Visionary 给出 outcome、角色、非目标与项目事实。Architect 用项�
 `loom capability compile <intent-id>` 只读显示会进入当前 Intent 的图谱节点与 Brief。Forge 激活
 Intent 时会获得同一份输入；发现新依赖、风险或能力缺口时必须回流 Architect 更新 Graph，不能静默
 扩展实现。Keeper 以图谱回链检查高影响问题是否真的被兑现。
+
+Capability 节点可选声明 `acquisition_mode: adaptive | external_required | project_only`。
+`project_only` 必须附 `acquisition_rationale`。未声明时，高影响 capability 自动提升为
+`external_required`。Graph 只保存获取必要性，不保存网站、Skill 名称或
+搜索词；Forge 在本轮 Expertise Pack 中按项目信号派生查询并记录真实来源。

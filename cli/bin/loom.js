@@ -28,6 +28,7 @@ import { compileCapabilityInputs, getCapabilityCoverage, getCapabilityFrontier, 
 import { getAsset, importAsset, listAssets, recoverAssetImportTransaction, searchAssets, validateAssetLibrary } from '../src/asset-library.js';
 import { closeCapabilityProposal, decideCapabilityProposal, getCapabilityProposal, listCapabilityProposals, submitCapabilityProposal } from '../src/capability-proposals.js';
 import { getAtelierRecord, initAtelierRecord, validateAtelierRecord } from '../src/atelier.js';
+import { assertExpertiseReady, getExpertisePack, initExpertisePack, validateExpertisePack } from '../src/expertise-pack.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // findLoomRoot / findVersionDir / readCurrentPointer 已提取到 shared/paths.js
@@ -180,6 +181,26 @@ try {
           break;
         default:
           die(`未知 atelier 子命令: ${sub}\n用法: loom atelier [init|get|validate] <intent-id>`);
+      }
+      break;
+    }
+
+    case 'expertise': {
+      const versionDir = findVersionDir();
+      const intentId = rest[0];
+      if (!intentId) die(`用法: loom expertise ${sub || '<init|get|validate>'} <intent-id>`);
+      switch (sub) {
+        case 'init':
+          output(initExpertisePack(versionDir, intentId));
+          break;
+        case 'get':
+          output(getExpertisePack(versionDir, intentId));
+          break;
+        case 'validate':
+          output(validateExpertisePack(versionDir, intentId));
+          break;
+        default:
+          die(`未知 expertise 子命令: ${sub}\n用法: loom expertise [init|get|validate] <intent-id>`);
       }
       break;
     }
@@ -343,6 +364,14 @@ try {
           const intent = getIntent(versionDir, id);
           if (!isVerificationCurrent(intent, latest)) {
             die(`${id} 最新 passed 验证不属于当前 Intent revision ${intent.revision ?? 1}。先重新验证。`);
+          }
+          const expertise = assertExpertiseReady(versionDir, id);
+          if (expertise && (latest.expertise?.record_ref !== `10_EXPERTISE_PACKS/${id}.json`
+            || latest.expertise?.intent_revision !== expertise.intent_revision
+            || latest.expertise?.source_count !== expertise.source_count
+            || latest.expertise?.capsule_count !== expertise.capsule_count
+            || latest.expertise?.pack_digest !== expertise.pack_digest)) {
+            die(`${id} 最新 passed 未绑定当前 Expertise Pack。请在新的 Keeper task 中重新打开来源并验证。`);
           }
           if (intent.quality_strategy === 'atelier') {
             const atelier = validateAtelierRecord(versionDir, id);
@@ -930,6 +959,9 @@ To Human:
   loom capability get <id>      返回节点、关系、Brief 与 Intent 回链
   loom capability coverage      检查图谱覆盖、Brief 和 Intent 回链
   loom capability compile <id>  只读显示会进入该 Intent 的能力输入
+  loom expertise init <id>      创建当前 Intent 的外部能力获取记录
+  loom expertise get <id>       返回并校验当前 Expertise Pack
+  loom expertise validate <id>  校验检索、来源、Capsule 与 revision
   loom atelier init <id>        为 atelier Intent 创建唯一创作记录
   loom atelier get <id>         返回并校验当前 Atelier Record
   loom atelier validate <id>    校验 Record、revision、候选与证据引用

@@ -15,6 +15,7 @@ import { getCapabilityCoverage, getCapabilityGraphPath, loadCapabilityGraph } fr
 import { listCapabilityProposals } from './capability-proposals.js';
 import { getAssetManifestPath, validateAssetLibrary } from './asset-library.js';
 import { validateAtelierRecord } from './atelier.js';
+import { getExpertisePackState } from './expertise-pack.js';
 
 function readIntentMapRaw(versionDir) {
   const filePath = join(versionDir, '04_INTENT_MAP.json');
@@ -178,6 +179,8 @@ const FIX_HINTS = {
   asset_library_invalid: '修复 08_ASSET_LIBRARY/manifest.json 的来源、许可、哈希、库内路径或 evidence 双向引用，然后运行 loom asset validate。',
   atelier_record_invalid: '运行 loom atelier init {id} 创建记录，或按校验错误修正后运行 loom atelier validate {id}。',
   atelier_verification_missing: '重新运行独立 Keeper 验证，让 passed 记录绑定当前 Atelier Record 与 stance_revision。',
+  expertise_pack_invalid: '运行 loom expertise init {id}（若尚未创建）；实际执行 find skill / 网络或文档检索，补齐来源与 Capability Capsules 后运行 loom expertise validate {id}。',
+  expertise_verification_missing: '重新运行独立 Keeper 验证，让 passed 记录绑定当前 10_EXPERTISE_PACKS/{id}.json。',
 };
 
 /**
@@ -313,6 +316,33 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
           issues.push({ id, type: 'quality_proof_invalid', severity: 'high', msg: `${id} 的 Quality Proof 无效: ${error.message}` });
         }
       }
+    }
+    if (!['pending', 'blocked', 'deprecated'].includes(intent.status)) {
+      try {
+        const expertise = getExpertisePackState(versionDir, id);
+        if (expertise.required && !expertise.ready) {
+          issues.push({
+            id,
+            type: 'expertise_pack_invalid',
+            severity: intent.status === 'completed' || latest?.verdict === 'passed' ? 'high' : 'medium',
+            msg: `${id} 的外部能力获取强门尚未闭合: ${expertise.reason || 'Expertise Pack not ready'}`,
+          });
+        } else if (expertise.required && latest?.verdict === 'passed') {
+          const validation = expertise.validation;
+          if (latest.expertise?.record_ref !== `10_EXPERTISE_PACKS/${id}.json`
+            || latest.expertise?.intent_revision !== validation.intent_revision
+            || latest.expertise?.source_count !== validation.source_count
+            || latest.expertise?.capsule_count !== validation.capsule_count
+            || latest.expertise?.pack_digest !== validation.pack_digest) {
+            issues.push({
+              id,
+              type: 'expertise_verification_missing',
+              severity: 'high',
+              msg: `${id} 的最新 passed 未绑定当前 Expertise Pack、Intent revision 与来源/Capsule 计数`,
+            });
+          }
+        }
+      } catch { /* Capability Graph 的结构错误已由上方统一报告。 */ }
     }
     if (intent.quality_strategy === 'atelier' && latest?.verdict === 'passed') {
       const atelier = atelierRecords.get(id);

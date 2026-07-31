@@ -10,6 +10,7 @@ import { getVerificationContract } from './verify.js';
 import { extractMdSection } from './shared/md-utils.js';
 import { compileCapabilityInputs } from './capability-graph.js';
 import { getAtelierRecord } from './atelier.js';
+import { formatExpertisePackForPrompt, getExpertisePack, getExpertisePackState } from './expertise-pack.js';
 
 const VALID_ROLES = ['weaver', 'visionary', 'architect', 'forge', 'keeper'];
 
@@ -262,8 +263,9 @@ function compileExpertiseInputs(role, versionDir, objective) {
     `- quality_strategy: ${qualityStrategy}`,
     '- Skill、工具和资产名称只代表可发现入口；实际检查并加载后才进入 Expertise Pack。',
   ];
+  let compiled = null;
   if (versionDir && objective.intent) {
-    const compiled = compileCapabilityInputs(versionDir, objective.intent.id);
+    compiled = compileCapabilityInputs(versionDir, objective.intent.id);
     if (!compiled.available) {
       lines.push(`- Capability Graph: ${compiled.warnings.join(' ')}`);
     } else if (compiled.nodes.length === 0) {
@@ -277,6 +279,40 @@ function compileExpertiseInputs(role, versionDir, objective) {
         lines.push(`\n### Capability Brief: ${brief.node_id}\n\n${brief.content.trim()}`);
       }
       for (const warning of compiled.warnings) lines.push(`- Capability Graph warning: ${warning}`);
+    }
+  }
+  if (compiled?.acquisition?.nodes?.length) {
+    lines.push('- External acquisition modes:');
+    for (const node of compiled.acquisition.nodes) {
+      lines.push(`  - ${node.node_id}: ${node.mode}（${node.reason}）`);
+    }
+  }
+  if (versionDir && objective.intent && ['forge', 'keeper'].includes(role)) {
+    const state = getExpertisePackState(versionDir, subject.id);
+    if (state.required && !state.ready) {
+      lines.push(
+        '\n### External Acquisition Gate — OPEN',
+        `- required_capabilities: ${state.required_node_ids.join(', ')}`,
+        '- 先根据 Capability question、Authorial Stance/creative_scope、媒介约束与已观察缺口派生搜索词；搜索词属于本轮计划，不得写死进 Capability Graph。',
+        '- 必须实际使用外部 find skill、网络搜索、官方文档或研究资料获取信息。模型自行生成的常识、内部复述和未打开的搜索结果不能充当来源。',
+        `- ${state.reason === 'missing' ? `运行 \`loom expertise init ${subject.id}\`` : `修正 \`10_EXPERTISE_PACKS/${subject.id}.json\``}，记录可回查来源与 Capability Capsules，再运行 \`loom expertise validate ${subject.id}\`。`,
+        '- 门未闭合时，只能完成机械性勘察、基线冻结与检索；不得声称专业方案已形成，也不得通过验证。',
+      );
+    } else if (state.required && role === 'forge') {
+      const pack = getExpertisePack(versionDir, subject.id);
+      lines.push(
+        '\n### External Acquisition Gate — READY',
+        '- 以下内容是本 Intent revision 的来源化核心信息组。它不是永久 Doctrine，也不是复制进仓库的第三方 Skill。',
+        `\n${formatExpertisePackForPrompt(pack)}`,
+      );
+    } else if (state.required && role === 'keeper') {
+      lines.push(
+        '\n### External Acquisition Evidence — PRESENT',
+        `- record_ref: 10_EXPERTISE_PACKS/${subject.id}.json`,
+        `- required_capabilities: ${state.required_node_ids.join(', ')}`,
+        `- source_count: ${state.validation.source_count}; capsule_count: ${state.validation.capsule_count}`,
+        '- 不继承 Forge 的 Capsule 结论。重新打开至少一个关键来源，检查来源确实支持规则与判断门，并把绑定写入本轮验证记录。',
+      );
     }
   }
   if (role === 'keeper') {

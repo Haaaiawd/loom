@@ -45,8 +45,15 @@ Stance。Stance 至少包含 creative thesis、gaze、tension、signature bet、
 medium grammar、surprise budget、anti-fixation 与 verification lens。人格故事、设计师
 名号和风格形容词不能替代这些决策。
 
-Context Pack 中出现 Skill 名称只代表可发现。只有实际检查环境并加载后，才算进入
-Expertise Pack。Pack 默认只存在于当前工作上下文，不新增项目文件。
+Context Pack 中出现 Skill 名称只代表可发现。若 External Acquisition Gate 为 OPEN，
+先从 Capability question、项目事实、媒介约束与已观察缺口派生 Search Plan，并实际使用
+find skill、网络、官方文档或研究资料。模型自行生成的常识、未打开的搜索摘要和只有标题的
+结果不能成为来源。
+
+required Pack 写入 `.loom/vN/10_EXPERTISE_PACKS/<intent-id>.json`，只保存来源定位和
+项目化 Capability Capsules，不复制第三方内容。每个 Capsule 必须直接引用已打开的外部
+来源并写出规则、决策门、失败模式与验证信号。运行 `loom expertise validate <intent-id>`
+闭合强门后，才能进入 Author/Atelier 或非机械性实现。
 
 Author 的观察先分流：当前命题、机制、媒介语法或候选选择失效，写入 Atelier Record 的
 `corrections[]` 并递增 `stance_revision`；新的用户结果、约束、研究证据、风险、能力缺口

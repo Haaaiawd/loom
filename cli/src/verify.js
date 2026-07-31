@@ -8,6 +8,7 @@ import { getIntent, getEffectiveVerificationEpoch, hasLegacyIntentRevision } fro
 import { formatIntentRef, resolveIntentRef } from './shared/intent-ref.js';
 import { resolveQualityProofReference } from './shared/proof-reference.js';
 import { validateAtelierRecord } from './atelier.js';
+import { assertExpertiseReady } from './expertise-pack.js';
 
 /** 合法判定结果 */
 const VALID_VERDICTS = ['passed', 'deviated', 'blocked', 'pending_human'];
@@ -46,6 +47,7 @@ function getRequiredDimensions(intent) {
 export function writeVerification(versionDir, verificationsDir, record) {
   const errors = [];
   let atelierEvidence = null;
+  let expertiseEvidence = null;
   if (!record.intent_id) errors.push('缺少 intent_id');
   if (!record.verdict || !VALID_VERDICTS.includes(record.verdict)) {
     errors.push(`verdict 非法: "${record.verdict}" (合法: ${VALID_VERDICTS.join('|')})`);
@@ -102,6 +104,13 @@ export function writeVerification(versionDir, verificationsDir, record) {
       resolveQualityProofReference(versionDir, qualityProofRef);
     } catch (error) {
       errors.push(error.message);
+    }
+  }
+  if (record.verdict === 'passed' && intent) {
+    try {
+      expertiseEvidence = assertExpertiseReady(versionDir, record.intent_id);
+    } catch (error) {
+      errors.push(`passed 前必须闭合外部能力获取强门: ${error.message}`);
     }
   }
   if (intent?.quality_strategy === 'atelier' && record.verdict === 'passed') {
@@ -161,6 +170,14 @@ export function writeVerification(versionDir, verificationsDir, record) {
       record_ref: `09_ATELIER/${record.intent_id}.json`,
       stance_revision: atelierEvidence.stance_revision,
       status: atelierEvidence.status,
+    } : undefined,
+    expertise: expertiseEvidence ? {
+      record_ref: `10_EXPERTISE_PACKS/${record.intent_id}.json`,
+      intent_revision: expertiseEvidence.intent_revision,
+      required_node_ids: expertiseEvidence.required_node_ids,
+      source_count: expertiseEvidence.source_count,
+      capsule_count: expertiseEvidence.capsule_count,
+      pack_digest: expertiseEvidence.pack_digest,
     } : undefined,
     reproduction_command: record.reproduction_command,
     deviation_detail: record.deviation_detail,

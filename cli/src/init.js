@@ -51,6 +51,7 @@ export function createVersionStructure(projectDir, version, parentVersion = null
     `.loom/${v}/07_CAPABILITY_BRIEFS`,
     `.loom/${v}/07_GRAPH_PROPOSALS`,
     `.loom/${v}/08_ASSET_LIBRARY/files`,
+    `.loom/${v}/10_EXPERTISE_PACKS`,
   ];
 
   for (const d of dirs) {

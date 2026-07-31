@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.2.0 — 2026-07-31
+
+### Added
+
+- External Acquisition Gate：Capability Graph 只声明 `acquisition_mode`，Forge 按当前
+  Intent 信号派生 Search Plan，并实际通过 Skill registry、网络、官方文档或研究资料获取信息。
+- revision-scoped Expertise Pack 与 `loom expertise init|get|validate`，以来源、检索证据和
+  Capability Capsules 形成类似 Skill 的项目化核心信息组，但不复制或内置第三方内容。
+- `guide`、Forge/Keeper activation、`verify pass`、`intent done` 与 `doctor` 的外部能力
+  获取强门；passed 记录绑定当前 Pack 内容摘要，Keeper 必须独立重开关键来源。
+
+### Compatibility
+
+- 中低影响 capability 默认为 `adaptive`；高影响 capability 未显式豁免时，以及任意 capability
+  显式声明 `external_required` 时启用持久化强门。
+- `project_only` 保留内部协议与机械任务路径，但必须说明 `acquisition_rationale`。
+
 ## 1.1.0 — 2026-07-30
 
 ### Added

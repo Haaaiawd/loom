@@ -4,6 +4,7 @@
 import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const TEST_ROOT = join(process.cwd(), 'test', '.tmp-loom-test');
 const LOOM_DIR = join(TEST_ROOT, '.loom', 'v1');
@@ -11,6 +12,7 @@ const PHILOSOPHY_DIR = join(LOOM_DIR, '00_PHILOSOPHY');
 const VERIFICATIONS_DIR = join(LOOM_DIR, 'verifications');
 const CAPABILITY_BRIEFS_DIR = join(LOOM_DIR, '07_CAPABILITY_BRIEFS');
 const ASSET_LIBRARY_DIR = join(LOOM_DIR, '08_ASSET_LIBRARY');
+const EXPERTISE_PACKS_DIR = join(LOOM_DIR, '10_EXPERTISE_PACKS');
 const CLI = join(process.cwd(), 'cli', 'bin', 'loom.js');
 
 let passed = 0;
@@ -22,6 +24,7 @@ function setup() {
   mkdirSync(VERIFICATIONS_DIR, { recursive: true });
   mkdirSync(CAPABILITY_BRIEFS_DIR, { recursive: true });
   mkdirSync(join(ASSET_LIBRARY_DIR, 'files'), { recursive: true });
+  mkdirSync(EXPERTISE_PACKS_DIR, { recursive: true });
   mkdirSync(join(TEST_ROOT, 'artifacts'), { recursive: true });
   writeFileSync(join(TEST_ROOT, 'artifacts', 'quality-proof.md'), '# INT-002 {#INT-002}\n\n基线、候选、稳定性与取舍证据。\n');
   writeFileSync(join(VERIFICATIONS_DIR, 'INT-001-host-render.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
@@ -106,6 +109,7 @@ function setup() {
       'CAP-PROJECT-CREATION': {
         id: 'CAP-PROJECT-CREATION', kind: 'capability', title: '设计项目创建的可理解流程',
         status: 'researched', impact: 'high', route: 'brief', intent_refs: ['INT-002'],
+        acquisition_mode: 'adaptive',
         brief_ref: '07_CAPABILITY_BRIEFS/CAP-PROJECT-CREATION.md',
         question: '用户能否理解输入、错误反馈和创建后的下一步？', relationships: [],
       },
@@ -163,6 +167,75 @@ function setup() {
 
   // 写入 current 指针
   writeFileSync(join(TEST_ROOT, '.loom', 'current'), 'v1', 'utf-8');
+}
+
+function writeReadyExpertisePack(intentId = 'INT-002') {
+  const map = JSON.parse(readFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), 'utf-8'));
+  const pack = {
+    _meta: {
+      _description: 'test expertise pack',
+      _version: '1.0',
+      _loom_version: 'v1',
+      _generated_by: 'forge',
+    },
+    intent_id: intentId,
+    intent_revision: map.intents[intentId].revision ?? 1,
+    required_capability_refs: ['CAP-PROJECT-CREATION'],
+    status: 'ready',
+    search_plan: {
+      decision_question: '怎样让首次项目创建既容易理解，又有可观察的反馈与后续路径？',
+      project_signals: ['当前 Capability Brief 要求覆盖输入、错误反馈和创建后的下一步'],
+      derived_queries: [
+        {
+          channel: 'skill_registry',
+          query: 'interaction design first run project creation feedback skill',
+          rationale: '寻找可复用的交互设计决策框架与失败模式',
+        },
+        {
+          channel: 'web',
+          query: 'project creation onboarding inline validation interaction patterns',
+          rationale: '交叉核对真实产品模式与可观察验证信号',
+        },
+      ],
+      constraints: ['不改变项目创建业务规则', '不得损害已有认证状态'],
+      stop_condition: '至少一个外部来源直接支持每个 Capsule，并能写出可观察的决策门与失败模式。',
+    },
+    sources: [{
+      id: 'SRC-001',
+      kind: 'skill',
+      authority: 'expert',
+      title: 'Interaction design workflow reference',
+      locator: 'https://example.com/interaction-design-skill',
+      retrieved_at: '2026-07-31T09:00:00Z',
+      why_selected: '包含触发、反馈、决策门与可观察检查，直接对应当前 Capability question。',
+      retrieval_evidence: '已打开来源正文并核对触发、反馈、失败路径和验证章节。',
+    }],
+    capsules: [{
+      capability_ref: 'CAP-PROJECT-CREATION',
+      professional_problem: '把项目创建的输入、错误和下一步编排成无需猜测的连续反馈。',
+      when_to_use: '首次创建、空输入、服务端失败和创建成功后的进入路径。',
+      rules: ['每次操作都给出与当前状态对应的反馈', '错误反馈靠近发生位置且保留用户输入'],
+      workflow: ['冻结当前流程基线', '按正常、空输入、服务失败、成功四条路径设计反馈'],
+      decision_gates: ['用户是否能在一次观察内说明当前状态和下一步'],
+      failure_modes: ['只做漂亮表单但错误和成功后的状态含糊'],
+      verification_signals: ['窄屏和错误路径可复现，认证状态不丢失'],
+      source_refs: ['SRC-001'],
+    }],
+    blocker: null,
+  };
+  writeFileSync(join(EXPERTISE_PACKS_DIR, `${intentId}.json`), JSON.stringify(pack, null, 2));
+  return pack;
+}
+
+function expertisePackDigest(pack) {
+  return createHash('sha256').update(JSON.stringify(pack)).digest('hex');
+}
+
+function useDefaultHighImpactAcquisition() {
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  delete graph.nodes['CAP-PROJECT-CREATION'].acquisition_mode;
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
 }
 
 function completeAllIntents() {
@@ -1042,6 +1115,64 @@ test('capability graph — evidence artifact and covered_by must be real, direct
   assertContains(run('capability coverage', true), 'covered_by 不得指向自身');
 });
 
+test('external acquisition — 高影响能力默认进入强门，并由 guide/activate/doctor 暴露', () => {
+  setup();
+  useDefaultHighImpactAcquisition();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].quality_contract = '相对当前基线，项目创建首次成功时间至少降低 20%，错误率不回退。';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+
+  const compiled = JSON.parse(run('capability compile INT-002'));
+  assert(compiled.acquisition.required === true, '未显式豁免的高影响 capability 应启用外部获取强门');
+  assert(compiled.acquisition.required_node_ids.includes('CAP-PROJECT-CREATION'), '必须报告强门能力节点');
+  assertContains(runFromRoot('guide'), 'loom expertise init INT-002');
+  const activation = run('activate forge --intent INT-002');
+  assertContains(activation, 'External Acquisition Gate — OPEN');
+  assertContains(activation, 'find skill');
+  assertContains(run('doctor'), 'expertise_pack_invalid');
+});
+
+test('expertise pack — draft 不能冒充 ready，来源化 Capsule 闭合后才注入 Forge', () => {
+  setup();
+  useDefaultHighImpactAcquisition();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].quality_contract = '相对当前基线，项目创建首次成功时间至少降低 20%，错误率不回退。';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+
+  const draft = JSON.parse(run('expertise init INT-002'));
+  assert(draft.status === 'draft', 'init 应只创建 draft');
+  assertContains(run('expertise validate INT-002', true), '必须为 ready');
+
+  const pack = writeReadyExpertisePack();
+  const validation = JSON.parse(run('expertise validate INT-002'));
+  assert(validation.external_source_count === 1, 'ready Pack 必须统计外部来源');
+  const activation = run('activate forge --intent INT-002');
+  assertContains(activation, 'External Acquisition Gate — READY');
+  assertContains(activation, pack.capsules[0].professional_problem);
+
+  pack.capsules[0].source_refs = [];
+  writeFileSync(join(EXPERTISE_PACKS_DIR, 'INT-002.json'), JSON.stringify(pack, null, 2));
+  assertContains(run('expertise validate INT-002', true), '至少需要一个来源');
+});
+
+test('capability acquisition_mode — 显式 required 生效，project_only 必须说明理由', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph.nodes['CAP-PROJECT-CREATION'].acquisition_mode = 'external_required';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assert(JSON.parse(run('capability compile INT-002')).acquisition.required === true, '显式 external_required 应生效');
+
+  graph.nodes['CAP-PROJECT-CREATION'].acquisition_mode = 'project_only';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('capability coverage', true), 'acquisition_rationale');
+  graph.nodes['CAP-PROJECT-CREATION'].acquisition_rationale = '这是对未公开内部协议的机械迁移，不存在可适用的外部专业知识。';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assert(JSON.parse(run('capability compile INT-002')).acquisition.required === false, '有理由的 project_only 不应强制外部获取');
+});
+
 console.log('\n测试 philosophy 命令');
 
 test('philosophy get — 按锚点加载特定章节', () => {
@@ -1264,14 +1395,28 @@ test('verify contract — 引用 acceptance 解析 05_VERIFICATION.md', () => {
 
 test('verify pass — 质量契约强制第五维，相对提升可附 Quality Proof', () => {
   setup();
+  useDefaultHighImpactAcquisition();
   const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
   const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
   map.intents['INT-002'].quality_contract = '相对当前基线，项目创建首次成功时间至少降低 20%，错误率不回退。';
   writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  writeReadyExpertisePack();
 
   writeFileSync(join(VERIFICATIONS_DIR, 'INT-002.json'), JSON.stringify({
     intent_id: 'INT-002',
-    records: [{ round: 1, intent_revision: 1, verdict: 'passed' }],
+    records: [{
+      round: 1,
+      intent_revision: 1,
+      verdict: 'passed',
+      expertise: {
+        record_ref: '10_EXPERTISE_PACKS/INT-002.json',
+        intent_revision: 1,
+        required_node_ids: ['CAP-PROJECT-CREATION'],
+        source_count: 1,
+        capsule_count: 1,
+        pack_digest: expertisePackDigest(JSON.parse(readFileSync(join(EXPERTISE_PACKS_DIR, 'INT-002.json'), 'utf-8'))),
+      },
+    }],
   }));
   assertContains(run('intent done INT-002', true), 'quality_achievement');
   rmSync(join(VERIFICATIONS_DIR, 'INT-002.json'), { force: true });
@@ -1305,6 +1450,13 @@ test('verify pass — 质量契约强制第五维，相对提升可附 Quality P
   const latest = history.records.at(-1);
   assert(latest.dimensions.quality_achievement.verdict === 'passed', '应自动写入第五维');
   assert(latest.dimensions.quality_achievement.quality_proof_ref === 'artifacts/quality-proof.md#INT-002', '应在质量维度保留 Quality Proof 引用');
+  assert(latest.expertise.record_ref === '10_EXPERTISE_PACKS/INT-002.json', 'passed 必须绑定当前 Expertise Pack');
+  assert(latest.expertise.source_count === 1 && latest.expertise.capsule_count === 1, 'passed 必须绑定来源与 Capsule 计数');
+  assert(/^[a-f0-9]{64}$/.test(latest.expertise.pack_digest), 'passed 必须绑定 Pack 内容摘要，内容变化后旧验证失效');
+  const changedPack = JSON.parse(readFileSync(join(EXPERTISE_PACKS_DIR, 'INT-002.json'), 'utf-8'));
+  changedPack.capsules[0].rules.push('验证后新增但尚未由 Keeper 重验的规则');
+  writeFileSync(join(EXPERTISE_PACKS_DIR, 'INT-002.json'), JSON.stringify(changedPack, null, 2));
+  assertContains(run('intent done INT-002', true), '未绑定当前 Expertise Pack');
   setup();
 });
 
@@ -1871,7 +2023,7 @@ console.log('\n测试 version 命令');
 
 test('--version / -v — 输出版本号', () => {
   const out2 = execSync(`node "${CLI}" --version`, { encoding: 'utf-8' });
-  assertContains(out2, '1.1.0');
+  assertContains(out2, '1.2.0');
   assertContains(out2, 'loom');
   const out3 = execSync(`node "${CLI}" -v`, { encoding: 'utf-8' });
   assertContains(out3, 'loom');
@@ -2120,6 +2272,13 @@ test('help concepts — 输出核心概念', () => {
   assertContains(out, 'Intent');
   assertContains(out, 'Keeper');
   assertContains(out, 'Quality Proof');
+});
+
+test('help expertise — 解释外部检索强门与来源化 Capsule', () => {
+  const out = run('help expertise');
+  assertContains(out, 'External Acquisition');
+  assertContains(out, 'Capability Capsule');
+  assertContains(out, '模型自行生成');
 });
 
 test('help loop — 输出 Loop 详细流程', () => {

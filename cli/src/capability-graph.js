@@ -11,6 +11,7 @@ const NODE_KINDS = ['outcome', 'concern', 'capability', 'risk', 'evidence'];
 const NODE_STATUSES = ['open', 'researched', 'covered', 'deferred', 'out_of_scope'];
 const ROUTES = ['expand', 'brief', 'intent', 'defer', 'exclude', 'covered_by'];
 const RELATIONSHIPS = ['refines', 'requires', 'realizes', 'constrains', 'risks', 'validated_by', 'covered_by'];
+const ACQUISITION_MODES = ['adaptive', 'external_required', 'project_only'];
 const VERIFICATION_FIELDS = ['method', 'target', 'procedure', 'pass_criteria', 'artifact'];
 const EVIDENCE_ARTIFACT_DIRS = ['verifications', '08_ASSET_LIBRARY/files'];
 
@@ -65,6 +66,17 @@ function validateNode(id, node, allIds, errors) {
   }
   if (node.asset_refs !== undefined && node.kind !== 'evidence') {
     errors.push(`nodes["${id}"].asset_refs 只允许写在 evidence 节点`);
+  }
+  if (node.acquisition_mode !== undefined) {
+    if (node.kind !== 'capability') {
+      errors.push(`nodes["${id}"].acquisition_mode 只允许写在 capability 节点`);
+    } else if (!ACQUISITION_MODES.includes(node.acquisition_mode)) {
+      errors.push(`nodes["${id}"].acquisition_mode 非法: ${node.acquisition_mode}`);
+    }
+  }
+  if (node.acquisition_mode === 'project_only'
+    && (typeof node.acquisition_rationale !== 'string' || !node.acquisition_rationale.trim())) {
+    errors.push(`nodes["${id}"].acquisition_mode=project_only 必须声明 acquisition_rationale`);
   }
   if (node.verification !== undefined) {
     if (node.kind !== 'evidence') {
@@ -129,6 +141,13 @@ export function loadCapabilityGraph(versionDir, { required = true } = {}) {
     return null;
   }
   return validateCapabilityGraph(readJsonFile(filePath, 'Capability Graph'));
+}
+
+function getEffectiveAcquisitionMode(node) {
+  if (node.kind !== 'capability') return null;
+  if (node.acquisition_mode) return node.acquisition_mode;
+  if (node.impact === 'high') return 'external_required';
+  return 'adaptive';
 }
 
 function isRouted(node) {
@@ -261,6 +280,19 @@ export function getCapabilityCoverage(versionDir) {
     if (node.route === 'brief' && !node.brief_ref) {
       capabilitiesWithoutPlan.push({ node_id: node.id, reason: 'route=brief 但缺少 brief_ref' });
     }
+    if (node.kind === 'capability') {
+      const linkedIntents = (node.intent_refs || [])
+        .map((intentId) => intentMap.intents[intentId])
+        .filter(Boolean);
+      const needsExternalAcquisition = linkedIntents.length > 0
+        && getEffectiveAcquisitionMode(node) === 'external_required';
+      if (needsExternalAcquisition && !node.brief_ref && node.route !== 'brief') {
+        capabilitiesWithoutPlan.push({
+          node_id: node.id,
+          reason: '外部能力获取为 required，但缺少 brief_ref 来定义专业问题与验收边界',
+        });
+      }
+    }
     if (['defer', 'exclude'].includes(node.route) && (!node.rationale || typeof node.rationale !== 'string' || node.rationale.trim() === '')) {
       routingGaps.push({ node_id: node.id, reason: `route=${node.route} 但缺少 rationale` });
     }
@@ -339,7 +371,15 @@ function collectCompilationNodes(graph, intentId) {
 
 export function compileCapabilityInputs(versionDir, intentId) {
   const graph = loadCapabilityGraph(versionDir, { required: false });
-  if (!graph) return { available: false, nodes: [], briefs: [], warnings: ['项目尚未建立 Capability Graph；使用 Intent 的 capability_needs 兼容路径。'] };
+  if (!graph) {
+    return {
+      available: false,
+      nodes: [],
+      briefs: [],
+      warnings: ['项目尚未建立 Capability Graph；使用 Intent 的 capability_needs 兼容路径。'],
+      acquisition: { required: false, required_node_ids: [], nodes: [] },
+    };
+  }
   const nodes = collectCompilationNodes(graph, intentId);
   const briefs = [];
   const warnings = [];
@@ -347,5 +387,30 @@ export function compileCapabilityInputs(versionDir, intentId) {
     if (!node.brief_ref) continue;
     try { briefs.push({ node_id: node.id, ...resolveBrief(versionDir, node.brief_ref) }); } catch (error) { warnings.push(`${node.id}: ${error.message}`); }
   }
-  return { available: true, nodes, briefs, warnings };
+  const acquisitionNodes = nodes
+    .filter((node) => node.kind === 'capability')
+    .map((node) => ({
+      node_id: node.id,
+      title: node.title,
+      mode: getEffectiveAcquisitionMode(node),
+      reason: node.acquisition_mode
+        ? 'Capability Graph 显式声明'
+        : node.impact === 'high'
+          ? '高影响能力默认需要外部来源化'
+          : '按任务证据自适应判断',
+    }));
+  const requiredNodeIds = acquisitionNodes
+    .filter((node) => node.mode === 'external_required')
+    .map((node) => node.node_id);
+  return {
+    available: true,
+    nodes,
+    briefs,
+    warnings,
+    acquisition: {
+      required: requiredNodeIds.length > 0,
+      required_node_ids: requiredNodeIds,
+      nodes: acquisitionNodes,
+    },
+  };
 }

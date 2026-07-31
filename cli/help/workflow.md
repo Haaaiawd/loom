@@ -64,6 +64,16 @@ loom activate keeper --intent <id>
 Forge 编译 Expertise Pack，在 Quality Arena 中实现与比较。
 Keeper 从当前磁盘事实和契约独立验证，不继承 Forge 的解释。
 
+当 `loom capability compile <id>` 报告 `acquisition.required=true` 时，先运行：
+
+```bash
+loom expertise init <id>
+# 实际执行 find skill / web / official docs / research 检索并填写 Pack
+loom expertise validate <id>
+```
+
+门未闭合时不能写入 passed。Keeper 会重新打开关键来源，passed 记录绑定当前 Pack。
+
 无质量契约时，四个基础维度通过即可闭合。存在质量契约时，额外验证
 `quality_achievement`；声明相对提升时，在该维度中链接 Quality Proof：
 

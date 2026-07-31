@@ -54,7 +54,10 @@ Forge 针对当前 Intent 临时组装一个 Expertise Pack。先由 Capability 
 6. 如何验证专业质量。
 
 能力名称只表示“可发现”；只有真实加载并转化为任务判断的内容才算进入 Expertise Pack。
-Pack 仅服务当前任务，不成为长期 Doctrine。
+当 External Acquisition Gate 为 required 时，Forge 只能自行派生 Search Plan，内容必须来自
+实际打开的 Skill、网络、官方文档或研究资料；Pack 写入当前 Intent revision 的
+`10_EXPERTISE_PACKS`，每个 Capability Capsule 都直接回链来源。Pack 仅服务当前任务，不成为
+长期 Doctrine。
 
 ## Quality Arena
 

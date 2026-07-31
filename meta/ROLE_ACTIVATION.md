@@ -69,6 +69,11 @@ Context Pack 不会清除 Agent 既有记忆。发生冲突时，以 system、de
 Expertise Pack。Domain、Taste、Author、Critic、Verifier 是按需认知职能，不是新增角色。
 Author 只在需要形成创作命题时启用，不是常驻 Persona。
 
+未显式豁免的高影响专业能力会让 Context Pack 先打开 External Acquisition Gate：Forge
+从项目事实派生查询并实际检索，将来源化 Capability Capsules 写入当前
+Intent revision 的 `10_EXPERTISE_PACKS`；门闭合后才注入 Author/Atelier。Keeper 只接收
+Pack 的证据入口和计数，必须独立重开关键来源，不继承 Forge 的综合结论。
+
 ### Quality Arena
 
 答案明确时直接实现；声明质量提升时保存基线、比较机制不同的候选。完成契约是

@@ -29,7 +29,7 @@
 1. 一个 Intent 产生可观察的完整结果，能独立验证，并可在一次受控工作周期内完成。
 2. 在创建正式 Intent Map 前，先用 Capability Graph 检查适用的用户旅程、体验、系统、资产、横切质量和风险；每个透镜必须展开、覆盖或明确排除。
 3. Graph 不是任务列表：未知与调研留在 Graph；只有边界清楚、可独立验证的结果才进入 Intent Map。
-4. 高影响 capability 节点需要外部知识、专业方法或会进入当前 Intent 时，创建短小的 Capability Brief；不要为每个低价值叶子制造文档。
+4. 高影响 capability 默认进入外部获取强门并创建短小的 Capability Brief；只有证据表明按任务自适应更合适时才显式写 `acquisition_mode: adaptive`，纯内部机械任务可写带理由的 `project_only`。Graph 不保存网站、Skill 或关键词，不为低价值叶子制造文档。
 5. 每个 Intent 必须回链至少一个 Graph 节点；每个高影响 Graph 节点必须有明确路由。
 6. 只引入当前目标确实需要的边界和抽象；不为想象中的扩展性提前付费。
 7. `acceptance` 是完成契约：包含功能承诺、关键失败边界和防御承诺。

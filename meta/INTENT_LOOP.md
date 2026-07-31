@@ -110,6 +110,13 @@ Forge 在实现前形成临时 Expertise Pack：
 
 Capability Graph 先提供当前 Intent 相关的项目事实、风险、约束和 Capability Brief；Expertise Compiler 再按 Brief 的获取计划加载真实技能、工具或资料。它不把整张图或历史会话当成当前任务上下文。
 
+当 capability 显式为 `external_required`，或高影响 capability 未显式豁免时，External
+Acquisition Gate 启用。Forge 只能自行生成 Search Plan，必须实际使用 find skill、
+网络、官方文档或研究资料获取内容，再把可回查来源与项目化 Capability Capsules 写入
+`.loom/vN/10_EXPERTISE_PACKS/<intent-id>.json`。Graph 不保存固定站点、Skill 或关键词。
+模型记忆、未打开的搜索摘要和自生成原则不能替代来源。Pack 绑定 Intent revision；Keeper
+不继承 Capsule 结论，而是重新打开关键来源并在 passed 记录中绑定当前 Pack。
+
 `quality_strategy=atelier` 时运行 Identity Compiler：将项目判断编译为可执行的 Authorial
 Stance，而不是模仿名人的 Persona。Forge 在 `.loom/vN/09_ATELIER/<intent-id>.json`
 保存唯一 Atelier Record；普通 Intent 不创建该文件。

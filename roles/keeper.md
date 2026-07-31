@@ -33,6 +33,8 @@ Keeper 默认运行在新的 Agent thread 中。只接收：
 - BASELINE、acceptance 与按需的 quality_contract。
 - verification_method、当前产物与可复现入口。
 - 当前 revision 的验证历史。
+- External Acquisition Gate required 时，读取当前 Expertise Pack 的 evidence binding，
+  重新打开至少一个决定性来源；不继承 Forge 的 Capsule 结论。
 - `quality_strategy=atelier` 时，读取当前 revision 的 Atelier Record 及其产物引用；不接收
   Forge 为结果辩护的隐藏推理。
 

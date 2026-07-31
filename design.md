@@ -458,13 +458,15 @@ Architect 在定义契约时应先问：
 而不是角色称号或永久提示词。
 
 ```text
-Capability Needs + Project Facts + Available Skills / Tools / Evidence
+Capability Graph + Project Facts + Available Skills / Tools / Evidence
 → Expertise Compiler
 → Expertise Pack
 ```
 
-Architect 只声明 `capability_needs`。Forge 检查真实环境、加载需要的能力并生成临时
-**Expertise Pack**；Keeper 不继承它，而是按质量契约独立准备验证能力。
+Architect 在 Capability Graph 中只声明能力问题与 `acquisition_mode`，不写死网站、
+Skill 或检索词。Forge 从 Brief、契约、媒介约束和已观察缺口派生 Search Plan，实际调用
+find skill、网络、官方文档或研究入口，再生成 revision-scoped **Expertise Pack**；
+Keeper 不继承其结论，而是按质量契约重新打开关键来源。
 
 Expertise Pack 只回答六件事：
 
@@ -487,9 +489,12 @@ Compiler 按需调用四种认知职能，而不创建四个固定角色：
 同一强模型的独立采样、Skill、工具、外部资料、专业人员或 Agent 都可以承担这些职能。
 来源质量优先于数量；“资深专家认为”必须还原为会改变候选或验证方式的机制与证据。
 
-Expertise Pack 默认只存在于当前工作上下文，不新增目录。方法会跨 Intent 重复使用时
-进入 Skill；长期项目取舍回流 Doctrine；重要架构判断进入决策记录。CLI 必须区分
-“发现了能力入口”和“能力已经加载”，但只维护一个 Expertise Pack 对象。
+当外部获取为 required 时，Expertise Pack 写入
+`.loom/vN/10_EXPERTISE_PACKS/<intent-id>.json`，只保存搜索计划、来源定位与项目化
+Capability Capsules，不复制第三方 Skill 或网页正文。它绑定 Intent revision；方法会跨
+Intent 重复使用且被 Quality Proof 支持时才考虑进入 Skill，长期项目取舍回流 Doctrine，
+重要架构判断进入决策记录。CLI 必须区分“发现了能力入口”“实际打开来源”和“来源支持
+当前判断”。
 
 ### Stage 5：Quality Arena
 

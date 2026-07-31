@@ -28,8 +28,10 @@ Forge 先形成任务级 Expertise Pack：
 - 已实际加载的技能、资料、工具及其用途。
 - Critic 视角与验证方法。
 
-Pack 是临时认知配置，不写成新的长期规范。明显任务可以很短；高质量任务应足以解释为什么
-某个专业手法适合这个项目。
+Pack 是任务级认知配置，不写成新的长期规范。External Acquisition Gate required 时，Pack
+必须落盘到 `10_EXPERTISE_PACKS/<intent-id>.json`：Search Plan 可由 AI 派生，但 Capsule 内容
+必须来自实际打开的外部来源，并写出判断门、失败模式和验证信号。明显的机械任务可以保持
+`adaptive`；高质量任务必须足以解释为什么某个专业手法适合这个项目。
 
 ## 3. Quality Arena
 

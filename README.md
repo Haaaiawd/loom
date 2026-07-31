@@ -29,7 +29,7 @@ LOOM 的核心机制：
 | **Intent** | 一个意图单元——不是"做什么"（任务），是"为什么做"（意图）。每个 Intent 有验收契约，Keeper 据此判定实现是否忠实 |
 | **Intent Map** | 所有 Intent 的依赖图（JSON）。Architect 绘制，定义拓扑序和依赖关系 |
 | **Capability Graph** | 在 Intent 前展开项目问题面、能力缺口、风险和证据；高影响节点必须路由，并回链到 Intent |
-| **Expertise Pack** | Forge 针对当前任务临时编译的专业认知，不成为永久规则 |
+| **Expertise Pack** | Forge 通过真实外部检索为当前 Intent 编译的来源化核心信息组；绑定 revision，不成为永久规则 |
 | **Authorial Stance** | 针对单个 Intent 编译的创作命题、选择、拒绝项、媒介语法和验证视角，不是 Persona 扮演 |
 | **Atelier Path** | 可选创作深路径：冻结基线、形成机制不同候选、比较或保留原版，并把证据写入唯一 Atelier Record |
 | **Quality Arena** | 以基线和机制不同候选进行探索、比较、实现与观察 |
@@ -229,6 +229,7 @@ Agent 在用户说"看看进度 / 打开 preview / 看全局"时，先跑 `loom 
 | `loom capability graph\|frontier\|get\|coverage\|compile` | 查看能力图谱、未路由前沿、覆盖缺口和当前 Intent 的能力编译输入 |
 | `loom capability proposal list\|get\|submit\|decide\|close` | 以 provenance 提交新发现，并由 Architect 裁决和闭合 |
 | `loom asset import\|list\|search\|get\|validate` | 管理带来源、许可、哈希、批准状态与 evidence 回链的本地素材 |
+| `loom expertise init\|get\|validate <id>` | 创建和校验 revision-scoped Search Plan、外部来源与 Capability Capsules |
 | `loom atelier init\|get\|validate <id>` | 为显式 Atelier Intent 创建、读取和校验创作记录 |
 | `loom intent deprecate <id> --reason <text>` | 只读评估当前版本弃用影响；加 `--confirm` 并完整分类依赖方后原子写入 |
 | `loom intent narrative <id>` | Intent 意图叙事 |
@@ -292,6 +293,7 @@ LOOM/
     ├── CAPABILITY_GRAPH_TEMPLATE.json Capability Graph 起点
     ├── CAPABILITY_BRIEF_TEMPLATE.md   Capability Brief 起点
     ├── ASSET_LIBRARY_MANIFEST_TEMPLATE.json Asset Library 起点
+    ├── EXPERTISE_PACK_TEMPLATE.json   外部能力获取记录起点
     └── ATELIER_RECORD_TEMPLATE.json   Atelier Record 起点
 ```
 
@@ -312,6 +314,7 @@ LOOM/
 | 哲学文档长什么样 | `templates/PHILOSOPHY_TEMPLATE.md` |
 | 愿景文档长什么样 | `templates/VISION_TEMPLATE.md` |
 | Capability Graph 与 Brief 长什么样 | `cli/help/capability.md`、`templates/CAPABILITY_GRAPH_TEMPLATE.json` |
+| 为什么必须外部检索、Expertise Pack 怎么闭合 | `cli/help/expertise.md`、`EXTERNAL_ACQUISITION_DESIGN.md` |
 | Author 与 Atelier 怎么工作 | `cli/help/atelier.md`、`dimensions/AUTHORSHIP.md` |
 | Intent Map 长什么样 | `templates/INTENT_MAP_TEMPLATE.json` |
 | 怎么搜索高质量参考 | `dimensions/SEARCH_METHODOLOGY.md` |

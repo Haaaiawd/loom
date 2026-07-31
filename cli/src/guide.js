@@ -10,6 +10,7 @@ import { getCapabilityCoverage } from './capability-graph.js';
 import { listCapabilityProposals } from './capability-proposals.js';
 import { isAutoOn, getAutoMode, writeHeartbeat, needsHumanReview } from './auto.js';
 import { doctor } from './diagnostics.js';
+import { getExpertisePackState } from './expertise-pack.js';
 
 /**
  * 检测文件是否还是模板（未填充真实内容）。
@@ -373,6 +374,39 @@ function diagnoseStage(cwd, loomRoot, auto) {
   // 状态 5: 有 in_progress
   if (counts.in_progress > 0) {
     const inProgressIds = allIntents.filter((i) => i.status === 'in_progress').map((i) => i.id);
+    const expertiseOpen = allIntents
+      .filter((intent) => intent.status === 'in_progress')
+      .map((intent) => ({ intent, state: getExpertisePackState(versionDir, intent.id) }))
+      .find(({ state }) => state.required && !state.ready);
+    if (expertiseOpen) {
+      const missing = expertiseOpen.state.reason === 'missing';
+      const blocked = expertiseOpen.state.reason?.startsWith('blocked:');
+      return {
+        stage: 'in_loop',
+        stage_num: 5,
+        details: {
+          version: current,
+          counts,
+          in_progress_ids: inProgressIds,
+          expertise_intent: expertiseOpen.intent.id,
+          expertise_reason: expertiseOpen.state.reason,
+        },
+        auto,
+        next_action: missing
+          ? '创建搜索计划并执行外部能力获取'
+          : blocked
+            ? '解决 Expertise Pack 记录的外部获取阻塞'
+            : '补齐来源化 Expertise Pack',
+        next_command: missing
+          ? `loom expertise init ${expertiseOpen.intent.id}`
+          : blocked
+            ? `loom expertise get ${expertiseOpen.intent.id}`
+            : `loom expertise validate ${expertiseOpen.intent.id}`,
+        message: blocked
+          ? `${expertiseOpen.intent.id} 的外部能力获取已明确 blocked：${expertiseOpen.state.reason.slice('blocked: '.length)}。满足 Pack 中的 recovery_condition 后再继续；不能让模型补齐空白。`
+          : `${expertiseOpen.intent.id} 需要外部能力获取。先由任务信号派生搜索词，实际使用 find skill、网络搜索、官方文档或研究资料，再把可回查来源编译为 Capability Capsules；模型临时生成内容不能代替来源。`,
+      };
+    }
     const atelierWithoutRecord = allIntents.find((intent) => intent.status === 'in_progress'
       && intent.quality_strategy === 'atelier'
       && !existsSync(join(versionDir, '09_ATELIER', `${intent.id}.json`)));

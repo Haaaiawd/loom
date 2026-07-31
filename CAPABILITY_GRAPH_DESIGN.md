@@ -127,7 +127,19 @@ Forge 激活 Intent 时，Compiler 不再只读取手填的 `capability_needs`�
 2. 收集对应 Capability Brief；
 3. 将每项缺口分类为项目事实、可复用方法、工具/权限、外部证据或人类决定；
 4. 只为当前 Intent 选择可用的 Skill、工具、参考与验证方法；
-5. 输出 Expertise Pack，并保留“为何需要、从何获得、怎样验证适用”的证据链。
+5. 根据 Brief、契约、媒介约束和已观察缺口派生本轮查询，实际执行外部检索；
+6. 输出 revision-scoped Expertise Pack，并保留“为何需要、从何获得、怎样验证适用”的证据链。
+
+Graph 的 capability 节点只允许用 `acquisition_mode` 表达获取边界：
+
+- `adaptive`：按任务证据决定是否检索；
+- `external_required`：必须形成来源化 Pack 后才能通过；
+- `project_only`：外部知识不会改变做法，且必须写 `acquisition_rationale`。
+
+未显式声明时，高影响 capability 自动提升为 `external_required`；Architect 需要根据项目
+事实显式选择 `adaptive` 或带理由的 `project_only` 才能豁免。Graph 不保存固定网站、Skill
+名称或搜索关键词；这些都属于当前
+Intent 的运行时 Search Plan。
 
 于是首页改造会同时看见 UX 路径、视觉层级、品牌资产、移动端、加载性能和可访问性；
 纯 API 修复不会被迫装载整套视觉能力。
