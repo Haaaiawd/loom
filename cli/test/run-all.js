@@ -2541,7 +2541,9 @@ test('guide — 刚 init 完引导 activate weaver', () => {
   const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
   assertContains(out, 'need_philosophy');
   assertContains(out, 'loom activate weaver');
-  assertContains(out, '下一步命令将装配的阶段输入');
+  assertContains(out, '它会输出当前阶段所需的 Context Pack');
+  assert(!out.includes('需要读取:'), 'guide 不应把路径清单暴露成 Agent 待办');
+  assert(!out.includes('PHILOSOPHY_WEAVER.md'), '阶段源文件应由 activate 装配，不应由 guide 要求寻找');
   rmSync(guideRoot, { recursive: true, force: true });
 });
 
@@ -2570,7 +2572,8 @@ test('guide — 愿景完成后先要求 Capability Graph，再允许设计 Inte
     '# 真实愿景\n\n用户需要一个可理解的项目空间。', 'utf-8');
   const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
   assertContains(out, 'need_capability_graph');
-  assertContains(out, '07_CAPABILITY_GRAPH.json');
+  assertContains(out, 'loom activate architect');
+  assert(!out.includes('07_CAPABILITY_GRAPH.json'), 'guide 不应泄露阶段文件清单');
   writeFileSync(join(guideRoot, '.loom', 'v1', '07_CAPABILITY_GRAPH.json'), JSON.stringify({
     _meta: { _version: '1.0', _loom_version: 'v1', _generated_by: 'architect' },
     nodes: {

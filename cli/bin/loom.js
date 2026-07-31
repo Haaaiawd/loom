@@ -800,16 +800,8 @@ try {
       console.log(`\n${result.message}`);
       console.log(`\n下一步: ${result.next_action}`);
       console.log(`  → ${result.next_command}`);
-      if (result.inputs && result.inputs.length > 0) {
-        const assembled = result.input_delivery === 'context_pack';
-        console.log(assembled
-          ? '\n下一步命令将装配的阶段输入（请先直接运行它，不要逐个手动查找）:'
-          : '\n相关输入（本命令不会自动装配；仅在下一步确实需要时读取）:');
-        for (const f of result.inputs) console.log(`  - ${f}`);
-      }
-      if (result.outputs && result.outputs.length > 0) {
-        console.log(`\n需要产出:`);
-        for (const f of result.outputs) console.log(`  - ${f}`);
+      if (result.input_delivery === 'context_pack') {
+        console.log('\n上下文: 直接运行这条命令；它会输出当前阶段所需的 Context Pack。');
       }
       if (result.verify_command) {
         console.log(`\n完成后校验: ${result.verify_command}`);

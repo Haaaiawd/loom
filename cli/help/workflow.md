@@ -10,7 +10,7 @@ loom context
 只读探测使用 `loom guide --dry-run`。
 
 若 `guide` 指向 `loom activate <role>`，直接运行该命令。它会输出已经装配的 Context Pack；
-guide 中列出的输入只是该 Pack 的来源说明，不是要求 Agent 逐个寻找文件的清单。
+`guide` 只负责给出当前动作，不要求 Agent 逐个寻找文件。
 
 ## 1. Doctrine — Weaver
 
