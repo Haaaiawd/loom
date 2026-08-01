@@ -46,9 +46,7 @@ medium grammar、surprise budget、anti-fixation 与 verification lens。人格�
 名号和风格形容词不能替代这些决策。
 
 Context Pack 中出现 Skill 名称只代表可发现。若 External Acquisition Gate 为 OPEN，
-先从 Capability question、项目事实、媒介约束与已观察缺口派生 Search Plan，并实际使用
-find skill、网络、官方文档或研究资料。模型自行生成的常识、未打开的搜索摘要和只有标题的
-结果不能成为来源。
+把每个 `external_required` capability 当作一项主动探索，不要只为“完成检索”随手找一页泛泛资料。先从 Capability question、项目事实、媒介约束与已观察缺口派生 Search Plan，并实际使用 find skill、网络、官方文档或研究资料；随后追问“这条资料让哪一个设计、实现或验证决定不同了”。优先补齐会决定用户体验、风险边界或质量上限的节点；若首个来源过于通用、彼此冲突或无法落入具体决策，继续换通道或回流，而不是把模型常识包装成结论。模型自行生成的常识、未打开的搜索摘要和只有标题的结果不能成为来源。
 
 required Pack 写入 `.loom/vN/10_EXPERTISE_PACKS/<intent-id>.json`，只保存来源定位和
 项目化 Capability Capsules，不复制第三方内容。每个 Capsule 必须直接引用已打开的外部

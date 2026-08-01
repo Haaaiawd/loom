@@ -1,5 +1,33 @@
 # Changelog
 
+## 1.3.1 — 2026-08-01
+
+### Fixed
+
+- Capability Graph 1.3 新增前置 **Impact Gate**：每个具体 capability 都必须说明影响的用户结果、错判代价、外部知识是否会改变决定与理由。若代价不可逆或外部知识会改变设计/验证，CLI 强制标为 high，并只允许 `external_required`，防止 Agent 通过写成 medium/low 或 `adaptive` 跳过检索。
+- Architect 初判后必须让新的 Agent thread / 子代理通过 `loom activate impact-reviewer` 独立逐项审查；high capability 必须至少占具体 capability 的 30%（向上取整，至少一个），防止整张图谱被大量普通节点稀释。
+- `guide` 与 `doctor` 会将缺失或试图绕过 Impact Gate 的图谱明确指回 Architect，而非让其继续进入 Intent 阶段。
+- Coverage 现在区分“已设计可观察验证入口”与“已完成 Intent 的证据产物已落盘”：规划阶段不再被要求伪造 artifact，完成后缺文件仍是高优先级缺口。
+
+### Compatibility
+
+- Graph 1.0–1.2 保持可读；新建模板使用 1.3。迁移既有图谱时应由 Architect 补 Impact Gate，不由 Forge 静默改写。
+
+## 1.3.0 — 2026-08-01
+
+### Added
+
+- Capability Graph 1.2 引入 `lens_contract` 与 `capability_domains`：Architect 必须审视用户旅程、交互与可访问性、视觉与信息表达、内容与沟通、系统与数据、横切质量与风险；再按项目事实声明 UI/UX、3D 光影、网络安全、心理学、生物学等会改变方案或验证方法的专业领域。两者都必须回链具体 Graph 节点。
+- `loom capability graph`、coverage 与 Forge/Keeper Context Pack 现在暴露与当前 Intent 相关的透镜和专业领域，避免图谱只在磁盘上存在。
+- 新增 `templates/CAPABILITY_GRAPH_EXAMPLE.json`，展示共享 capability、横切 risk/evidence 与 Lens Contract，而非把 Intent 一一镜像成能力节点。
+- `loom atlas` 取代并移除 Preview：CLI 先编译当前版本的架构与决策资料模型，再以 command-assembled Composer Pack 生成必交付的 `loom-atlas.html`。Atlas 固定呈现原则、结构、能力图谱、关键决策与审查入口，不承载项目进度或验证历史。
+- Intent 全部闭合后，`guide` 与 `doctor` 将缺少、过期或结构不完整的 Atlas 视为高优先级交付缺口。
+
+### Compatibility
+
+- 既有 Graph 1.0/1.1 保持可读；新 Graph 1.2 缺失 Lens Contract 或 Capability Domain Contract 时，coverage/doctor 会明确阻断并引导 Architect 补全。既有项目迁移应先走 Capability Graph Proposal，不由 Forge 静默改写。
+- `loom preview` 及 `loom-preview.html` 不再是 LOOM 功能或合格交付物；迁移到 `loom atlas --regen`。
+
 ## 1.2.2 — 2026-07-31
 
 ### Fixed

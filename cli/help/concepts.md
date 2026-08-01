@@ -37,6 +37,8 @@ Capability Graph 位于 Vision 和 Intent Map 之间。它将项目初衷展开�
 
 它不是执行 DAG，也不替代 Intent Map：Graph 保留未知、研究与分叉；Intent 只保留边界明确、能独立验收的承诺。高影响节点必须有明确路由（继续展开、Brief、Intent、延后或排除），每个 Intent 必须回链至少一个图谱节点。只有需要专业方法、调研或即将进入当前 Intent 的节点才创建短小的项目化 Capability Brief。
 
+在 schema 1.3 中，每个具体 capability 先经过 **Impact Gate**：Architect 说明它影响的用户结果、错判代价、外部知识是否会改变决定与理由；新的 Agent thread / 子代理通过 `loom activate impact-reviewer` 独立复审并写入 `impact_review`。若错判不可逆或外部知识会改变决定，节点必须是 high、必须外部获取；high 至少占 capability 的 30%（向上取整，至少一个），不能用大量普通节点稀释。
+
 ## System Boundary
 
 LOOM 不假装能够清除宿主 Agent 的既有记忆。`loom activate` 生成有序 Context Pack，

@@ -39,7 +39,9 @@ loom capability frontier
 loom capability coverage
 ```
 
-在写 Intent Map 前，Architect 先把愿景展开为项目问题面、能力缺口、风险与证据。图谱不是待办列表：高影响节点必须继续展开、形成项目化 Capability Brief、编译为 Intent，或带理由地延后/排除。每个 Intent 必须回链图谱；只有边界清楚且可独立验证的结果才进入 Intent Map。
+在写 Intent Map 前，Architect 先完成 Lens Contract：对用户旅程、交互与可访问性、视觉与信息表达、内容与沟通、系统与数据、横切质量与风险逐项判断，并将适用项连接到具体图谱节点。随后才把愿景展开为项目问题面、能力缺口、风险与证据。图谱不是待办列表：高影响节点必须继续展开、形成项目化 Capability Brief、编译为 Intent，或带理由地延后/排除。每个 Intent 必须回链图谱；只有边界清楚且可独立验证的结果才进入 Intent Map。
+
+在创建 Intent Map 前还要通过 Impact Gate：Architect 为每个具体 capability 写影响判断；随后在**新的 Agent thread / 子代理**中运行 `loom activate impact-reviewer`，逐项复审 high/medium/low 和外部获取必要性，并写回 `impact_review`。高影响 capability 至少占全部具体 capability 的 30%（向上取整，至少一个）；通过 `loom capability coverage` 后才能进入 Contract。
 
 ## 4. Contract — Architect
 
@@ -103,7 +105,7 @@ loom intent done <id>
 - 证据不足 → Keeper 补证或 `pending_human`
 
 连续三次 `deviated` 自动升级为 `blocked`。所有当前 revision 和当前验证 epoch 的 Intent 都有最新 passed
-记录，且没有 `needs_review`、`loom doctor` 没有 fatal/high 风险时，本轮收敛。
+记录，且没有 `needs_review`、`loom doctor` 没有 fatal/high 风险、`loom atlas validate` 通过当前版本的决策图谱交付门时，本轮收敛。
 
 ## 7. 演进
 

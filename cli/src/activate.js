@@ -13,12 +13,13 @@ import { getAtelierRecord } from './atelier.js';
 import { formatExpertisePackForPrompt, getExpertisePack, getExpertisePackState } from './expertise-pack.js';
 import { listCapabilityProposals } from './capability-proposals.js';
 
-const VALID_ROLES = ['weaver', 'visionary', 'architect', 'forge', 'keeper'];
+const VALID_ROLES = ['weaver', 'visionary', 'architect', 'impact-reviewer', 'forge', 'keeper'];
 
 const ROLE_FILES = {
   weaver: 'meta/PHILOSOPHY_WEAVER.md',
   visionary: 'roles/visionary.md',
   architect: 'roles/architect.md',
+  'impact-reviewer': 'roles/impact-reviewer.md',
   forge: 'roles/forge.md',
   keeper: 'roles/keeper.md',
 };
@@ -26,6 +27,7 @@ const ROLE_FILES = {
 const ROLE_PHILOSOPHY_FILES = {
   visionary: ['PRODUCT_PHILOSOPHY.md', 'DECISION_RUBRIC.md'],
   architect: ['ENGINEERING_CREED.md', 'DECISION_RUBRIC.md'],
+  'impact-reviewer': ['PRODUCT_PHILOSOPHY.md', 'DECISION_RUBRIC.md'],
   forge: ['ENGINEERING_CREED.md'],
   keeper: ['PRODUCT_PHILOSOPHY.md', 'DECISION_RUBRIC.md'],
 };
@@ -79,6 +81,10 @@ function compileEnvelope(role, intentId) {
   if (role === 'keeper') {
     lines.push('- Keeper 必须在新的 Agent thread 中运行；同一会话切换角色不构成独立验证。');
     lines.push('- 无法获得独立上下文时降低声明，关键判断使用 pending_human。');
+  }
+  if (role === 'impact-reviewer') {
+    lines.push('- Impact Reviewer 必须在新的 Agent thread 中运行；不得与 Architect 共用本轮推理上下文。');
+    lines.push('- 只审能力影响等级与外部获取必要性；不改产品目标、不写 Intent、不实现功能。');
   }
   return lines.join('\n');
 }
@@ -276,6 +282,18 @@ function compileExpertiseInputs(role, versionDir, objective) {
       for (const node of compiled.nodes) {
         lines.push(`  - ${node.id} [${node.kind}/${node.impact}] ${node.title}${node.question ? ` — ${node.question}` : ''}`);
       }
+      if (compiled.lenses?.length) {
+        lines.push('- Lens Contract: 以下透镜是本 Intent 不可忽略的结果维度；它们不是额外任务，也不能被“功能能跑”替代。');
+        for (const lens of compiled.lenses) {
+          lines.push(`  - ${lens.id} / ${lens.title}: ${lens.question}（节点: ${lens.node_refs.join(', ')}）`);
+        }
+      }
+      if (compiled.capability_domains?.length) {
+        lines.push('- Capability Domains: 以下是会改变本 Intent 方案或验证方法的专业领域；它们不是贴在结果上的专家标签。');
+        for (const domain of compiled.capability_domains) {
+          lines.push(`  - ${domain.id} / ${domain.title}: ${domain.question} 为什么现在需要：${domain.why_now}（能力: ${domain.node_refs.join(', ')}）`);
+        }
+      }
       for (const brief of compiled.briefs) {
         lines.push(`\n### Capability Brief: ${brief.node_id}\n\n${brief.content.trim()}`);
       }
@@ -429,6 +447,20 @@ function compileStageInputs(role, versionDir, objective) {
         : proposals.length
         ? `\`\`\`json\n${JSON.stringify(proposals, null, 2)}\n\`\`\``
         : '无。',
+    ].join('\n');
+  }
+
+  if (role === 'impact-reviewer' && versionDir && !objective.intent && !objective.draft) {
+    return [
+      '本节由 `loom activate impact-reviewer` 直接装配。以下是独立判断 Impact Gate 所需的最小版本化输入；不要先手动查找路径。',
+      '',
+      '### Vision Input (01_VISION.md)',
+      '',
+      readStageFile(join(versionDir, '01_VISION.md'), '01_VISION.md'),
+      '',
+      '### Proposed Capability Graph (07_CAPABILITY_GRAPH.json)',
+      '',
+      readStageFile(join(versionDir, '07_CAPABILITY_GRAPH.json'), '07_CAPABILITY_GRAPH.json'),
     ].join('\n');
   }
 

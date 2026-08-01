@@ -12,7 +12,12 @@ loom context
 | 类型 | 严重度 | 含义 |
 |---|---|---|
 | `cycle` | fatal | Intent DAG 有环 |
+| `project_document_missing` | high | Vision、Architecture、Verification 或哲学三件套缺失 |
+| `project_document_template` | high | 必需文档仍是初始化模板，尚未成为项目判断 |
 | `orphan_philosophy_ref` | high | Doctrine 引用不存在 |
+| `orphan_philosophy_anchor` | high | Doctrine 文件存在，但 Intent 指向的章节锚点不存在 |
+| `intent_narrative_invalid` | high | Intent 的 narrative_ref 无法解析到当前 Vision |
+| `intent_contract_invalid` | high | Intent 的 acceptance 或其 Verification 引用无法解析 |
 | `orphan_dependency` | high | Intent 依赖不存在 |
 | `completed_no_record` | high | completed 没有验证记录 |
 | `completed_verification_not_passed` | high | 最新记录不能闭合当前 revision |
@@ -21,6 +26,7 @@ loom context
 | `preservation_dimension_missing` | high | 启用了状态守恒门，但缺少通过的守恒维度 |
 | `inspiration_source` | high/medium | Doctrine 证据不可追溯、缺理由或仍是模板 |
 | `verification_method_drift` | high | 声明的验证方式与复现证据不一致 |
+| `capability_impact_gate_missing` | high | Capability Graph 未完成独立 Impact Review，或试图绕过 high / 外部获取门禁 |
 | `in_progress_no_record` | medium | 工作可能中断 |
 | `zombie` | medium | Intent 长时间无活动 |
 
@@ -60,8 +66,9 @@ loom verify pass <id> --summary "<证据>" --quality-proof "<ref>" \
 
 - Forge 中断：检查真实产物后继续，或把 Intent 回退到 `pending`。
 - Intent Map 损坏：从 Git 恢复，再运行 `loom intent validate`。
+- 哲学锚点失效：运行 `loom philosophy get <file#anchor>`，修正 Intent 引用到实际存在的章节，而不是只确认 Markdown 文件还在。
 - 验证记录丢失：重新独立验证，不从旧会话记忆补写。
-- Preview 过期：`loom preview status` 后使用 `loom preview --regen`。
+- 所有 Intent 已完成但 Atlas 缺失或过期：运行 `loom atlas --regen` 生成 `loom-atlas.html`，再运行 `loom atlas validate`。
 
 追溯入口：
 

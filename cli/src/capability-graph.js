@@ -12,8 +12,22 @@ const NODE_STATUSES = ['open', 'researched', 'covered', 'deferred', 'out_of_scop
 const ROUTES = ['expand', 'brief', 'intent', 'defer', 'exclude', 'covered_by'];
 const RELATIONSHIPS = ['refines', 'requires', 'realizes', 'constrains', 'risks', 'validated_by', 'covered_by'];
 const ACQUISITION_MODES = ['adaptive', 'external_required', 'project_only'];
+const FAILURE_COSTS = ['low', 'material', 'hard_to_reverse'];
+const IMPACT_REVIEWER_MODES = ['independent_agent_thread'];
 const VERIFICATION_FIELDS = ['method', 'target', 'procedure', 'pass_criteria', 'artifact'];
 const EVIDENCE_ARTIFACT_DIRS = ['verifications', '08_ASSET_LIBRARY/files'];
+const LENS_STATUSES = ['applicable', 'not_applicable'];
+// A lens is a mandatory inspection direction, not a capability category.  The
+// graph may decide that a lens does not apply, but it must make that decision
+// visible instead of silently omitting, for example, interaction quality.
+const STANDARD_LENSES = [
+  { id: 'journey', title: '用户旅程', question: '用户从开始到离开，是否能完成有意义的完整路径？' },
+  { id: 'interaction_accessibility', title: '交互与可访问性', question: '状态、反馈、失败恢复和不同使用条件是否真实可用？' },
+  { id: 'visual_editorial', title: '视觉与信息表达', question: '视觉语言、层级、版式与资产是否帮助用户理解并形成该产品的气质？' },
+  { id: 'content_communication', title: '内容与沟通', question: '文案、信息呈现或对话是否准确、可理解且符合产品立场？' },
+  { id: 'system_data', title: '系统与数据', question: '数据、模型、集成、权限与运行边界是否支撑而非伤害用户结果？' },
+  { id: 'quality_risk', title: '横切质量与风险', question: '可靠性、隐私、安全、性能、素材来源与独立验证是否被处理？' },
+];
 
 export function getCapabilityGraphPath(versionDir) {
   return join(versionDir, GRAPH_FILE);
@@ -27,7 +41,193 @@ function assertString(value, label, errors) {
   if (typeof value !== 'string' || value.trim() === '') errors.push(`${label} 必须是非空字符串`);
 }
 
-function validateNode(id, node, allIds, errors) {
+function schemaRequiresLensContract(data) {
+  const version = Number.parseFloat(String(data?._meta?._version || '1.0'));
+  return Number.isFinite(version) && version >= 1.1;
+}
+
+function schemaRequiresCapabilityDomains(data) {
+  const version = Number.parseFloat(String(data?._meta?._version || '1.0'));
+  return Number.isFinite(version) && version >= 1.2;
+}
+
+function schemaRequiresImpactAssessment(data) {
+  const version = Number.parseFloat(String(data?._meta?._version || '1.0'));
+  return Number.isFinite(version) && version >= 1.3;
+}
+
+function minimumHighCapabilityCount(totalCapabilities) {
+  return Math.max(1, Math.ceil(totalCapabilities * 0.3));
+}
+
+function validateImpactReview(data, capabilities, errors) {
+  if (data?._meta?._template === true) return;
+  const review = data.impact_review;
+  if (!review || typeof review !== 'object' || Array.isArray(review)) {
+    errors.push('Graph schema 1.3 要求 impact_review；Architect 提出判断后，必须由新的 Agent thread 独立审查每个 capability 的影响等级与外部获取必要性');
+    return;
+  }
+  if (!IMPACT_REVIEWER_MODES.includes(review.reviewer_mode)) {
+    errors.push(`impact_review.reviewer_mode 必须为 independent_agent_thread；不能由 Architect 在同一上下文替自己确认影响等级`);
+  }
+  if (!Array.isArray(review.assessments)) {
+    errors.push('impact_review.assessments 必须是数组');
+    return;
+  }
+  const assessmentByCapability = new Map();
+  for (const [index, assessment] of review.assessments.entries()) {
+    const prefix = `impact_review.assessments[${index}]`;
+    if (!assessment || typeof assessment !== 'object' || Array.isArray(assessment)) {
+      errors.push(`${prefix} 必须是对象`);
+      continue;
+    }
+    assertString(assessment.capability_id, `${prefix}.capability_id`, errors);
+    if (!['low', 'medium', 'high'].includes(assessment.recommended_impact)) {
+      errors.push(`${prefix}.recommended_impact 非法: ${assessment.recommended_impact}`);
+    }
+    if (typeof assessment.external_acquisition_required !== 'boolean') {
+      errors.push(`${prefix}.external_acquisition_required 必须是 boolean`);
+    }
+    assertString(assessment.rationale, `${prefix}.rationale`, errors);
+    if (assessmentByCapability.has(assessment.capability_id)) errors.push(`${prefix}.capability_id 重复: ${assessment.capability_id}`);
+    assessmentByCapability.set(assessment.capability_id, assessment);
+  }
+
+  const capabilityIds = new Set(capabilities.map((node) => node.id));
+  for (const capability of capabilities) {
+    const assessment = assessmentByCapability.get(capability.id);
+    if (!assessment) {
+      errors.push(`impact_review 缺少 ${capability.id} 的独立审查；不要让 Architect 自己裁决它是否重要`);
+      continue;
+    }
+    if (assessment.recommended_impact !== capability.impact) {
+      errors.push(`impact_review 对 ${capability.id} 建议 ${assessment.recommended_impact}，但 Graph 写为 ${capability.impact}；先按独立审查结论更新图谱或重新审查`);
+    }
+    const effectiveAcquisition = getEffectiveAcquisitionMode(capability);
+    if (assessment.external_acquisition_required && effectiveAcquisition !== 'external_required') {
+      errors.push(`impact_review 要求 ${capability.id} 外部获取，但 Graph 的 acquisition_mode 为 ${effectiveAcquisition}`);
+    }
+  }
+  for (const capabilityId of assessmentByCapability.keys()) {
+    if (!capabilityIds.has(capabilityId)) errors.push(`impact_review 引用不存在的 capability: ${capabilityId}`);
+  }
+  const highCount = capabilities.filter((node) => node.impact === 'high').length;
+  const requiredHighCount = minimumHighCapabilityCount(capabilities.length);
+  if (highCount < requiredHighCount) {
+    errors.push(`Impact Gate 要求至少 ${requiredHighCount}/${capabilities.length}（30%，向上取整，至少 1 个）capability 为 high；当前只有 ${highCount} 个。不要通过整体降级来跳过检索`);
+  }
+}
+
+function validateImpactAssessment(id, node, required, errors) {
+  const prefix = `nodes["${id}"].impact_assessment`;
+  const assessment = node.impact_assessment;
+  if (assessment === undefined) {
+    if (required) errors.push(`nodes["${id}"] 是 capability；Graph schema 1.3 要求 impact_assessment，先说明它影响的用户结果、错判代价、外部知识是否会改变决定与理由，再决定 impact`);
+    return;
+  }
+  if (!assessment || typeof assessment !== 'object' || Array.isArray(assessment)) {
+    errors.push(`${prefix} 必须是对象`);
+    return;
+  }
+  assertString(assessment.affected_user_result, `${prefix}.affected_user_result`, errors);
+  if (!FAILURE_COSTS.includes(assessment.failure_cost)) {
+    errors.push(`${prefix}.failure_cost 非法: ${assessment.failure_cost}（可选 low|material|hard_to_reverse）`);
+  }
+  if (typeof assessment.external_knowledge_changes_decision !== 'boolean') {
+    errors.push(`${prefix}.external_knowledge_changes_decision 必须是 boolean`);
+  }
+  assertString(assessment.rationale, `${prefix}.rationale`, errors);
+
+  const mustBeHigh = assessment.failure_cost === 'hard_to_reverse'
+    || assessment.external_knowledge_changes_decision === true;
+  if (mustBeHigh && node.impact !== 'high') {
+    errors.push(`nodes["${id}"] 的 impact_assessment 表明错判不可逆或外部知识会改变决定，impact 必须为 high；不能以 medium/low 绕过能力获取门禁`);
+  }
+  if (node.impact === 'high' && assessment.external_knowledge_changes_decision !== true) {
+    errors.push(`nodes["${id}"] 为 high capability，impact_assessment.external_knowledge_changes_decision 必须为 true；高影响能力必须进入外部获取判断`);
+  }
+}
+
+function validateCapabilityDomains(data, allIds, errors) {
+  if (data?._meta?._template === true) return new Set();
+  const domains = data.capability_domains;
+  if (domains === undefined) return new Set();
+  if (!Array.isArray(domains)) {
+    errors.push('capability_domains 必须是数组');
+    return new Set();
+  }
+  const seen = new Set();
+  for (const [index, domain] of domains.entries()) {
+    const prefix = `capability_domains[${index}]`;
+    if (!domain || typeof domain !== 'object' || Array.isArray(domain)) {
+      errors.push(`${prefix} 必须是对象`);
+      continue;
+    }
+    assertString(domain.id, `${prefix}.id`, errors);
+    assertString(domain.title, `${prefix}.title`, errors);
+    assertString(domain.question, `${prefix}.question`, errors);
+    assertString(domain.why_now, `${prefix}.why_now`, errors);
+    if (seen.has(domain.id)) errors.push(`${prefix}.id 重复: ${domain.id}`);
+    seen.add(domain.id);
+    if (!Array.isArray(domain.node_refs) || domain.node_refs.length === 0) {
+      errors.push(`${prefix}.node_refs 必须连接至少一个具体 capability 节点`);
+    } else {
+      for (const nodeId of domain.node_refs) {
+        if (!allIds.has(nodeId)) errors.push(`${prefix}.node_refs 指向不存在节点: ${nodeId}`);
+        else if (data.nodes[nodeId]?.kind !== 'capability') errors.push(`${prefix}.node_refs 只能引用 capability 节点: ${nodeId}`);
+      }
+    }
+  }
+  return seen;
+}
+
+function validateLensContract(data, allIds, errors) {
+  if (data?._meta?._template === true) return;
+  const contract = data.lens_contract;
+  if (contract === undefined) return;
+  if (!contract || typeof contract !== 'object' || Array.isArray(contract)) {
+    errors.push('lens_contract 必须是对象');
+    return;
+  }
+  assertString(contract.selection_basis, 'lens_contract.selection_basis', errors);
+  if (!Array.isArray(contract.lenses)) {
+    errors.push('lens_contract.lenses 必须是数组');
+    return;
+  }
+  const seen = new Set();
+  for (const [index, lens] of contract.lenses.entries()) {
+    const prefix = `lens_contract.lenses[${index}]`;
+    if (!lens || typeof lens !== 'object' || Array.isArray(lens)) {
+      errors.push(`${prefix} 必须是对象`);
+      continue;
+    }
+    assertString(lens.id, `${prefix}.id`, errors);
+    assertString(lens.title, `${prefix}.title`, errors);
+    assertString(lens.question, `${prefix}.question`, errors);
+    if (!LENS_STATUSES.includes(lens.status)) errors.push(`${prefix}.status 非法: ${lens.status}`);
+    if (seen.has(lens.id)) errors.push(`${prefix}.id 重复: ${lens.id}`);
+    seen.add(lens.id);
+    if (lens.status === 'applicable') {
+      if (!Array.isArray(lens.node_refs) || lens.node_refs.length === 0) {
+        errors.push(`${prefix}.status=applicable 必须用 node_refs 连接至少一个具体 Graph 节点`);
+      } else {
+        for (const nodeId of lens.node_refs) {
+          if (!allIds.has(nodeId)) errors.push(`${prefix}.node_refs 指向不存在节点: ${nodeId}`);
+        }
+      }
+    }
+    if (lens.status === 'not_applicable') {
+      assertString(lens.rationale, `${prefix}.rationale`, errors);
+    }
+  }
+  if (schemaRequiresLensContract(data)) {
+    for (const lens of STANDARD_LENSES) {
+      if (!seen.has(lens.id)) errors.push(`lens_contract 缺少必审透镜: ${lens.id}（${lens.title}）`);
+    }
+  }
+}
+
+function validateNode(id, node, allIds, domainIds, requireCapabilityDomains, requireImpactAssessment, errors) {
   if (!node || typeof node !== 'object' || Array.isArray(node)) {
     errors.push(`nodes["${id}"] 必须是对象`);
     return;
@@ -67,6 +267,22 @@ function validateNode(id, node, allIds, errors) {
   if (node.asset_refs !== undefined && node.kind !== 'evidence') {
     errors.push(`nodes["${id}"].asset_refs 只允许写在 evidence 节点`);
   }
+  if (node.domain_refs !== undefined && (!Array.isArray(node.domain_refs) || node.domain_refs.some((ref) => typeof ref !== 'string' || !ref.trim()))) {
+    errors.push(`nodes["${id}"].domain_refs 必须是非空字符串数组`);
+  } else if (node.domain_refs !== undefined) {
+    for (const domainId of node.domain_refs) {
+      if (!domainIds.has(domainId)) errors.push(`nodes["${id}"].domain_refs 指向不存在能力领域: ${domainId}`);
+    }
+  }
+  if (requireCapabilityDomains && node.kind === 'capability'
+    && (!Array.isArray(node.domain_refs) || node.domain_refs.length === 0)) {
+    errors.push(`nodes["${id}"] 是 capability，必须用 domain_refs 回链至少一个 capability domain`);
+  }
+  if (node.kind === 'capability') {
+    validateImpactAssessment(id, node, requireImpactAssessment, errors);
+  } else if (node.impact_assessment !== undefined) {
+    errors.push(`nodes["${id}"].impact_assessment 只允许写在 capability 节点`);
+  }
   if (node.acquisition_mode !== undefined) {
     if (node.kind !== 'capability') {
       errors.push(`nodes["${id}"].acquisition_mode 只允许写在 capability 节点`);
@@ -78,7 +294,10 @@ function validateNode(id, node, allIds, errors) {
     && (typeof node.acquisition_rationale !== 'string' || !node.acquisition_rationale.trim())) {
     errors.push(`nodes["${id}"].acquisition_mode=project_only 必须声明 acquisition_rationale`);
   }
-  if (node.impact === 'high' && node.acquisition_mode === 'adaptive'
+  if (node.impact === 'high' && requireImpactAssessment
+    && node.acquisition_mode !== undefined && node.acquisition_mode !== 'external_required') {
+    errors.push(`nodes["${id}"] 为 high capability；Graph schema 1.3 只允许 acquisition_mode=external_required（或省略并使用默认值），不得以 ${node.acquisition_mode} 绕过外部获取门禁`);
+  } else if (node.impact === 'high' && node.acquisition_mode === 'adaptive'
     && (typeof node.acquisition_rationale !== 'string' || !node.acquisition_rationale.trim())) {
     errors.push(`nodes["${id}"] 为高影响 capability 且选择 adaptive 时必须声明 acquisition_rationale；说明为何此处不启用 external_required`);
   }
@@ -104,7 +323,16 @@ export function validateCapabilityGraph(data) {
     errors.push('缺少 nodes 对象');
   } else {
     const ids = new Set(Object.keys(data.nodes));
-    for (const [id, node] of Object.entries(data.nodes)) validateNode(id, node, ids, errors);
+    const domainIds = validateCapabilityDomains(data, ids, errors);
+    const requireCapabilityDomains = schemaRequiresCapabilityDomains(data) && data.capability_domains !== undefined;
+    const requireImpactAssessment = schemaRequiresImpactAssessment(data);
+    validateLensContract(data, ids, errors);
+    for (const [id, node] of Object.entries(data.nodes)) {
+      validateNode(id, node, ids, domainIds, requireCapabilityDomains, requireImpactAssessment, errors);
+    }
+    if (requireImpactAssessment) {
+      validateImpactReview(data, Object.values(data.nodes).filter((node) => node?.kind === 'capability'), errors);
+    }
     for (const [id, node] of Object.entries(data.nodes)) {
       if (node?.route !== 'covered_by') continue;
       const targetId = node.covered_by;
@@ -204,8 +432,28 @@ export function getCapabilityGraphProjection(versionDir) {
       total: Object.keys(graph.nodes).length,
       by_kind: Object.fromEntries(NODE_KINDS.map((kind) => [kind, Object.values(graph.nodes).filter((node) => node.kind === kind).length])),
       frontier: getCapabilityFrontier(versionDir).length,
+      lenses: getLensSummary(graph),
+      capability_domains: getDomainSummary(graph),
     },
     mermaid: lines.join('\n'),
+  };
+}
+
+function getLensSummary(graph) {
+  const lenses = graph.lens_contract?.lenses || [];
+  return {
+    required: schemaRequiresLensContract(graph),
+    declared: lenses.length,
+    applicable: lenses.filter((lens) => lens.status === 'applicable').length,
+    not_applicable: lenses.filter((lens) => lens.status === 'not_applicable').length,
+  };
+}
+
+function getDomainSummary(graph) {
+  const domains = graph.capability_domains || [];
+  return {
+    required: schemaRequiresCapabilityDomains(graph),
+    declared: domains.length,
   };
 }
 
@@ -238,7 +486,7 @@ function resolveEvidenceArtifact(versionDir, artifactRef) {
   return artifactPath;
 }
 
-function getHighOutcomesWithoutObservableEvidence(versionDir, graph, intentMap, intentMappingRequired) {
+function getHighOutcomesWithoutObservableEvidence(graph, intentMap, intentMappingRequired) {
   const gaps = [];
   for (const outcome of Object.values(graph.nodes)) {
     if (outcome.kind !== 'outcome' || outcome.impact !== 'high') continue;
@@ -246,7 +494,6 @@ function getHighOutcomesWithoutObservableEvidence(versionDir, graph, intentMap, 
     const validEvidence = evidenceRelations.find((relation) => {
       const evidence = graph.nodes[relation.target];
       if (!evidence || evidence.kind !== 'evidence' || !evidence.verification) return false;
-      if (!resolveEvidenceArtifact(versionDir, evidence.verification.artifact)) return false;
       const hasOwner = (evidence.intent_refs || []).some((intentId) => !intentMappingRequired || intentId in intentMap.intents);
       return hasOwner;
     });
@@ -265,6 +512,8 @@ export function getCapabilityCoverage(versionDir) {
   const intentMap = loadIntentMap(versionDir);
   const intentMappingRequired = intentMap._meta?._template !== true;
   const nodes = Object.values(graph.nodes);
+  const capabilityNodes = nodes.filter((node) => node.kind === 'capability');
+  const highCapabilityCount = capabilityNodes.filter((node) => node.impact === 'high').length;
   const highUnrouted = getCapabilityFrontier(versionDir);
   const orphanIntentRefs = [];
   const mappedIntentIds = new Set();
@@ -272,6 +521,19 @@ export function getCapabilityCoverage(versionDir) {
   const routingGaps = [];
   const outcomesWithoutConcern = [];
   const evidenceArtifactGaps = [];
+  const lensContractGaps = [];
+  const capabilityDomainGaps = [];
+
+  if (schemaRequiresLensContract(graph) && !graph.lens_contract) {
+    lensContractGaps.push({
+      reason: '当前 Graph schema 要求 lens_contract；Architect 必须先审视用户旅程、交互与可访问性、视觉与信息表达、内容与沟通、系统与数据、横切质量与风险，并把每项连接到具体节点或说明为何不适用。',
+    });
+  }
+  if (schemaRequiresCapabilityDomains(graph) && !graph.capability_domains) {
+    capabilityDomainGaps.push({
+      reason: '当前 Graph schema 要求 capability_domains；Architect 必须从项目事实派生会改变方案或验证方法的专业领域（如 UI/UX、3D 与光影、网络安全、心理学或生物学），再把具体 capability 回链到这些领域。',
+    });
+  }
 
   for (const node of nodes) {
     for (const intentId of node.intent_refs || []) {
@@ -326,11 +588,15 @@ export function getCapabilityCoverage(versionDir) {
   const unmappedIntents = intentMappingRequired
     ? Object.keys(intentMap.intents).filter((id) => !mappedIntentIds.has(id))
     : [];
-  const highOutcomesWithoutObservableEvidence = getHighOutcomesWithoutObservableEvidence(versionDir, graph, intentMap, intentMappingRequired);
+  const highOutcomesWithoutObservableEvidence = getHighOutcomesWithoutObservableEvidence(graph, intentMap, intentMappingRequired);
   return {
     summary: {
       nodes: nodes.length,
       outcomes: nodes.filter((node) => node.kind === 'outcome').length,
+      capabilities: capabilityNodes.length,
+      high_capabilities: highCapabilityCount,
+      required_high_capabilities: capabilityNodes.length ? minimumHighCapabilityCount(capabilityNodes.length) : 0,
+      high_capability_ratio: capabilityNodes.length ? highCapabilityCount / capabilityNodes.length : 0,
       high_unrouted: highUnrouted.length,
       orphan_intent_refs: orphanIntentRefs.length,
       capabilities_without_plan: capabilitiesWithoutPlan.length,
@@ -338,6 +604,10 @@ export function getCapabilityCoverage(versionDir) {
       outcomes_without_concern: outcomesWithoutConcern.length,
       high_outcomes_without_observable_evidence: highOutcomesWithoutObservableEvidence.length,
       evidence_artifact_gaps: evidenceArtifactGaps.length,
+      lens_contract_gaps: lensContractGaps.length,
+      capability_domain_gaps: capabilityDomainGaps.length,
+      lenses: getLensSummary(graph),
+      capability_domains: getDomainSummary(graph),
       intent_mapping_required: intentMappingRequired,
       unmapped_intents: unmappedIntents.length,
       ready: highUnrouted.length === 0
@@ -347,6 +617,8 @@ export function getCapabilityCoverage(versionDir) {
         && outcomesWithoutConcern.length === 0
         && highOutcomesWithoutObservableEvidence.length === 0
         && evidenceArtifactGaps.length === 0
+        && lensContractGaps.length === 0
+        && capabilityDomainGaps.length === 0
         && unmappedIntents.length === 0,
     },
     high_unrouted: highUnrouted,
@@ -356,6 +628,8 @@ export function getCapabilityCoverage(versionDir) {
     outcomes_without_concern: outcomesWithoutConcern,
     high_outcomes_without_observable_evidence: highOutcomesWithoutObservableEvidence,
     evidence_artifact_gaps: evidenceArtifactGaps,
+    lens_contract_gaps: lensContractGaps,
+    capability_domain_gaps: capabilityDomainGaps,
     unmapped_intents: unmappedIntents,
   };
 }
@@ -395,6 +669,24 @@ export function compileCapabilityInputs(versionDir, intentId) {
     };
   }
   const nodes = collectCompilationNodes(graph, intentId);
+  const relevantLenses = (graph.lens_contract?.lenses || [])
+    .filter((lens) => lens.status === 'applicable'
+      && (lens.node_refs || []).some((nodeId) => nodes.some((node) => node.id === nodeId)))
+    .map((lens) => ({
+      id: lens.id,
+      title: lens.title,
+      question: lens.question,
+      node_refs: lens.node_refs,
+    }));
+  const relevantDomains = (graph.capability_domains || [])
+    .filter((domain) => (domain.node_refs || []).some((nodeId) => nodes.some((node) => node.id === nodeId)))
+    .map((domain) => ({
+      id: domain.id,
+      title: domain.title,
+      question: domain.question,
+      why_now: domain.why_now,
+      node_refs: domain.node_refs,
+    }));
   const briefs = [];
   const warnings = [];
   for (const node of nodes) {
@@ -419,6 +711,8 @@ export function compileCapabilityInputs(versionDir, intentId) {
   return {
     available: true,
     nodes,
+    lenses: relevantLenses,
+    capability_domains: relevantDomains,
     briefs,
     warnings,
     acquisition: {

@@ -20,7 +20,7 @@ import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../
 import { getHelpTopic, listHelpTopics } from '../src/help.js';
 import { guideProject } from '../src/guide.js';
 import { isAutoOn, autoOn, autoOff, autoStatus, getAutoMode } from '../src/auto.js';
-import { generatePreviewPrompt, getPreviewStatus } from '../src/preview.js';
+import { generateAtlasComposerPack, getAtlasStatus, validateAtlas, writeAtlasModel } from '../src/atlas.js';
 import { getPatch, listPatches, recordPatch, validatePatches } from '../src/patch.js';
 import { addIntentDraft, finalizeIntentDraft, getIntentDraft, reviseIntentDraft } from '../src/intent-draft.js';
 import { resolveIntentRef } from '../src/shared/intent-ref.js';
@@ -435,7 +435,7 @@ try {
 
     case 'activate': {
       const role = sub;
-      if (!role) die('用法: loom activate <role>\n角色: weaver | visionary | architect | forge | keeper');
+      if (!role) die('用法: loom activate <role>\n角色: weaver | visionary | architect | impact-reviewer | forge | keeper');
       // weaver 不需要 versionDir（项目还没初始化时也能激活）
       let versionDir = null;
       if (role !== 'weaver') {
@@ -869,39 +869,52 @@ try {
       break;
     }
 
-    case 'preview': {
-      const previewFile = join(cwd(), 'loom-preview.html');
+    case 'atlas': {
+      const versionDir = findVersionDir();
+      const projectDir = cwd();
       if (argv.includes('--help') || argv.includes('-h')) {
         console.log(`用法:
-  loom preview              打开新鲜 preview；过期时提示重新生成
-  loom preview --regen      输出生成提示词，让 Agent 重写 loom-preview.html
-  loom preview status       检查 preview 是否存在、是否新鲜
-  loom preview --stale      强行打开过期 preview
-  loom preview --help       显示本帮助`);
+  loom atlas build          编译当前版本的 Atlas Model
+  loom atlas --regen        输出 command-assembled Composer Pack，让 Agent 生成 loom-atlas.html
+  loom atlas status         检查 loom-atlas.html 与 Model 是否齐全、新鲜
+  loom atlas validate       校验 Atlas 是否为当前版本的必交付物
+  loom atlas                打开通过校验的 loom-atlas.html
+  loom atlas --help         显示本帮助`);
         break;
       }
-      const status = getPreviewStatus(cwd());
-      const hasPreview = status.exists;
-      const regenOnly = argv.includes('--regen') || argv.includes('-r');
-      const openStale = argv.includes('--stale');
-
       if (sub === 'status') {
-        output(status);
+        output(getAtlasStatus(projectDir, versionDir));
         break;
       }
-
-      // 已有 HTML 且没指定 --regen：直接打开浏览器
-      if (hasPreview && !regenOnly) {
-        if (!status.fresh && !openStale) {
-          console.log('preview 已过期：.loom 源文件比 loom-preview.html 更新。');
-          console.log(`  preview: ${status.preview_mtime || '未知'}`);
-          console.log(`  最新源: ${status.source_latest_mtime || '未知'} ${status.latest_source_file ? `(${status.latest_source_file})` : ''}`);
-          console.log('\n下一步: loom preview --regen');
-          console.log('强行打开旧 preview: loom preview --stale');
-          break;
-        }
+      if (sub === 'build') {
+        output(writeAtlasModel(versionDir));
+        break;
+      }
+      if (sub === 'validate') {
+        const result = validateAtlas(projectDir, versionDir);
+        if (!result.valid) die(`Atlas 校验失败:\n  - ${result.errors.join('\n  - ')}`);
+        output(result);
+        break;
+      }
+      if (argv.includes('--regen') || argv.includes('-r')) {
+        writeAtlasModel(versionDir);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('To Agent: 以下 Composer Pack 已直接装配当前架构与决策资料；生成项目根目录的 loom-atlas.html。');
+        console.log('To Human: 把以下内容交给负责视觉实现的 Agent。');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        console.log(generateAtlasComposerPack(versionDir));
+        break;
+      }
+      const validation = validateAtlas(projectDir, versionDir);
+      if (!validation.valid) {
+        console.log('Atlas 尚未成为当前版本的合格交付物：');
+        validation.errors.forEach((error) => console.log(`  - ${error}`));
+        console.log('\n下一步: loom atlas --regen');
+        break;
+      }
+      {
         const { spawn } = await import('node:child_process');
-        const target = previewFile.replace(/\\/g, '/');
+        const target = validation.atlas_path.replace(/\\/g, '/');
         if (process.platform === 'win32') {
           spawn('cmd', ['/c', 'start', target], { detached: true, stdio: 'ignore' }).unref();
         } else if (process.platform === 'darwin') {
@@ -909,20 +922,8 @@ try {
         } else {
           spawn('xdg-open', [target], { detached: true, stdio: 'ignore' }).unref();
         }
-        console.log(`已打开浏览器: ${previewFile}`);
-        console.log(status.fresh ? `重新生成: loom preview --regen` : `已打开旧 preview。重新生成: loom preview --regen`);
-        break;
+        console.log(`已打开决策图谱: ${validation.atlas_path}`);
       }
-
-      // 没有 HTML 或指定 --regen：输出提示词让 AI 生成
-      const prompt = generatePreviewPrompt();
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('To Agent: 按以下提示词读 .loom/ 文件并生成 loom-preview.html');
-      console.log('  生成完成后再次运行 loom preview 会自动打开浏览器');
-      console.log('To Human: 把以下内容给你的 AI agent');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('');
-      console.log(prompt);
       break;
     }
 
@@ -997,10 +998,11 @@ To Human:
 
   loom doctor                   项目健康检查（一致性+孤儿引用+循环依赖+僵尸）
   loom context                  上下文摘要（进度+下一步+待验证+风险）
-  loom preview                  打开新鲜 HTML；过期则提示重新生成
-  loom preview status           检查 preview 是否存在、是否新鲜
-  loom preview --regen          强制重新输出提示词（让 AI 重新生成 HTML）
-  loom preview --stale          强行打开过期 preview
+  loom atlas build              编译当前版本的决策图谱资料模型
+  loom atlas --regen            输出已装配资料的 Composer Pack，生成 loom-atlas.html
+  loom atlas status             检查决策图谱资料与 HTML 是否新鲜
+  loom atlas validate           校验决策图谱是否为当前版本合格交付物
+  loom atlas                    打开通过校验的 loom-atlas.html
   loom help <topic>             分层指南（含 patch 工作流）
 
   loom philosophy get <anchor>  按锚点加载哲学章节

@@ -1487,7 +1487,7 @@ Atelier 不能绕过 `continuity_required`：
 3. Atelier CLI 与 revision 新鲜度。
 4. Quality Proof 条件门。
 5. UI + 美术资产两个真实对照场景。
-6. 文档、帮助、preview 和兼容测试。
+6. 文档、帮助、Atlas 和兼容测试。
 
 不要先建设自动审美评分、长期偏好模型或大型素材语义索引。
 

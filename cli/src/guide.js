@@ -11,6 +11,7 @@ import { listCapabilityProposals } from './capability-proposals.js';
 import { isAutoOn, getAutoMode, writeHeartbeat, needsHumanReview } from './auto.js';
 import { doctor } from './diagnostics.js';
 import { getExpertisePackState } from './expertise-pack.js';
+import { validateAtlas } from './atlas.js';
 
 /**
  * 检测文件是否还是模板（未填充真实内容）。
@@ -268,20 +269,25 @@ function diagnoseStage(cwd, loomRoot, auto) {
           stage_num: 3.1,
           details: { version: current, coverage: coverage.summary },
           auto,
-          next_action: '补齐 Capability Graph 的路由、可观察验证入口与 Intent 回链',
+          next_action: '补齐 Capability Graph 的透镜审视、路由、可观察验证入口与 Intent 回链',
           next_command: 'loom activate architect',
-          message: `当前版本 ${current}：Capability Graph 尚未闭合（高影响前沿 ${coverage.summary.high_unrouted}、路由缺口 ${coverage.summary.routing_gaps}、不可观察 outcome ${coverage.summary.high_outcomes_without_observable_evidence}、未映射 Intent ${coverage.summary.unmapped_intents}）。先由 Architect 补图谱，再继续设计 Intent。`,
+          message: `当前版本 ${current}：Capability Graph 尚未闭合（透镜契约缺口 ${coverage.summary.lens_contract_gaps || 0}、能力领域缺口 ${coverage.summary.capability_domain_gaps || 0}、高影响前沿 ${coverage.summary.high_unrouted}、路由缺口 ${coverage.summary.routing_gaps}、不可观察 outcome ${coverage.summary.high_outcomes_without_observable_evidence}、未映射 Intent ${coverage.summary.unmapped_intents}）。先由 Architect 补图谱，再继续设计 Intent。`,
         };
       }
     } catch (error) {
+      const impactGateError = /impact_assessment|impact 必须为 high|外部获取门禁/.test(error.message);
       return {
         stage: 'capability_graph_incomplete',
         stage_num: 3.1,
         details: { version: current, error: error.message },
         auto,
-        next_action: '修复 Capability Graph',
+        next_action: impactGateError
+          ? '先完成每个 capability 的 Impact Gate，再决定哪些必须外部获取'
+          : '修复 Capability Graph',
         next_command: 'loom activate architect',
-        message: `Capability Graph 无法通过校验: ${error.message}`,
+        message: impactGateError
+          ? `Capability Graph 的 Impact Gate 尚未通过：${error.message} 先由 Architect 判断影响的用户结果、错判代价与外部知识是否会改变决定，不能靠降级 impact 继续。`
+          : `Capability Graph 无法通过校验: ${error.message}`,
       };
     }
   }
@@ -318,6 +324,41 @@ function diagnoseStage(cwd, loomRoot, auto) {
   }
 
   const allIntents = Object.values(intents);
+  const incompleteDesignDocuments = ['02_ARCHITECTURE.md', '05_VERIFICATION.md']
+    .filter((filename) => isTemplate(join(versionDir, filename)));
+  if (incompleteDesignDocuments.length) {
+    return {
+      stage: 'need_architecture',
+      stage_num: 3.5,
+      details: { version: current, incomplete_documents: incompleteDesignDocuments },
+      auto,
+      next_action: '完成当前版本的系统架构与验证契约文档',
+      next_command: 'loom activate architect',
+      message: `当前版本 ${current} 的 Intent Map 已存在，但 ${incompleteDesignDocuments.join('、')} 仍缺失或是模板。Architect 必须先把系统边界与完成契约落到真实文档，再进入 Intent Loop。`,
+    };
+  }
+  const documentIntegrityIssues = doctor(versionDir, join(versionDir, 'verifications'), philosophyDir).issues
+    .filter((issue) => [
+      'project_document_missing',
+      'project_document_template',
+      'orphan_philosophy_ref',
+      'orphan_philosophy_anchor',
+      'intent_narrative_invalid',
+      'intent_contract_invalid',
+      'capability_impact_gate_missing',
+    ].includes(issue.type));
+  if (documentIntegrityIssues.length) {
+    const issueTypes = [...new Set(documentIntegrityIssues.map((issue) => issue.type))];
+    return {
+      stage: 'document_integrity_incomplete',
+      stage_num: 3.6,
+      details: { version: current, issue_types: issueTypes },
+      auto,
+      next_action: '修复 LOOM 文档引用与结构完整性，再进入 Intent Loop',
+      next_command: 'loom activate architect',
+      message: `当前版本 ${current} 的 LOOM 文档完整性尚未通过（${issueTypes.join('、')}）。先让 Architect 修复真实文档、章节引用或 Impact Gate；不要带着断开的叙事/契约进入 Intent Loop。`,
+    };
+  }
   const counts = {
     pending: allIntents.filter((i) => i.status === 'pending').length,
     in_progress: allIntents.filter((i) => i.status === 'in_progress').length,
@@ -346,6 +387,18 @@ function diagnoseStage(cwd, loomRoot, auto) {
 
   // 状态 6: 全部 completed
   if (counts.completed === total && total > 0) {
+    const atlas = validateAtlas(join(versionDir, '..', '..'), versionDir);
+    if (!atlas.valid) {
+      return {
+        stage: 'need_decision_atlas',
+        stage_num: 5.8,
+        details: { version: current, atlas_errors: atlas.errors },
+        auto,
+        next_action: '生成并校验当前版本的决策图谱交付物',
+        next_command: 'loom atlas --regen',
+        message: `当前版本 ${current} 的 Intent 已全部完成，但决策图谱尚未交付。它只说明当前架构与决策结构，不展示项目进度；生成 loom-atlas.html 后运行 loom atlas validate。`,
+      };
+    }
     const health = doctor(versionDir, join(versionDir, 'verifications'), philosophyDir);
     const blocking = health.issues.filter((issue) => issue.severity === 'fatal' || issue.severity === 'high');
     if (blocking.length) {

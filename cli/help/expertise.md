@@ -15,19 +15,20 @@ loom activate forge --intent <intent-id>
 ## 什么时候强制
 
 - capability 显式声明 `acquisition_mode: external_required`；
-- 或高影响 capability 没有显式声明其他模式。
+- 或高影响 capability 没有显式声明模式（默认即为 `external_required`）。
 
-中低影响任务默认为 `adaptive`。高影响任务只有在 Architect 明确写 `adaptive` 时才按证据
-决定是否检索；仅依赖未公开内部协议、外部知识不会改变做法的机械任务可以用 `project_only`，
-但必须写 `acquisition_rationale`。
+Graph schema 1.3 中，高影响 capability 不允许 `adaptive` 或 `project_only`：它必须实际检索。
+中低影响任务默认为 `adaptive`；仅依赖未公开内部协议、外部知识不会改变做法的机械任务可以用
+`project_only`，但必须写 `acquisition_rationale`。若外部知识仍可能改变方案，应回流 Impact Gate 上调，
+而不是把检索省掉。
 
 ## Search Plan
 
 Forge 根据 capability question、Capability Brief、Intent narrative、质量契约、creative
-scope、媒介约束和基线缺口派生查询。关键词是运行时证据，不写回 Graph。
+scope、媒介约束和基线缺口派生查询。每个 `external_required` capability 都是一项主动探索：先写清它需要回答的专业决定，再记录哪一条来源会让设计、实现或验证路径不同。关键词是运行时证据，不写回 Graph。
 
 必须实际使用 Skill registry、网络、官方文档或研究资料。模型自行生成的原则、没有打开的
-搜索摘要和只看标题的结果都不能登记为来源。每个计划必须写停止条件，避免无边界浏览。
+搜索摘要和只看标题的结果都不能登记为来源。首个来源如果只是通用建议、无法改变具体决定或与另一来源冲突，继续探索或回流，不得把它凑成 Capsule。每个计划必须写停止条件，避免无边界浏览。
 
 ## Capability Capsule
 

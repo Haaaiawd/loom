@@ -398,7 +398,25 @@ Weaver 不再产出“实现部分清单”作为准架构。它只识别需要�
 - 功能与项目北极星一致。
 - 结果是否意外扩大了产品范围。
 
-### Stage 3：Execution Contract
+### Stage 3：Capability Boundary / Lens Contract
+
+**负责人**：Architect
+
+Capability Graph 的第一层不是 Intent 路由，而是 `lens_contract`：它要求 Architect 先对用户旅程、交互与可访问性、视觉与信息表达、内容与沟通、系统与数据、横切质量与风险逐项作出项目化判断。适用的方向必须用 `node_refs` 连接到实际的 outcome、concern、capability、risk 或 evidence；不适用必须留下理由。它的作用是防止“模型刚好没有想到视觉或交互”被误当成“项目不需要”。
+
+这六项不是六个固定部门，更不是要创建 `CAP-UI`、`CAP-UX`、`CAP-后端` 之类空泛节点。透镜只负责追问，Capability 必须表达可观察、可取舍、可验证的用户结果，例如：
+
+- “让状态、失败恢复与键盘路径保持可理解”；
+- “让报告中的证据、推断与待验证问题在窄屏仍可扫读”；
+- “让结论以条件化语言回链用户可核对的事实”。
+
+`capability_domains` 是第二层：它记录会改变方案或验证方法的专业知识来源。UI/UX、3D、光影与材质、网络安全、心理学、生物学等都可以进入，但前提不是“领域看起来厉害”，而是能回答“不了解它，当前设计、实现或验证会怎样不同”。Domain 要连接具体 capability，Capability 也要回链 Domain；前者不是功能承诺，后者不是学科标签。
+
+一张合格的图允许一个能力服务多个 outcome、同时被多个透镜引用、回链多个专业领域，也允许一个 concern 同时约束交互、内容与数据能力；风险和 evidence 往往横切多个 Intent。若图自然地退化成 `一个 Outcome → 一个 Capability → 一个 Intent`，Architect 必须把它当作信号：要么项目的真实边界尚未展开，要么应明确说明为什么不存在共享关系。完整结构例子位于 `templates/CAPABILITY_GRAPH_EXAMPLE.json`。
+
+旧版 `1.0` Graph 保持可读；`1.1` 起的新 Graph 强制 Lens Contract，`1.2` 起还要求 Capability Domain Contract。迁移既有项目时先通过 Graph Proposal 让 Architect 判断现有 Intent、证据与架构是否受影响，不能由 Forge 静默补图。
+
+### Stage 4：Execution Contract
 
 **负责人**：Architect
 
@@ -452,7 +470,7 @@ Architect 在定义契约时应先问：
 
 将有实质风险的答案转为防御承诺或验证方法。
 
-### Stage 4：Expertise Compiler
+### Stage 5：Expertise Compiler
 
 **使命**：为当前 Intent 编译足够而不过量的专业认知，使“专家”成为任务级能力，
 而不是角色称号或永久提示词。
@@ -496,7 +514,7 @@ Intent 重复使用且被 Quality Proof 支持时才考虑进入 Skill，长期�
 重要架构判断进入决策记录。CLI 必须区分“发现了能力入口”“实际打开来源”和“来源支持
 当前判断”。
 
-### Stage 5：Quality Arena
+### Stage 6：Quality Arena
 
 **负责人**：Forge
 
@@ -1197,7 +1215,7 @@ System Boundary 与角色职责保持跨模型稳定；工具声明、会话隔�
 |---|---|
 | `cli/help/*.md` | 与新认知飞轮一致 |
 | `README.md` | 展示产品模型和最短路径 |
-| `cli/src/preview-prompt.md` | 使用质量契约，不再依赖规则堆叠 |
+| `cli/src/atlas.js` | 编译可追溯的架构与决策资料模型，并为 Atlas H5 提供固定内容契约 |
 | `cli/test/run-all.js` | 增加结构、Quality Arena 与行为夹具 |
 
 验收：
