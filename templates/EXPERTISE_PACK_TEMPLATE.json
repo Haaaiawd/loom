@@ -1,0 +1,22 @@
+{
+  "_meta": {
+    "_description": "当前 Intent 的外部能力获取记录。只保存检索计划、来源定位与项目化核心信息，不复制第三方 Skill 或网站内容。",
+    "_version": "1.0",
+    "_loom_version": "v1",
+    "_generated_by": "forge"
+  },
+  "intent_id": "INT-001",
+  "intent_revision": 1,
+  "required_capability_refs": [],
+  "status": "draft",
+  "search_plan": {
+    "decision_question": "",
+    "project_signals": [],
+    "derived_queries": [],
+    "constraints": [],
+    "stop_condition": ""
+  },
+  "sources": [],
+  "capsules": [],
+  "blocker": null
+}

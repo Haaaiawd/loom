@@ -1,0 +1,78 @@
+{
+  "_meta": {
+    "_description": "Capability Graph 起点：从项目初衷展开问题面、能力缺口、风险与证据，再编译为 Intent。先完成 lens_contract；再从项目事实派生 capability_domains，让具体 capability 回链其专业领域。每个 capability 先写 impact_assessment：影响的用户结果、错判代价、外部知识会不会改变决定与理由；错判不可逆或外部知识会改变决定即为 high，必须 external_required。Graph 不保存网站、Skill 或搜索词。",
+    "_version": "1.3",
+    "_loom_version": "v1",
+    "_generated_by": "architect",
+    "_template": true
+  },
+  "lens_contract": {
+    "selection_basis": "[从愿景、用户、媒介与实际交付方式判断；不要按固定部门表格机械分类。]",
+    "lenses": [
+      {
+        "id": "journey",
+        "title": "用户旅程",
+        "question": "用户从开始到离开，是否能完成有意义的完整路径？",
+        "status": "applicable",
+        "node_refs": []
+      },
+      {
+        "id": "interaction_accessibility",
+        "title": "交互与可访问性",
+        "question": "状态、反馈、失败恢复和不同使用条件是否真实可用？",
+        "status": "applicable",
+        "node_refs": []
+      },
+      {
+        "id": "visual_editorial",
+        "title": "视觉与信息表达",
+        "question": "视觉语言、层级、版式与资产是否帮助用户理解并形成该产品的气质？",
+        "status": "applicable",
+        "node_refs": []
+      },
+      {
+        "id": "content_communication",
+        "title": "内容与沟通",
+        "question": "文案、信息呈现或对话是否准确、可理解且符合产品立场？",
+        "status": "applicable",
+        "node_refs": []
+      },
+      {
+        "id": "system_data",
+        "title": "系统与数据",
+        "question": "数据、模型、集成、权限与运行边界是否支撑而非伤害用户结果？",
+        "status": "applicable",
+        "node_refs": []
+      },
+      {
+        "id": "quality_risk",
+        "title": "横切质量与风险",
+        "question": "可靠性、隐私、安全、性能、素材来源与独立验证是否被处理？",
+        "status": "applicable",
+        "node_refs": []
+      }
+    ]
+  },
+  "capability_domains": [
+    {
+      "id": "DOMAIN-EXAMPLE",
+      "title": "[会改变本项目方案或验证方式的专业领域，例如 Interaction Design / UX]",
+      "question": "[这个领域必须回答什么专业问题？]",
+      "why_now": "[为什么它会实质改变当前项目的设计、实现或验证？]",
+      "node_refs": []
+    }
+  ],
+  "impact_review": {
+    "reviewer_mode": "independent_agent_thread",
+    "assessments": [
+      {
+        "capability_id": "[CAPABILITY-ID]",
+        "recommended_impact": "high",
+        "external_acquisition_required": true,
+        "rationale": "[由新的 Agent thread 判断：错判会伤害哪个用户结果？外部知识会如何改变方案或验收？]"
+      }
+    ]
+  },
+  "nodes": {},
+  "constraints": []
+}

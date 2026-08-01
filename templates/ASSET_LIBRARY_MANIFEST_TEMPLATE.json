@@ -1,0 +1,10 @@
+{
+  "_meta": {
+    "_description": "Asset Library is a versioned local-first source of truth. Asset bytes live in files/; do not claim a remote URL is renderable.",
+    "_version": "1.0",
+    "_loom_version": "v1",
+    "_generated_by": "architect",
+    "_template": true
+  },
+  "assets": {}
+}

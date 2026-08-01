@@ -1,0 +1,188 @@
+{
+  "_meta": {
+    "_description": "示例：一张能力边界图不是按部门分类，也不是 Intent 的镜像。它先完成透镜审视，再用关系表达共享能力、约束、风险与证据。替换为自己的项目事实，不要复制节点标题。",
+    "_version": "1.2",
+    "_loom_version": "v1",
+    "_generated_by": "architect-example"
+  },
+  "lens_contract": {
+    "selection_basis": "这是一个帮助用户审视复杂选择的对话式产品；交互状态、视觉阅读、论断措辞、证据数据和信任风险都会直接影响结果。",
+    "lenses": [
+      {
+        "id": "journey",
+        "title": "用户旅程",
+        "question": "用户从开始到离开，是否能完成有意义的完整路径？",
+        "status": "applicable",
+        "node_refs": ["OUTCOME-REVISABLE-CHOICE", "CAP-STATEFUL-GUIDANCE"]
+      },
+      {
+        "id": "interaction_accessibility",
+        "title": "交互与可访问性",
+        "question": "状态、反馈、失败恢复和不同使用条件是否真实可用？",
+        "status": "applicable",
+        "node_refs": ["CAP-STATEFUL-GUIDANCE", "EVIDENCE-END-TO-END-USE"]
+      },
+      {
+        "id": "visual_editorial",
+        "title": "视觉与信息表达",
+        "question": "视觉语言、层级、版式与资产是否帮助用户理解并形成该产品的气质？",
+        "status": "applicable",
+        "node_refs": ["CAP-EVIDENCE-READABILITY", "EVIDENCE-END-TO-END-USE"]
+      },
+      {
+        "id": "content_communication",
+        "title": "内容与沟通",
+        "question": "文案、信息呈现或对话是否准确、可理解且符合产品立场？",
+        "status": "applicable",
+        "node_refs": ["CAP-CONDITIONAL-INSIGHT", "RISK-OVERCLAIM"]
+      },
+      {
+        "id": "system_data",
+        "title": "系统与数据",
+        "question": "数据、模型、集成、权限与运行边界是否支撑而非伤害用户结果？",
+        "status": "applicable",
+        "node_refs": ["CONCERN-USER-OWNERSHIP", "CAP-STATEFUL-GUIDANCE"]
+      },
+      {
+        "id": "quality_risk",
+        "title": "横切质量与风险",
+        "question": "可靠性、隐私、安全、性能、素材来源与独立验证是否被处理？",
+        "status": "applicable",
+        "node_refs": ["RISK-OVERCLAIM", "EVIDENCE-END-TO-END-USE"]
+      }
+    ]
+  },
+  "capability_domains": [
+    {
+      "id": "DOMAIN-INTERACTION-DESIGN",
+      "title": "Interaction Design / UX",
+      "question": "怎样让状态、错误、恢复与退出在真实交互中可理解且可操作？",
+      "why_now": "入口和恢复并非视觉润色；它决定用户能否保有会话主导权。",
+      "node_refs": ["CAP-STATEFUL-GUIDANCE", "CAP-EVIDENCE-READABILITY"]
+    },
+    {
+      "id": "DOMAIN-EDITORIAL-INFORMATION-DESIGN",
+      "title": "Editorial & Information Design",
+      "question": "怎样让事实、推断和待验证问题在有限屏幕内保持可分辨的阅读层级？",
+      "why_now": "报告若只显得有权威而不能被扫读，会直接放大过度断言风险。",
+      "node_refs": ["CAP-EVIDENCE-READABILITY", "CAP-CONDITIONAL-INSIGHT"]
+    },
+    {
+      "id": "DOMAIN-APPLIED-EPISTEMICS",
+      "title": "Applied Epistemics / Responsible AI Communication",
+      "question": "怎样在给出有用洞察时保留条件、证据来源、反例与用户修正权？",
+      "why_now": "这里的措辞和推断结构会决定产品是在帮助用户判断，还是冒充裁决者。",
+      "node_refs": ["CAP-CONDITIONAL-INSIGHT"]
+    }
+  ],
+  "nodes": {
+    "OUTCOME-REVISABLE-CHOICE": {
+      "id": "OUTCOME-REVISABLE-CHOICE",
+      "kind": "outcome",
+      "title": "用户带着可修订的选择假设离开，而不是被系统替他下结论",
+      "status": "covered",
+      "impact": "high",
+      "route": "intent",
+      "intent_refs": ["INT-002", "INT-003"],
+      "relationships": [
+        { "type": "refines", "target": "CONCERN-USER-OWNERSHIP" },
+        { "type": "requires", "target": "CAP-STATEFUL-GUIDANCE" },
+        { "type": "requires", "target": "CAP-CONDITIONAL-INSIGHT" },
+        { "type": "requires", "target": "CAP-EVIDENCE-READABILITY" },
+        { "type": "risks", "target": "RISK-OVERCLAIM" },
+        { "type": "validated_by", "target": "EVIDENCE-END-TO-END-USE" }
+      ]
+    },
+    "CONCERN-USER-OWNERSHIP": {
+      "id": "CONCERN-USER-OWNERSHIP",
+      "kind": "concern",
+      "title": "用户始终理解系统现在知道什么、能暂停或修正什么",
+      "status": "covered",
+      "impact": "high",
+      "route": "intent",
+      "intent_refs": ["INT-001", "INT-002"],
+      "relationships": [
+        { "type": "constrains", "target": "CAP-STATEFUL-GUIDANCE" },
+        { "type": "constrains", "target": "CAP-CONDITIONAL-INSIGHT" }
+      ]
+    },
+    "CAP-STATEFUL-GUIDANCE": {
+      "id": "CAP-STATEFUL-GUIDANCE",
+      "kind": "capability",
+      "title": "让会话状态、失败恢复与暂停入口保持可理解",
+      "status": "researched",
+      "impact": "high",
+      "route": "brief",
+      "intent_refs": ["INT-001", "INT-002"],
+      "domain_refs": ["DOMAIN-INTERACTION-DESIGN"],
+      "acquisition_mode": "external_required",
+      "brief_ref": "07_CAPABILITY_BRIEFS/CAP-STATEFUL-GUIDANCE.md",
+      "question": "用户是否能看见当前状态、理解下一步，并在中断后安全恢复或退出？",
+      "relationships": [
+        { "type": "requires", "target": "CAP-EVIDENCE-READABILITY" },
+        { "type": "risks", "target": "RISK-OVERCLAIM" }
+      ]
+    },
+    "CAP-CONDITIONAL-INSIGHT": {
+      "id": "CAP-CONDITIONAL-INSIGHT",
+      "kind": "capability",
+      "title": "把洞察表达为带证据、条件与反例的可修订假设",
+      "status": "researched",
+      "impact": "high",
+      "route": "brief",
+      "intent_refs": ["INT-002", "INT-003"],
+      "domain_refs": ["DOMAIN-EDITORIAL-INFORMATION-DESIGN", "DOMAIN-APPLIED-EPISTEMICS"],
+      "acquisition_mode": "external_required",
+      "brief_ref": "07_CAPABILITY_BRIEFS/CAP-CONDITIONAL-INSIGHT.md",
+      "question": "系统能否给出具体洞察而不越权成为命运裁决者？",
+      "relationships": [
+        { "type": "requires", "target": "CAP-EVIDENCE-READABILITY" },
+        { "type": "risks", "target": "RISK-OVERCLAIM" }
+      ]
+    },
+    "CAP-EVIDENCE-READABILITY": {
+      "id": "CAP-EVIDENCE-READABILITY",
+      "kind": "capability",
+      "title": "让证据、推断与待验证问题在报告中可扫读且不被视觉淹没",
+      "status": "researched",
+      "impact": "high",
+      "route": "brief",
+      "intent_refs": ["INT-002", "INT-003"],
+      "domain_refs": ["DOMAIN-INTERACTION-DESIGN", "DOMAIN-EDITORIAL-INFORMATION-DESIGN"],
+      "acquisition_mode": "external_required",
+      "brief_ref": "07_CAPABILITY_BRIEFS/CAP-EVIDENCE-READABILITY.md",
+      "question": "窄屏和长文本中，用户能否分清事实、推断和下一步，而不是只看到漂亮结论？",
+      "relationships": []
+    },
+    "RISK-OVERCLAIM": {
+      "id": "RISK-OVERCLAIM",
+      "kind": "risk",
+      "title": "流畅、权威的表达掩盖了证据不足，诱导用户把假设当成定论",
+      "status": "covered",
+      "impact": "high",
+      "route": "intent",
+      "intent_refs": ["INT-002", "INT-003"],
+      "relationships": [
+        { "type": "validated_by", "target": "EVIDENCE-END-TO-END-USE" }
+      ]
+    },
+    "EVIDENCE-END-TO-END-USE": {
+      "id": "EVIDENCE-END-TO-END-USE",
+      "kind": "evidence",
+      "title": "独立使用者在真实阅读与中断恢复路径中区分证据、推断与可操作的下一步",
+      "status": "covered",
+      "impact": "high",
+      "route": "intent",
+      "intent_refs": ["INT-003"],
+      "verification": {
+        "method": "independent_human_review",
+        "target": "窄屏和桌面端的真实报告与会话恢复界面",
+        "procedure": "让未参与实现者完成一次中断、恢复、阅读报告并追问一个结论来源的任务。",
+        "pass_criteria": "使用者能指出至少一项证据、一项条件化推断与一个修正入口；恢复过程没有丢失已确认状态。",
+        "artifact": "verifications/INT-003-end-to-end-use.md"
+      },
+      "relationships": []
+    }
+  },
+  "constraints": []
+}

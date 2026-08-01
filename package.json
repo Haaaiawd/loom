@@ -1,6 +1,6 @@
 {
   "name": "@haaaiawd/loom",
-  "version": "1.0.0",
+  "version": "1.3.1",
   "description": "LOOM — 哲学驱动开发框架。Agent 通过 CLI 访问 Intent Map / 哲学 / 验证记录，不直接读文件",
   "type": "module",
   "bin": {
@@ -14,8 +14,14 @@
     "roles",
     "templates",
     "dimensions",
-    "README.md"
+    "README.md",
+    "CHANGELOG.md",
+    "EXTERNAL_ACQUISITION_DESIGN.md"
   ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=18"
   },

@@ -48,6 +48,10 @@ export function createVersionStructure(projectDir, version, parentVersion = null
     `.loom/${v}/00_PHILOSOPHY`,
     `.loom/${v}/verifications`,
     `.loom/${v}/03_DECISIONS`,
+    `.loom/${v}/07_CAPABILITY_BRIEFS`,
+    `.loom/${v}/07_GRAPH_PROPOSALS`,
+    `.loom/${v}/08_ASSET_LIBRARY/files`,
+    `.loom/${v}/10_EXPERTISE_PACKS`,
   ];
 
   for (const d of dirs) {
@@ -64,6 +68,8 @@ export function createVersionStructure(projectDir, version, parentVersion = null
     ['templates/INTENT_MAP_TEMPLATE.json', `.loom/${v}/04_INTENT_MAP.json`],
     ['templates/PHILOSOPHY_TEMPLATE.md', `.loom/${v}/00_PHILOSOPHY/PRODUCT_PHILOSOPHY.md`],
     ['templates/VISION_TEMPLATE.md', `.loom/${v}/01_VISION.md`],
+    ['templates/CAPABILITY_GRAPH_TEMPLATE.json', `.loom/${v}/07_CAPABILITY_GRAPH.json`],
+    ['templates/ASSET_LIBRARY_MANIFEST_TEMPLATE.json', `.loom/${v}/08_ASSET_LIBRARY/manifest.json`],
   ];
 
   // 02_ARCHITECTURE.md 和 05_VERIFICATION.md 没有"填空模板"——
@@ -114,7 +120,7 @@ export function createVersionStructure(projectDir, version, parentVersion = null
       skipped.push(dst);
     } else if (existsSync(srcPath)) {
       copyFileSync(srcPath, dstPath);
-      if (dst.endsWith('04_INTENT_MAP.json')) {
+      if (dst.endsWith('04_INTENT_MAP.json') || dst.endsWith('07_CAPABILITY_GRAPH.json') || dst.endsWith('08_ASSET_LIBRARY/manifest.json')) {
         const map = JSON.parse(readFileSync(dstPath, 'utf-8'));
         map._meta._loom_version = v;
         map._meta._parent_version = parentVersion;
@@ -163,6 +169,7 @@ export function initProject(projectDir) {
       '3. 只在当前角色的权限内行动；发现目标、契约或架构需要改变时，按 LOOM 回流，不要静默扩展范围。',
       '4. 完成前运行当前 Intent 的验证方法与 `loom doctor`；声称质量提升时必须提供基线相对 Quality Proof，以磁盘证据而非会话记忆判断状态。',
       '5. Keeper 验证必须运行在新的 Agent thread 中；同一会话切换角色不构成独立验证。',
+      '6. 协作节奏默认是手动；需要让 Agent 在已允许阶段连续推进时，显式运行 `loom auto on`。AUTO 不会跳过契约、证据或 Keeper 门禁。',
       '',
       '常用入口：',
       '- `loom --help`',

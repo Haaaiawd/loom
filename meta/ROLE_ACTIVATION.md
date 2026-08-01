@@ -3,7 +3,7 @@
 角色是决策权边界，不是人格表演。LOOM 的执行链是：
 
 ```text
-Doctrine → Intent → Contract → Expertise Compiler
+Doctrine → Intent narrative → Capability Graph → Contract → Expertise Compiler
 → Quality Arena → Quality Proof → Reflow
 ```
 
@@ -18,11 +18,11 @@ Doctrine → Intent → Contract → Expertise Compiler
 3. Hard Invariants：BASELINE 摘要与命中的项目底线。
 4. Success Contracts：acceptance、按需的 continuity_required / quality_contract、verification_method；其中状态守恒规则仍只写在 acceptance。
 5. Project Judgment：相关 Doctrine anchors 与决策记录。
-6. Expertise Inputs：capability_needs、可发现的 Skill / 工具 / 资产入口和获取边界。
+6. Expertise Inputs：当前 Intent 编译得到的 Capability Graph 节点与 Brief、`capability_needs`、`quality_strategy`、可发现的 Skill / 工具 / 资产入口和获取边界；仅当 `quality_strategy=atelier` 时注入 Authorship Method 与 Atelier Record 要求。
 7. Working Facts：相关架构、代码、资产、基线和产物路径。
 8. Output / Reflow / Stop：交付、证据、回流与停止条件。
 
-Context Pack 编译器只选择事实和能力入口。Expertise Compiler 在角色激活后检查真实环境，
+Context Pack 编译器只选择事实和能力入口。Capability Graph 保留项目问题面、能力缺口、风险、证据与 Intent 回链；它不是任务列表，只有当前 Intent 关联的节点和 Brief 会进入 Context Pack。Expertise Compiler 在角色激活后检查真实环境，
 再形成 Expertise Pack；看见 Skill 名称不等于已经加载能力。
 
 Context Pack 不会清除 Agent 既有记忆。发生冲突时，以 system、developer 和用户指令
@@ -42,14 +42,18 @@ Context Pack 不会清除 Agent 既有记忆。发生冲突时，以 system、de
 
 ### Architect
 
-- 拥有系统边界、Intent DAG、公共契约、质量契约和验证入口。
-- 声明 capability_needs 与 creative_scope。
+- 拥有 Capability Graph、系统边界、Intent DAG、公共契约、质量契约和验证入口。
+- 先路由高影响图谱节点并保证每个 Intent 回链，再声明 capability_needs 与 creative_scope。
 - 不实现，也不给出通过结论。
 
 ### Forge
 
 - 为当前 Intent 编译 Expertise Pack，运行 Quality Arena 并完成实现和自测。
 - 可以做必要局部设计、错误处理和可逆探索。
+- `quality_strategy=atelier` 时增加 Author 认知职能：用 Identity Compiler 形成可反驳的
+  Authorial Stance，并将基线、候选、修正和选择写入唯一 Atelier Record。
+- 局部创作假设更正只递增 `stance_revision`；结构性新发现提交 Capability Graph proposal，
+  由 Architect 裁决后再经 Capability compile 进入下一版 Stance。
 - 不改变上层目标、公共契约或架构边界。
 
 ### Keeper
@@ -62,7 +66,13 @@ Context Pack 不会清除 Agent 既有记忆。发生冲突时，以 system、de
 ### Expertise Compiler
 
 按任务组合项目事实、Skill、工具、资产、参考、质量机制、失败模型与验证手段，输出临时
-Expertise Pack。Domain、Taste、Critic、Verifier 是按需认知职能，不是新增角色。
+Expertise Pack。Domain、Taste、Author、Critic、Verifier 是按需认知职能，不是新增角色。
+Author 只在需要形成创作命题时启用，不是常驻 Persona。
+
+未显式豁免的高影响专业能力会让 Context Pack 先打开 External Acquisition Gate：Forge
+从项目事实派生查询并实际检索，将来源化 Capability Capsules 写入当前
+Intent revision 的 `10_EXPERTISE_PACKS`；门闭合后才注入 Author/Atelier。Keeper 只接收
+Pack 的证据入口和计数，必须独立重开关键来源，不继承 Forge 的综合结论。
 
 ### Quality Arena
 
@@ -79,6 +89,7 @@ Reliability Floor，质量契约是 Distinctive Ceiling。没有候选胜过基�
 
 - 实现错误、遗漏或局部质量不足 → Forge。
 - acceptance、verification_method、依赖或架构错误 → Architect。
+- 项目问题面遗漏、能力缺口或图谱回链缺失 → Architect 更新 Capability Graph。
 - 目标、非目标或 narrative 错误 → Visionary。
 - 长期项目原则持续失效 → Weaver / 新版本。
 - 缺少外部授权或主观裁决 → 人类。

@@ -7,9 +7,12 @@ import { extractMdSection, readJsonFile } from './shared/md-utils.js';
 import { getIntent, getEffectiveVerificationEpoch, hasLegacyIntentRevision } from './intent-map.js';
 import { formatIntentRef, resolveIntentRef } from './shared/intent-ref.js';
 import { resolveQualityProofReference } from './shared/proof-reference.js';
+import { validateAtelierRecord } from './atelier.js';
+import { assertExpertiseReady } from './expertise-pack.js';
 
 /** 合法判定结果 */
 const VALID_VERDICTS = ['passed', 'deviated', 'blocked', 'pending_human'];
+const VALID_VERIFICATION_CONTEXTS = ['independent_thread', 'human_review'];
 
 /** 每个 Intent 都必须覆盖的基础验证维度。 */
 const BASE_DIMENSIONS = [
@@ -44,6 +47,8 @@ function getRequiredDimensions(intent) {
  */
 export function writeVerification(versionDir, verificationsDir, record) {
   const errors = [];
+  let atelierEvidence = null;
+  let expertiseEvidence = null;
   if (!record.intent_id) errors.push('缺少 intent_id');
   if (!record.verdict || !VALID_VERDICTS.includes(record.verdict)) {
     errors.push(`verdict 非法: "${record.verdict}" (合法: ${VALID_VERDICTS.join('|')})`);
@@ -55,6 +60,15 @@ export function writeVerification(versionDir, verificationsDir, record) {
     errors.push(`Intent ${record.intent_id} 当前状态为 ${intent.status}；只能为 in_progress 或 needs_review 的 Intent 写入验证记录`);
   }
   const requiredDimensions = getRequiredDimensions(intent);
+  if (record.verdict === 'passed') {
+    const provenance = record.verification_provenance;
+    if (!provenance || typeof provenance !== 'object') {
+      errors.push('passed 必须声明 verification_provenance（verified_by + context）；实现者自检不能单独闭合 Intent');
+    } else {
+      if (typeof provenance.verified_by !== 'string' || !provenance.verified_by.trim()) errors.push('verification_provenance.verified_by 必须是非空验证者标识');
+      if (!VALID_VERIFICATION_CONTEXTS.includes(provenance.context)) errors.push(`verification_provenance.context 非法: ${provenance.context}（合法: ${VALID_VERIFICATION_CONTEXTS.join('|')}）`);
+    }
+  }
   // dimensions 结构校验：每个维度必须是 { verdict, evidence } 对象
   if (record.dimensions) {
     for (const dim of requiredDimensions) {
@@ -102,6 +116,23 @@ export function writeVerification(versionDir, verificationsDir, record) {
       errors.push(error.message);
     }
   }
+  if (record.verdict === 'passed' && intent) {
+    try {
+      expertiseEvidence = assertExpertiseReady(versionDir, record.intent_id);
+    } catch (error) {
+      errors.push(`passed 前必须闭合外部能力获取强门: ${error.message}`);
+    }
+  }
+  if (intent?.quality_strategy === 'atelier' && record.verdict === 'passed') {
+    try {
+      atelierEvidence = validateAtelierRecord(versionDir, record.intent_id);
+      if (!['selected', 'baseline_retained'].includes(atelierEvidence.status)) {
+        errors.push(`quality_strategy=atelier 通过前，Atelier Record 必须是 selected 或 baseline_retained（当前: ${atelierEvidence.status}）`);
+      }
+    } catch (error) {
+      errors.push(`quality_strategy=atelier 通过前必须有当前且合法的 Atelier Record: ${error.message}`);
+    }
+  }
   if (errors.length > 0) {
     throw new Error(`验证记录校验失败:\n  - ${errors.join('\n  - ')}`);
   }
@@ -144,7 +175,21 @@ export function writeVerification(versionDir, verificationsDir, record) {
     verdict: record.verdict,
     timestamp: record.timestamp,
     summary: record.summary,
+    verification_provenance: record.verification_provenance,
     dimensions: record.dimensions,
+    atelier: atelierEvidence ? {
+      record_ref: `09_ATELIER/${record.intent_id}.json`,
+      stance_revision: atelierEvidence.stance_revision,
+      status: atelierEvidence.status,
+    } : undefined,
+    expertise: expertiseEvidence ? {
+      record_ref: `10_EXPERTISE_PACKS/${record.intent_id}.json`,
+      intent_revision: expertiseEvidence.intent_revision,
+      required_node_ids: expertiseEvidence.required_node_ids,
+      source_count: expertiseEvidence.source_count,
+      capsule_count: expertiseEvidence.capsule_count,
+      pack_digest: expertiseEvidence.pack_digest,
+    } : undefined,
     reproduction_command: record.reproduction_command,
     deviation_detail: record.deviation_detail,
     reset_suggested: record.reset_suggested,
@@ -209,7 +254,7 @@ export function getAcrossVersionVerificationHistory(currentVersionDir, inputRef)
 
 /**
  * 快捷创建验证记录——Agent 不用手动构造完整 JSON。
- * 内部用 summary 填充适用维度的 evidence，生成标准记录格式。
+ * 快捷记录只能用于低风险的结构化核验；passed 仍必须显式声明独立验证来源。
  * @param {string} versionDir — 当前 .loom/v{N}/ 目录
  * @param {string} verificationsDir — verifications/ 目录路径
  * @param {string} intentId — 如 "INT-001"
@@ -245,6 +290,7 @@ export function createQuickVerification(versionDir, verificationsDir, intentId, 
     summary,
     dimensions,
     reproduction_command: extras.reproduction_command || null,
+    verification_provenance: extras.verification_provenance || null,
     deviation_detail: extras.deviation_detail || null,
   });
 }

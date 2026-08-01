@@ -18,10 +18,11 @@
 ## Inputs
 
 - 当前 Intent、revision 与 narrative。
-- acceptance、按需的 quality_contract 与 creative_scope。
+- acceptance、按需的 quality_contract、creative_scope 与 `quality_strategy`；缺失等价于 `adaptive`。
 - 若 `continuity_required` 为 true：先保存可观察旧状态，执行后跑“旧状态 → 操作 → 新状态”序列；默认合并/保留，删除或替换只接受明确授权。
 - capability_needs、相关 Doctrine anchors 与 architecture references。
 - 真实代码、资产、工具和运行反馈。
+- 当前版本的 Asset Library manifest；仅将已批准且本地哈希可验证的资产用于交付。
 
 ## Expertise Compiler
 
@@ -34,11 +35,29 @@
 5. 哪个用户可感知或可测量的质量主张值得探索。
 6. 如何从结果上验证这些判断。
 
-按需使用四种认知职能：Domain 保证领域正确，Taste 建立标杆，Critic 暴露伪提升，
-Verifier 将判断转成证据。它们不是固定角色，不为凑数量调用较弱或不匹配的来源。
+按需使用五种认知职能：Domain 保证领域正确，Taste 建立标杆，Author 提出可反驳的创作
+命题并做出选择，Critic 暴露伪提升，Verifier 将判断转成证据。它们不是固定角色，不为凑
+数量调用较弱或不匹配的来源。
 
-Context Pack 中出现 Skill 名称只代表可发现。只有实际检查环境并加载后，才算进入
-Expertise Pack。Pack 默认只存在于当前工作上下文，不新增项目文件。
+当 `quality_strategy=atelier` 时，在探索前运行 Identity Compiler：把 Doctrine、Intent、
+Capability Graph / Brief、质量契约、创作空间、真实参考机制和媒介约束编译成 Authorial
+Stance。Stance 至少包含 creative thesis、gaze、tension、signature bet、refusals、
+medium grammar、surprise budget、anti-fixation 与 verification lens。人格故事、设计师
+名号和风格形容词不能替代这些决策。
+
+Context Pack 中出现 Skill 名称只代表可发现。若 External Acquisition Gate 为 OPEN，
+把每个 `external_required` capability 当作一项主动探索，不要只为“完成检索”随手找一页泛泛资料。先从 Capability question、项目事实、媒介约束与已观察缺口派生 Search Plan，并实际使用 find skill、网络、官方文档或研究资料；随后追问“这条资料让哪一个设计、实现或验证决定不同了”。优先补齐会决定用户体验、风险边界或质量上限的节点；若首个来源过于通用、彼此冲突或无法落入具体决策，继续换通道或回流，而不是把模型常识包装成结论。模型自行生成的常识、未打开的搜索摘要和只有标题的结果不能成为来源。
+
+required Pack 写入 `.loom/vN/10_EXPERTISE_PACKS/<intent-id>.json`，只保存来源定位和
+项目化 Capability Capsules，不复制第三方内容。每个 Capsule 必须直接引用已打开的外部
+来源并写出规则、决策门、失败模式与验证信号。运行 `loom expertise validate <intent-id>`
+闭合强门后，才能进入 Author/Atelier 或非机械性实现。
+
+Author 的观察先分流：当前命题、机制、媒介语法或候选选择失效，写入 Atelier Record 的
+`corrections[]` 并递增 `stance_revision`；新的用户结果、约束、研究证据、风险、能力缺口
+或素材来源问题，才写成带 provenance 的 Capability Graph proposal，回流 Architect。
+不得静默修改正式 Graph、Intent、acceptance 或把它扩成当前实现范围，也不得裁决自己的
+proposal。不得把远程 URL、HTTP 200 或下载成功当作“用户实际看见资产”的证据。
 
 ## Quality Arena
 
@@ -54,6 +73,10 @@ Orient → Compile Expertise → Explore → Compare → Realize
 - 质量契约是 Distinctive Ceiling；只在站稳地板后比较用户感知与专业水准。
 - 候选只需说明质量主张、实现机制、主要代价和最小验证，不另建文档。
 - 没有候选胜过基线时保留原版、收窄假设或回流契约，不强行制造变化。
+- `quality_strategy=atelier` 时使用 `.loom/vN/09_ATELIER/<intent-id>.json`：冻结基线、
+  定义差异轴、独立形成媒介原型、先过 Reliability Floor，再匿名比较或保留基线。
+- 每个候选绑定产生它的 `stance_revision`；Stance 改变后，旧候选必须重新资格检查或归档，
+  不能静默与新候选比较。
 
 观察必须来自测试、运行结果、截图、指标或其他外部反馈。没有新证据时，不进行仪式化
 自我反思。

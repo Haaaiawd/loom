@@ -28,8 +28,10 @@ Forge 先形成任务级 Expertise Pack：
 - 已实际加载的技能、资料、工具及其用途。
 - Critic 视角与验证方法。
 
-Pack 是临时认知配置，不写成新的长期规范。明显任务可以很短；高质量任务应足以解释为什么
-某个专业手法适合这个项目。
+Pack 是任务级认知配置，不写成新的长期规范。高影响 capability 默认进入 External Acquisition Gate；若明确选择 `adaptive`，也必须写明为何此处不启用外部获取。Pack
+必须落盘到 `10_EXPERTISE_PACKS/<intent-id>.json`：Search Plan 可由 AI 派生，但 Capsule 内容
+必须来自实际打开的外部来源，并写出判断门、失败模式和验证信号。明显的机械任务可以保持
+`adaptive`；高质量任务必须足以解释为什么某个专业手法适合这个项目。
 
 ## 3. Quality Arena
 
@@ -58,6 +60,10 @@ Keeper 独立检查基础四维；有质量契约时增加第五维：
   "verdict": "passed",
   "timestamp": "2026-07-28T12:00:00.000Z",
   "summary": "具体、可定位、可复现的判定摘要",
+  "verification_provenance": {
+    "verified_by": "keeper thread 或人类复核标识",
+    "context": "independent_thread"
+  },
   "reproduction_command": "npm test",
   "dimensions": {
     "intent_fidelity": {
@@ -83,6 +89,14 @@ Keeper 独立检查基础四维；有质量契约时增加第五维：
     }
   }
 }
+```
+
+快捷写入 `passed` 时，也必须声明这一来源：
+
+```bash
+loom verify pass INT-001 --summary "..." \
+  --verified-by "keeper-run-123" \
+  --verification-context independent_thread
 ```
 
 若 Intent 声明 `continuity_required: true`，Keeper 还必须写入并通过：

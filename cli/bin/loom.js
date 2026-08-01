@@ -2,7 +2,7 @@
 // loom — LOOM 框架的 CLI 传感器层
 // Agent 通过这个 CLI 访问 Intent Map / 哲学 / 验证记录，不直接读文件。
 
-import { argv, cwd, exit } from 'node:process';
+import { argv, cwd, env, exit } from 'node:process';
 import { resolve, join, dirname } from 'node:path';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -20,10 +20,15 @@ import { doctor, contextSummary, traceIntent, reverseDep, reverseRef } from '../
 import { getHelpTopic, listHelpTopics } from '../src/help.js';
 import { guideProject } from '../src/guide.js';
 import { isAutoOn, autoOn, autoOff, autoStatus, getAutoMode } from '../src/auto.js';
-import { generatePreviewPrompt, getPreviewStatus } from '../src/preview.js';
+import { generateAtlasComposerPack, getAtlasStatus, validateAtlas, writeAtlasModel } from '../src/atlas.js';
 import { getPatch, listPatches, recordPatch, validatePatches } from '../src/patch.js';
 import { addIntentDraft, finalizeIntentDraft, getIntentDraft, reviseIntentDraft } from '../src/intent-draft.js';
 import { resolveIntentRef } from '../src/shared/intent-ref.js';
+import { compileCapabilityInputs, getCapabilityCoverage, getCapabilityFrontier, getCapabilityGraphProjection, getCapabilityNode } from '../src/capability-graph.js';
+import { getAsset, importAsset, listAssets, recoverAssetImportTransaction, searchAssets, validateAssetLibrary } from '../src/asset-library.js';
+import { closeCapabilityProposal, decideCapabilityProposal, getCapabilityProposal, listCapabilityProposals, submitCapabilityProposal } from '../src/capability-proposals.js';
+import { getAtelierRecord, initAtelierRecord, validateAtelierRecord } from '../src/atelier.js';
+import { assertExpertiseReady, getExpertisePack, initExpertisePack, validateExpertisePack } from '../src/expertise-pack.js';
 
 // ─── 路径解析 ──────────────────────────────────────────
 // findLoomRoot / findVersionDir / readCurrentPointer 已提取到 shared/paths.js
@@ -64,6 +69,139 @@ try {
       const pkgPath = resolve(__dirname, '..', '..', 'package.json');
       const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
       console.log(`loom ${pkg.version}`);
+      break;
+    }
+
+    case 'capability': {
+      const versionDir = findVersionDir();
+      switch (sub) {
+        case 'graph':
+          output(getCapabilityGraphProjection(versionDir));
+          break;
+        case 'frontier':
+          output(getCapabilityFrontier(versionDir));
+          break;
+        case 'get': {
+          const id = rest[0];
+          if (!id) die('用法: loom capability get <node-id>');
+          output(getCapabilityNode(versionDir, id));
+          break;
+        }
+        case 'coverage':
+          output(getCapabilityCoverage(versionDir));
+          break;
+        case 'compile': {
+          const intentId = rest[0];
+          if (!intentId) die('用法: loom capability compile <intent-id>');
+          output(compileCapabilityInputs(versionDir, intentId));
+          break;
+        }
+        case 'proposal': {
+          const action = rest[0];
+          if (action === 'list') output(listCapabilityProposals(versionDir));
+          else if (action === 'get') {
+            if (!rest[1]) die('用法: loom capability proposal get <CGP-ID>');
+            output(getCapabilityProposal(versionDir, rest[1]));
+          } else if (action === 'submit') {
+            const fileIndex = argv.indexOf('--json-file');
+            const path = fileIndex === -1 ? null : argv[fileIndex + 1];
+            if (!path) die('用法: loom capability proposal submit --json-file <proposal.json>');
+            output(submitCapabilityProposal(versionDir, JSON.parse(readFileSync(path, 'utf-8'))));
+          } else if (action === 'decide') {
+            const rationaleIndex = argv.indexOf('--rationale');
+            if (!rest[1] || !rest[2] || rationaleIndex === -1 || !argv[rationaleIndex + 1]) die('用法: loom capability proposal decide <CGP-ID> <decision> --rationale <text>');
+            output(decideCapabilityProposal(versionDir, rest[1], rest[2], argv[rationaleIndex + 1]));
+          } else if (action === 'close') {
+            const resolutionIndex = argv.indexOf('--resolution-file');
+            if (!rest[1] || resolutionIndex === -1 || !argv[resolutionIndex + 1]) die('用法: loom capability proposal close <CGP-ID> --resolution-file <resolution.json>');
+            output(closeCapabilityProposal(versionDir, rest[1], JSON.parse(readFileSync(argv[resolutionIndex + 1], 'utf-8'))));
+          } else die('用法: loom capability proposal [list|get|submit|decide|close]');
+          break;
+        }
+        default:
+          die(`未知 capability 子命令: ${sub}\n用法: loom capability [graph|frontier|get|coverage|compile|proposal]`);
+      }
+      break;
+    }
+
+    case 'asset': {
+      const versionDir = findVersionDir();
+      switch (sub) {
+        case 'import': {
+          const filePath = rest[0];
+          const option = (name) => {
+            const index = argv.indexOf(name);
+            return index === -1 ? undefined : argv[index + 1];
+          };
+          if (!filePath || filePath.startsWith('--')) die('用法: loom asset import <本地文件> --tags <标签,...> --source <来源> --author <作者> --license <许可> --approval approved [--kind image] [--evidence <节点,...>]');
+          output(importAsset(versionDir, filePath, {
+            tags: option('--tags'), source: option('--source'), author: option('--author'), license: option('--license'),
+            approval: option('--approval'), kind: option('--kind'), evidenceRefs: option('--evidence'),
+            failureInjection: env.NODE_ENV === 'test' && option('--test-fail-after') === 'manifest' ? 'after_manifest'
+              : env.NODE_ENV === 'test' && option('--test-fail-after') === 'crash-manifest' ? 'crash_after_manifest' : undefined,
+          }));
+          break;
+        }
+        case 'list': output(listAssets(versionDir)); break;
+        case 'search': {
+          const query = rest[0];
+          if (!query) die('用法: loom asset search <查询>');
+          output(searchAssets(versionDir, query));
+          break;
+        }
+        case 'get': {
+          const id = rest[0];
+          if (!id) die('用法: loom asset get <asset-id>');
+          output(getAsset(versionDir, id));
+          break;
+        }
+        case 'validate': {
+          const recovery = recoverAssetImportTransaction(versionDir);
+          output({ valid: true, assets: Object.keys(validateAssetLibrary(versionDir).assets).length, recovered_transaction: recovery.recovered ? recovery : null });
+          break;
+        }
+        default: die(`未知 asset 子命令: ${sub}\n用法: loom asset [import|list|search|get|validate]`);
+      }
+      break;
+    }
+
+    case 'atelier': {
+      const versionDir = findVersionDir();
+      const intentId = rest[0];
+      if (!intentId) die(`用法: loom atelier ${sub || '<init|get|validate>'} <intent-id>`);
+      switch (sub) {
+        case 'init':
+          output(initAtelierRecord(versionDir, intentId));
+          break;
+        case 'get':
+          output(getAtelierRecord(versionDir, intentId));
+          break;
+        case 'validate':
+          output(validateAtelierRecord(versionDir, intentId));
+          break;
+        default:
+          die(`未知 atelier 子命令: ${sub}\n用法: loom atelier [init|get|validate] <intent-id>`);
+      }
+      break;
+    }
+
+    case 'expertise': {
+      const versionDir = findVersionDir();
+      const intentId = rest[0];
+      if (!intentId) die(`用法: loom expertise ${sub || '<init|get|validate>'} <intent-id>`);
+      switch (sub) {
+        case 'init':
+          output(initExpertisePack(versionDir, intentId));
+          break;
+        case 'get':
+          output(getExpertisePack(versionDir, intentId));
+          break;
+        case 'validate':
+          output(validateExpertisePack(versionDir, intentId));
+          break;
+        default:
+          die(`未知 expertise 子命令: ${sub}\n用法: loom expertise [init|get|validate] <intent-id>`);
+      }
       break;
     }
 
@@ -137,7 +275,17 @@ try {
           break;
         }
         case 'next':
-          output(getNextIntent(versionDir) ?? '没有可执行的 Intent');
+          {
+            const next = getNextIntent(versionDir);
+            output(next ? {
+              ...next,
+              suggested_flow: {
+                start: `loom intent update ${next.id} --status in_progress`,
+                forge_context: `loom activate forge --intent ${next.id}`,
+                note: '先显式开始 Intent，再由 activate 命令装配该 Intent 的叙事、契约、图谱路由与专业输入。',
+              },
+            } : '没有可执行的 Intent');
+          }
           break;
         case 'status': {
           const s = getStatus(versionDir);
@@ -227,6 +375,25 @@ try {
           if (!isVerificationCurrent(intent, latest)) {
             die(`${id} 最新 passed 验证不属于当前 Intent revision ${intent.revision ?? 1}。先重新验证。`);
           }
+          const expertise = assertExpertiseReady(versionDir, id);
+          if (expertise && (latest.expertise?.record_ref !== `10_EXPERTISE_PACKS/${id}.json`
+            || latest.expertise?.intent_revision !== expertise.intent_revision
+            || latest.expertise?.source_count !== expertise.source_count
+            || latest.expertise?.capsule_count !== expertise.capsule_count
+            || latest.expertise?.pack_digest !== expertise.pack_digest)) {
+            die(`${id} 最新 passed 未绑定当前 Expertise Pack。请在新的 Keeper task 中重新打开来源并验证。`);
+          }
+          if (intent.quality_strategy === 'atelier') {
+            const atelier = validateAtelierRecord(versionDir, id);
+            if (!['selected', 'baseline_retained'].includes(atelier.status)) {
+              die(`${id} 的 Atelier Record 尚未完成选择（当前: ${atelier.status}）`);
+            }
+            if (latest.atelier?.record_ref !== `09_ATELIER/${id}.json`
+              || latest.atelier?.stance_revision !== atelier.stance_revision
+              || latest.atelier?.status !== atelier.status) {
+              die(`${id} 最新 passed 未绑定当前 Atelier Record 与 stance_revision。请在新的 Keeper task 中重新验证。`);
+            }
+          }
           const currentStatus = intent.status;
           if (currentStatus === 'completed') {
             console.log(`${id} 已经是 completed，无需操作`);
@@ -268,7 +435,7 @@ try {
 
     case 'activate': {
       const role = sub;
-      if (!role) die('用法: loom activate <role>\n角色: weaver | visionary | architect | forge | keeper');
+      if (!role) die('用法: loom activate <role>\n角色: weaver | visionary | architect | impact-reviewer | forge | keeper');
       // weaver 不需要 versionDir（项目还没初始化时也能激活）
       let versionDir = null;
       if (role !== 'weaver') {
@@ -361,7 +528,7 @@ try {
               const icon = issue.severity === 'high' ? '⚠' : '·';
               console.log(`  ${icon} [${issue.severity}] ${issue.msg}`);
             }
-            console.log('\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/SEARCH_METHODOLOGY.md。');
+            console.log('\n下一步: 运行 loom activate weaver；命令会重新输出哲学阶段所需的 Context Pack。');
             exit(1);
           }
           break;
@@ -435,7 +602,7 @@ try {
         }
         case 'pass':
         case 'fail': {
-          // loom verify pass <id> --summary "..." [--reproduction-command "..."] [--preservation-evidence "..."] [--quality-proof "..."]
+          // loom verify pass <id> --summary "..." --verified-by <id> --verification-context <independent_thread|human_review>
           // loom verify fail <id> --summary "..." [--deviation "..."] [--reproduction-command "..."]
           const id = rest[0];
           if (!id) die(`用法: loom verify ${sub} <id> --summary "..." [--reproduction-command "..."]${sub === 'pass' ? ' [--preservation-evidence "..."] [--quality-proof "..."]' : ' [--deviation "..."]'}`);
@@ -444,6 +611,8 @@ try {
           const deviationIdx = argv.indexOf('--deviation');
           const qualityProofIdx = argv.indexOf('--quality-proof');
           const preservationIdx = argv.indexOf('--preservation-evidence');
+          const verifiedByIdx = argv.indexOf('--verified-by');
+          const verificationContextIdx = argv.indexOf('--verification-context');
           const summary = summaryIdx !== -1 ? argv[summaryIdx + 1] : null;
           if (!summary) die(`缺少 --summary: loom verify ${sub} ${id} --summary "..."`);
           const intent = getIntent(versionDir, id);
@@ -453,11 +622,15 @@ try {
           if (sub === 'pass' && intent.quality_contract && !(qualityProofIdx !== -1 && argv[qualityProofIdx + 1])) {
             die(`Intent ${id} 声明了 quality_contract；通过前必须提供 --quality-proof，指向项目内真实的 Quality Proof Markdown 锚点。`);
           }
+          if (sub === 'pass' && !(verifiedByIdx !== -1 && argv[verifiedByIdx + 1] && verificationContextIdx !== -1 && argv[verificationContextIdx + 1])) {
+            die(`Intent ${id} 通过前必须声明独立验证来源：--verified-by <thread/run/人类标识> --verification-context <independent_thread|human_review>。同一会话自检请记录为自检，不得写 passed。`);
+          }
           const extras = {};
           if (reproIdx !== -1 && argv[reproIdx + 1]) extras.reproduction_command = argv[reproIdx + 1];
           if (sub === 'fail' && deviationIdx !== -1 && argv[deviationIdx + 1]) extras.deviation_detail = argv[deviationIdx + 1];
           if (sub === 'pass' && qualityProofIdx !== -1 && argv[qualityProofIdx + 1]) extras.quality_proof_ref = argv[qualityProofIdx + 1];
           if (sub === 'pass' && preservationIdx !== -1 && argv[preservationIdx + 1]) extras.preservation_evidence = argv[preservationIdx + 1];
+          if (sub === 'pass') extras.verification_provenance = { verified_by: argv[verifiedByIdx + 1], context: argv[verificationContextIdx + 1] };
           const verdict = sub === 'pass' ? 'passed' : 'deviated';
           const result = createQuickVerification(versionDir, verificationsDir, id, verdict, summary, extras);
           console.log(`验证记录已写入: ${result.filePath}`);
@@ -575,7 +748,7 @@ try {
             console.log(`    → 修复: ${issue.fix_hint}`);
           }
         }
-        console.log(`\n参见 meta/PHILOSOPHY_WEAVER.md + dimensions/SEARCH_METHODOLOGY.md。`);
+        console.log('\n下一步: 运行 loom guide；它会根据当前状态给出可执行动作与所需 Context Pack。');
       }
       break;
     }
@@ -627,13 +800,8 @@ try {
       console.log(`\n${result.message}`);
       console.log(`\n下一步: ${result.next_action}`);
       console.log(`  → ${result.next_command}`);
-      if (result.inputs && result.inputs.length > 0) {
-        console.log(`\n需要读取:`);
-        for (const f of result.inputs) console.log(`  - ${f}`);
-      }
-      if (result.outputs && result.outputs.length > 0) {
-        console.log(`\n需要产出:`);
-        for (const f of result.outputs) console.log(`  - ${f}`);
+      if (result.input_delivery === 'context_pack') {
+        console.log('\n上下文: 直接运行这条命令；它会输出当前阶段所需的 Context Pack。');
       }
       if (result.verify_command) {
         console.log(`\n完成后校验: ${result.verify_command}`);
@@ -701,39 +869,52 @@ try {
       break;
     }
 
-    case 'preview': {
-      const previewFile = join(cwd(), 'loom-preview.html');
+    case 'atlas': {
+      const versionDir = findVersionDir();
+      const projectDir = cwd();
       if (argv.includes('--help') || argv.includes('-h')) {
         console.log(`用法:
-  loom preview              打开新鲜 preview；过期时提示重新生成
-  loom preview --regen      输出生成提示词，让 Agent 重写 loom-preview.html
-  loom preview status       检查 preview 是否存在、是否新鲜
-  loom preview --stale      强行打开过期 preview
-  loom preview --help       显示本帮助`);
+  loom atlas build          编译当前版本的 Atlas Model
+  loom atlas --regen        输出 command-assembled Composer Pack，让 Agent 生成 loom-atlas.html
+  loom atlas status         检查 loom-atlas.html 与 Model 是否齐全、新鲜
+  loom atlas validate       校验 Atlas 是否为当前版本的必交付物
+  loom atlas                打开通过校验的 loom-atlas.html
+  loom atlas --help         显示本帮助`);
         break;
       }
-      const status = getPreviewStatus(cwd());
-      const hasPreview = status.exists;
-      const regenOnly = argv.includes('--regen') || argv.includes('-r');
-      const openStale = argv.includes('--stale');
-
       if (sub === 'status') {
-        output(status);
+        output(getAtlasStatus(projectDir, versionDir));
         break;
       }
-
-      // 已有 HTML 且没指定 --regen：直接打开浏览器
-      if (hasPreview && !regenOnly) {
-        if (!status.fresh && !openStale) {
-          console.log('preview 已过期：.loom 源文件比 loom-preview.html 更新。');
-          console.log(`  preview: ${status.preview_mtime || '未知'}`);
-          console.log(`  最新源: ${status.source_latest_mtime || '未知'} ${status.latest_source_file ? `(${status.latest_source_file})` : ''}`);
-          console.log('\n下一步: loom preview --regen');
-          console.log('强行打开旧 preview: loom preview --stale');
-          break;
-        }
+      if (sub === 'build') {
+        output(writeAtlasModel(versionDir));
+        break;
+      }
+      if (sub === 'validate') {
+        const result = validateAtlas(projectDir, versionDir);
+        if (!result.valid) die(`Atlas 校验失败:\n  - ${result.errors.join('\n  - ')}`);
+        output(result);
+        break;
+      }
+      if (argv.includes('--regen') || argv.includes('-r')) {
+        writeAtlasModel(versionDir);
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.log('To Agent: 以下 Composer Pack 已直接装配当前架构与决策资料；生成项目根目录的 loom-atlas.html。');
+        console.log('To Human: 把以下内容交给负责视觉实现的 Agent。');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        console.log(generateAtlasComposerPack(versionDir));
+        break;
+      }
+      const validation = validateAtlas(projectDir, versionDir);
+      if (!validation.valid) {
+        console.log('Atlas 尚未成为当前版本的合格交付物：');
+        validation.errors.forEach((error) => console.log(`  - ${error}`));
+        console.log('\n下一步: loom atlas --regen');
+        break;
+      }
+      {
         const { spawn } = await import('node:child_process');
-        const target = previewFile.replace(/\\/g, '/');
+        const target = validation.atlas_path.replace(/\\/g, '/');
         if (process.platform === 'win32') {
           spawn('cmd', ['/c', 'start', target], { detached: true, stdio: 'ignore' }).unref();
         } else if (process.platform === 'darwin') {
@@ -741,20 +922,8 @@ try {
         } else {
           spawn('xdg-open', [target], { detached: true, stdio: 'ignore' }).unref();
         }
-        console.log(`已打开浏览器: ${previewFile}`);
-        console.log(status.fresh ? `重新生成: loom preview --regen` : `已打开旧 preview。重新生成: loom preview --regen`);
-        break;
+        console.log(`已打开决策图谱: ${validation.atlas_path}`);
       }
-
-      // 没有 HTML 或指定 --regen：输出提示词让 AI 生成
-      const prompt = generatePreviewPrompt();
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('To Agent: 按以下提示词读 .loom/ 文件并生成 loom-preview.html');
-      console.log('  生成完成后再次运行 loom preview 会自动打开浏览器');
-      console.log('To Human: 把以下内容给你的 AI agent');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('');
-      console.log(prompt);
       break;
     }
 
@@ -797,6 +966,18 @@ To Human:
   loom patch get <id>           返回指定 Patch
   loom patch validate           校验 Patch ledger 和 Markdown 投影
 
+  loom capability graph         输出 Capability Graph 的 Mermaid 投影与摘要
+  loom capability frontier      列出尚未路由的高影响节点
+  loom capability get <id>      返回节点、关系、Brief 与 Intent 回链
+  loom capability coverage      检查图谱覆盖、Brief 和 Intent 回链
+  loom capability compile <id>  只读显示会进入该 Intent 的能力输入
+  loom expertise init <id>      创建当前 Intent 的外部能力获取记录
+  loom expertise get <id>       返回并校验当前 Expertise Pack
+  loom expertise validate <id>  校验检索、来源、Capsule 与 revision
+  loom atelier init <id>        为 atelier Intent 创建唯一创作记录
+  loom atelier get <id>         返回并校验当前 Atelier Record
+  loom atelier validate <id>    校验 Record、revision、候选与证据引用
+
   loom intent next              返回下一个可执行 Intent
   loom intent add --title <text> [--depends-on <ids>]  创建新增 draft
   loom intent revise <id> --reason <text>  创建修订 draft 并报告反向依赖
@@ -817,10 +998,11 @@ To Human:
 
   loom doctor                   项目健康检查（一致性+孤儿引用+循环依赖+僵尸）
   loom context                  上下文摘要（进度+下一步+待验证+风险）
-  loom preview                  打开新鲜 HTML；过期则提示重新生成
-  loom preview status           检查 preview 是否存在、是否新鲜
-  loom preview --regen          强制重新输出提示词（让 AI 重新生成 HTML）
-  loom preview --stale          强行打开过期 preview
+  loom atlas build              编译当前版本的决策图谱资料模型
+  loom atlas --regen            输出已装配资料的 Composer Pack，生成 loom-atlas.html
+  loom atlas status             检查决策图谱资料与 HTML 是否新鲜
+  loom atlas validate           校验决策图谱是否为当前版本合格交付物
+  loom atlas                    打开通过校验的 loom-atlas.html
   loom help <topic>             分层指南（含 patch 工作流）
 
   loom philosophy get <anchor>  按锚点加载哲学章节

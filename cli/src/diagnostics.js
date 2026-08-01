@@ -11,6 +11,12 @@ import { validatePatches } from './patch.js';
 import { formatIntentRef } from './shared/intent-ref.js';
 import { commandCoversVerificationMethod, getIntentVerificationMethod } from './shared/verification-method.js';
 import { resolveQualityProofReference } from './shared/proof-reference.js';
+import { getCapabilityCoverage, getCapabilityGraphPath, loadCapabilityGraph } from './capability-graph.js';
+import { listCapabilityProposals } from './capability-proposals.js';
+import { getAssetManifestPath, validateAssetLibrary } from './asset-library.js';
+import { validateAtelierRecord } from './atelier.js';
+import { getExpertisePackState } from './expertise-pack.js';
+import { validateAtlas } from './atlas.js';
 
 function readIntentMapRaw(versionDir) {
   const filePath = join(versionDir, '04_INTENT_MAP.json');
@@ -143,10 +149,16 @@ const FIX_HINTS = {
   intent_map_missing: '运行 loom init 或 loom activate architect 产出 04_INTENT_MAP.json',
   intent_map_template: '运行 loom activate architect，Architect 填充真实 Intent Map 后删除 _meta._template 标记',
   intent_map_invalid: '按报错信息修正 04_INTENT_MAP.json 里对应字段（补 title / 加长 acceptance / 填必填字段）',
+  project_document_missing: '运行 loom activate architect，补齐当前版本缺失的项目文档；不要靠 Intent Map 或会话记忆替代 Vision、Architecture、Verification 的可审计载体',
+  project_document_template: '运行 loom activate architect，将仍带 LOOM_TEMPLATE 标记的项目文档替换为本项目的真实判断与契约后删除标记',
+  intent_narrative_invalid: '修正 {id}.narrative_ref 到 01_VISION.md 中实际存在的章节；可运行 loom intent narrative {id} 复核',
+  intent_contract_invalid: '修正 {id}.acceptance 或其对 05_VERIFICATION.md 的章节引用；可运行 loom verify contract {id} 复核',
   completed_no_record: '在 .loom/v{N}/verifications/ 下补验证记录，或运行 loom verify pass {id} --summary "..."',
   completed_verification_not_passed: '最新验证不是当前 revision 的 passed；重新运行 loom verify pass {id} --summary "..."，再用 loom intent done {id} 闭合。',
   in_progress_no_record: '运行 loom verify pass {id} --summary "..." 写入验证记录，或 loom intent update {id} --status pending 回退',
   orphan_philosophy_ref: '检查 04_INTENT_MAP.json 里 {id} 的 philosophy_anchors，移除或修正不存在的哲学文件引用',
+  orphan_philosophy_anchor: '修正 {id} 的 philosophy_anchors 中 # 后的章节锚点；可运行 loom philosophy get <file#anchor> 检查该章节是否可读取',
+  orphan_philosophy_anchor: '修正 {id} 的 philosophy_anchors 中 # 后的章节锚点；可运行 loom philosophy get <file#anchor> 检查该章节是否可读取',
   orphan_dependency: '检查 04_INTENT_MAP.json 里 {id} 的 depends_on，移除或修正不存在的 Intent ID',
   cycle: '打破循环：把循环链中某个 Intent 的 depends_on 里去掉前驱，或拆成更小的 Intent',
   zombie: '检查 {id} 是否还需要——不需要就 loom intent update {id} --status completed 或 blocked',
@@ -161,6 +173,25 @@ const FIX_HINTS = {
   preservation_dimension_missing: '为 continuity_required 的 Intent 补写并通过 preservation_achievement，证据必须覆盖旧状态到新操作后的完整序列',
   patch_changelog_invalid: '运行 loom patch validate 查看具体错误；修正 06_CHANGELOG.json 后重新生成 Markdown 投影',
   patch_projection_drift: '不要手工编辑 06_CHANGELOG.md；重新运行 loom init 或下一次 loom patch record 生成投影',
+  capability_graph_missing: '这是 1.0 项目的兼容提示；迁移时运行 loom activate architect，创建 07_CAPABILITY_GRAPH.json 并路由高影响节点',
+  capability_graph_template: '运行 loom activate architect，先将愿景展开为 Capability Graph，再创建或修订 Intent Map',
+  capability_graph_invalid: '修正 07_CAPABILITY_GRAPH.json 的节点、关系或枚举值后运行 loom capability coverage',
+  capability_frontier_open: '为高影响节点继续展开、创建 Capability Brief、编译为 Intent，或明确延后/排除理由',
+  capability_plan_missing: '为高影响 capability 节点补齐可用 Brief 与获取计划，或改为明确的其他路由',
+  capability_route_evidence: '为该节点补齐路由所需的 Intent 回链、Brief 或延后/排除理由，避免只写一个状态标签',
+  capability_outcome_unexpanded: '将 outcome 连接到至少一个 concern，明确项目初衷需要被处理的问题面',
+  capability_outcome_unobservable: '为高影响 outcome 新建或补齐 evidence 节点，并以 validated_by 连接；evidence 必须写明观察目标、复现步骤、通过标准、证据产物，并回链承担验证的 Intent',
+  capability_lens_contract_missing: '运行 loom activate architect；按用户旅程、交互与可访问性、视觉与信息表达、内容与沟通、系统与数据、横切质量与风险审视本项目。每项都要连接具体节点，或写明为何不适用；不要把“UI/UX”当成空泛节点。',
+  capability_domain_contract_missing: '运行 loom activate architect；从项目事实派生会改变方案或验证方法的专业领域（例如 UI/UX、3D 与光影、网络安全、心理学、生物学），并让每个具体 capability 用 domain_refs 回链。领域不是部门标签，必须说明它改变什么决定。',
+  capability_impact_gate_missing: '运行 loom activate architect；先为每个 capability 写 impact_assessment：影响的用户结果、错判代价、外部知识是否会改变决定及理由。不可逆或会受外部知识影响的能力必须标为 high，并进入 external_required。',
+  decision_atlas_missing: '当前版本的 Intent 已全部闭合，但缺少合格的 loom-atlas.html；运行 loom atlas --regen，用已装配的 Composer Pack 生成后再运行 loom atlas validate。',
+  intent_graph_unmapped: '将该 Intent 回链到至少一个 Capability Graph 节点；不要让执行承诺失去项目初衷和能力来源',
+  capability_proposal_pending: '由 Architect 审核 proposal：判定已覆盖、更新 Graph、生成/修订 Intent、改变 acceptance，或升级 Minor/Major；Forge 不得静默把候选写进正式图谱。',
+  asset_library_invalid: '修复 08_ASSET_LIBRARY/manifest.json 的来源、许可、哈希、库内路径或 evidence 双向引用，然后运行 loom asset validate。',
+  atelier_record_invalid: '运行 loom atelier init {id} 创建记录，或按校验错误修正后运行 loom atelier validate {id}。',
+  atelier_verification_missing: '重新运行独立 Keeper 验证，让 passed 记录绑定当前 Atelier Record 与 stance_revision。',
+  expertise_pack_invalid: '运行 loom expertise init {id}（若尚未创建）；实际执行 find skill / 网络或文档检索，补齐来源与 Capability Capsules 后运行 loom expertise validate {id}。',
+  expertise_verification_missing: '重新运行独立 Keeper 验证，让 passed 记录绑定当前 10_EXPERTISE_PACKS/{id}.json。',
 };
 
 /**
@@ -197,6 +228,105 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
   }
 
   const { intents } = mapState.validMap;
+  const atelierRecords = new Map();
+  appendProjectDocumentStructureDiagnostics(issues, versionDir, philosophyDir);
+
+  // Atlas is a completion deliverable, not a live dashboard. It becomes a
+  // hard gate only after all designed Intents are completed.
+  const allIntents = Object.values(intents);
+  if (allIntents.length > 0 && allIntents.every((intent) => intent.status === 'completed')) {
+    const atlas = validateAtlas(join(versionDir, '..', '..'), versionDir);
+    if (!atlas.valid) {
+      issues.push({
+        id: 'decision_atlas',
+        type: 'decision_atlas_missing',
+        severity: 'high',
+        msg: `当前版本所有 Intent 已完成，但决策图谱尚未成为合格交付物: ${atlas.errors.join('；')}`,
+      });
+    }
+  }
+
+  for (const [id, intent] of Object.entries(intents)) {
+    if (intent.quality_strategy !== 'atelier' || intent.status === 'pending' || intent.status === 'blocked') continue;
+    try {
+      const record = validateAtelierRecord(versionDir, id);
+      atelierRecords.set(id, record);
+      if (intent.status === 'completed' && !['selected', 'baseline_retained'].includes(record.status)) {
+        issues.push({ id, type: 'atelier_record_invalid', severity: 'high', msg: `${id} 已 completed，但 Atelier Record 仍是 ${record.status}` });
+      }
+    } catch (error) {
+      issues.push({ id, type: 'atelier_record_invalid', severity: 'high', msg: error.message });
+    }
+  }
+
+  // 0. Incoming Graph changes are an Architect gate, not Forge implementation scope.
+  try {
+    for (const proposal of listCapabilityProposals(versionDir, { unresolvedOnly: true })) {
+      issues.push({ id: proposal.id, type: 'capability_proposal_pending', severity: 'high', msg: `${proposal.id} 是尚未闭合的 ${proposal.origin} 候选（${proposal.candidate_kind}: ${proposal.title}）；必须由 Architect 决定其影响。` });
+    }
+  } catch (error) {
+    issues.push({ id: 'capability_proposals', type: 'capability_proposal_pending', severity: 'high', msg: `Capability Graph proposal 无法审计: ${error.message}` });
+  }
+
+  // Asset Library is optional for a project, but once initialized it is a local source of truth.
+  if (existsSync(getAssetManifestPath(versionDir))) {
+    try { validateAssetLibrary(versionDir); } catch (error) {
+      issues.push({ id: 'asset_library', type: 'asset_library_invalid', severity: 'high', msg: error.message });
+    }
+  }
+
+  // 0. Capability Graph：旧项目允许缺失但提示迁移；图谱一旦存在则必须可读、可路由。
+  const capabilityGraphPath = getCapabilityGraphPath(versionDir);
+  if (!existsSync(capabilityGraphPath)) {
+    issues.push({ id: 'capability_graph', type: 'capability_graph_missing', severity: 'medium', msg: '缺少 07_CAPABILITY_GRAPH.json；现有项目仍可运行，但不会获得图谱驱动的能力拆分与覆盖检查。' });
+  } else {
+    try {
+      const graph = loadCapabilityGraph(versionDir);
+      if (graph._meta?._template === true) {
+        issues.push({ id: 'capability_graph', type: 'capability_graph_template', severity: 'high', msg: 'Capability Graph 仍是模板；不得在未路由项目问题与能力缺口时宣告架构完成。' });
+      } else {
+        const coverage = getCapabilityCoverage(versionDir);
+        for (const node of coverage.high_unrouted) {
+          issues.push({ id: node.id, type: 'capability_frontier_open', severity: 'high', msg: `${node.id} 是尚未路由的高影响 Capability Graph 节点: ${node.title}` });
+        }
+        for (const item of coverage.capabilities_without_plan) {
+          issues.push({ id: item.node_id, type: 'capability_plan_missing', severity: 'high', msg: `${item.node_id} 的能力获取计划不完整: ${item.reason}` });
+        }
+        for (const item of coverage.routing_gaps) {
+          issues.push({ id: item.node_id, type: 'capability_route_evidence', severity: 'high', msg: `${item.node_id} 的图谱路由缺少依据: ${item.reason}` });
+        }
+        for (const item of coverage.outcomes_without_concern) {
+          issues.push({ id: item.node_id, type: 'capability_outcome_unexpanded', severity: 'high', msg: `${item.node_id} 没有展开为项目问题面: ${item.reason}` });
+        }
+        for (const item of coverage.high_outcomes_without_observable_evidence) {
+          issues.push({ id: item.node_id, type: 'capability_outcome_unobservable', severity: 'high', msg: `${item.node_id} 缺少真实呈现或交付的验证入口: ${item.reason}` });
+        }
+        for (const item of coverage.evidence_artifact_gaps || []) {
+          issues.push({ id: item.node_id, type: 'capability_evidence_artifact_missing', severity: 'high', msg: `${item.node_id} 的完成证据不可用: ${item.reason}` });
+        }
+        for (const item of coverage.lens_contract_gaps || []) {
+          issues.push({ id: 'capability_graph', type: 'capability_lens_contract_missing', severity: 'high', msg: `Capability Graph 尚未完成透镜审视: ${item.reason}` });
+        }
+        for (const item of coverage.capability_domain_gaps || []) {
+          issues.push({ id: 'capability_graph', type: 'capability_domain_contract_missing', severity: 'high', msg: `Capability Graph 尚未声明能力领域: ${item.reason}` });
+        }
+        for (const item of coverage.orphan_intent_refs) {
+          issues.push({ id: item.node_id, type: 'intent_graph_unmapped', severity: 'high', msg: `${item.node_id} 引用了不存在的 Intent: ${item.intent_id}` });
+        }
+        for (const intentId of coverage.unmapped_intents) {
+          issues.push({ id: intentId, type: 'intent_graph_unmapped', severity: 'high', msg: `${intentId} 没有 Capability Graph 回链；执行承诺缺少能力与问题来源。` });
+        }
+      }
+    } catch (error) {
+      const impactGateError = /impact_assessment|impact_review|Impact Gate|impact 必须为 high|外部获取门禁|30%/.test(error.message);
+      issues.push({
+        id: 'capability_graph',
+        type: impactGateError ? 'capability_impact_gate_missing' : 'capability_graph_invalid',
+        severity: 'high',
+        msg: error.message,
+      });
+    }
+  }
 
   // 1. 状态一致性：completed 必须由当前 revision 的最后一条 passed 验证支撑。
   for (const [id, intent] of Object.entries(intents)) {
@@ -229,6 +359,47 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
         }
       }
     }
+    if (!['pending', 'blocked', 'deprecated'].includes(intent.status)) {
+      try {
+        const expertise = getExpertisePackState(versionDir, id);
+        if (expertise.required && !expertise.ready) {
+          issues.push({
+            id,
+            type: 'expertise_pack_invalid',
+            severity: intent.status === 'completed' || latest?.verdict === 'passed' ? 'high' : 'medium',
+            msg: `${id} 的外部能力获取强门尚未闭合: ${expertise.reason || 'Expertise Pack not ready'}`,
+          });
+        } else if (expertise.required && latest?.verdict === 'passed') {
+          const validation = expertise.validation;
+          if (latest.expertise?.record_ref !== `10_EXPERTISE_PACKS/${id}.json`
+            || latest.expertise?.intent_revision !== validation.intent_revision
+            || latest.expertise?.source_count !== validation.source_count
+            || latest.expertise?.capsule_count !== validation.capsule_count
+            || latest.expertise?.pack_digest !== validation.pack_digest) {
+            issues.push({
+              id,
+              type: 'expertise_verification_missing',
+              severity: 'high',
+              msg: `${id} 的最新 passed 未绑定当前 Expertise Pack、Intent revision 与来源/Capsule 计数`,
+            });
+          }
+        }
+      } catch { /* Capability Graph 的结构错误已由上方统一报告。 */ }
+    }
+    if (intent.quality_strategy === 'atelier' && latest?.verdict === 'passed') {
+      const atelier = atelierRecords.get(id);
+      if (!atelier
+        || latest.atelier?.record_ref !== `09_ATELIER/${id}.json`
+        || latest.atelier?.stance_revision !== atelier.stance_revision
+        || latest.atelier?.status !== atelier.status) {
+        issues.push({
+          id,
+          type: 'atelier_verification_missing',
+          severity: 'high',
+          msg: `${id} 的最新 passed 未绑定当前 Atelier Record、status 与 stance_revision`,
+        });
+      }
+    }
     if (intent.continuity_required && latest?.verdict === 'passed') {
       const preservation = latest.dimensions?.preservation_achievement;
       if (!preservation || preservation.verdict !== 'passed') {
@@ -242,7 +413,7 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
     }
   }
 
-  // 2. 孤儿引用：哲学锚点指向不存在的文件
+  // 2. 孤儿引用：哲学锚点必须同时指向存在的文件和可读取的章节。
   for (const [id, intent] of Object.entries(intents)) {
     if (!intent.philosophy_anchors) continue;
     for (const anchor of intent.philosophy_anchors) {
@@ -250,7 +421,27 @@ export function doctor(versionDir, verificationsDir, philosophyDir) {
       const filePath = join(philosophyDir, file);
       if (!existsSync(filePath)) {
         issues.push({ id, type: 'orphan_philosophy_ref', severity: 'high', msg: `${id} 引用不存在的哲学文件: ${file}` });
+      } else if (anchor.includes('#')) {
+        try {
+          getPhilosophy(philosophyDir, anchor);
+        } catch (error) {
+          issues.push({ id, type: 'orphan_philosophy_anchor', severity: 'high', msg: `${id} 引用不存在或不可读取的哲学章节: ${anchor}（${error.message}）` });
+        }
       }
+    }
+  }
+
+  // Intent 的叙事与完成契约不能只是字符串；它们必须能从当前版本真实解析。
+  for (const [id] of Object.entries(intents)) {
+    try {
+      getNarrative(versionDir, id);
+    } catch (error) {
+      issues.push({ id, type: 'intent_narrative_invalid', severity: 'high', msg: `${id} 的 narrative_ref 无法解析: ${error.message}` });
+    }
+    try {
+      getVerificationContract(versionDir, id);
+    } catch (error) {
+      issues.push({ id, type: 'intent_contract_invalid', severity: 'high', msg: `${id} 的 acceptance 无法解析: ${error.message}` });
     }
   }
 
@@ -591,6 +782,40 @@ export function traceIntent(versionDir, verificationsDir, philosophyDir, intentI
     dependency_chain: dependencyChain,
     lineage: { predecessors, successors },
   };
+}
+
+const REQUIRED_PROJECT_DOCUMENTS = [
+  { relativePath: '01_VISION.md', label: 'Vision' },
+  { relativePath: '02_ARCHITECTURE.md', label: 'Architecture' },
+  { relativePath: '05_VERIFICATION.md', label: 'Verification' },
+];
+const REQUIRED_PHILOSOPHY_DOCUMENTS = [
+  'PRODUCT_PHILOSOPHY.md',
+  'ENGINEERING_CREED.md',
+  'DECISION_RUBRIC.md',
+];
+
+function isLoomTemplateDocument(filePath) {
+  return existsSync(filePath) && readFileSync(filePath, 'utf-8').includes('<!-- LOOM_TEMPLATE -->');
+}
+
+function appendProjectDocumentStructureDiagnostics(issues, versionDir, philosophyDir) {
+  for (const document of REQUIRED_PROJECT_DOCUMENTS) {
+    const filePath = join(versionDir, document.relativePath);
+    if (!existsSync(filePath)) {
+      issues.push({ id: document.relativePath, type: 'project_document_missing', severity: 'high', msg: `缺少 LOOM 必需项目文档: ${document.relativePath}（${document.label}）` });
+    } else if (isLoomTemplateDocument(filePath)) {
+      issues.push({ id: document.relativePath, type: 'project_document_template', severity: 'high', msg: `${document.relativePath} 仍是 LOOM_TEMPLATE，尚未成为当前项目的 ${document.label} 文档` });
+    }
+  }
+  for (const filename of REQUIRED_PHILOSOPHY_DOCUMENTS) {
+    const filePath = join(philosophyDir, filename);
+    if (!existsSync(filePath)) {
+      issues.push({ id: filename, type: 'project_document_missing', severity: 'high', msg: `缺少 LOOM 必需哲学文档: 00_PHILOSOPHY/${filename}` });
+    } else if (isLoomTemplateDocument(filePath)) {
+      issues.push({ id: filename, type: 'project_document_template', severity: 'high', msg: `00_PHILOSOPHY/${filename} 仍是 LOOM_TEMPLATE，尚未成为当前项目的哲学判断` });
+    }
+  }
 }
 
 // ─── reverse-dep ───────────────────────────────────────

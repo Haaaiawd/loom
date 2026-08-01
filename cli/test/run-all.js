@@ -1,14 +1,18 @@
 // run-all.js — CLI 端到端测试
 // 造一个临时 .loom/v1/ 项目结构，用模板数据，跑通所有命令。
 
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, utimesSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const TEST_ROOT = join(process.cwd(), 'test', '.tmp-loom-test');
 const LOOM_DIR = join(TEST_ROOT, '.loom', 'v1');
 const PHILOSOPHY_DIR = join(LOOM_DIR, '00_PHILOSOPHY');
 const VERIFICATIONS_DIR = join(LOOM_DIR, 'verifications');
+const CAPABILITY_BRIEFS_DIR = join(LOOM_DIR, '07_CAPABILITY_BRIEFS');
+const ASSET_LIBRARY_DIR = join(LOOM_DIR, '08_ASSET_LIBRARY');
+const EXPERTISE_PACKS_DIR = join(LOOM_DIR, '10_EXPERTISE_PACKS');
 const CLI = join(process.cwd(), 'cli', 'bin', 'loom.js');
 
 let passed = 0;
@@ -18,8 +22,12 @@ function setup() {
   rmSync(TEST_ROOT, { recursive: true, force: true });
   mkdirSync(PHILOSOPHY_DIR, { recursive: true });
   mkdirSync(VERIFICATIONS_DIR, { recursive: true });
+  mkdirSync(CAPABILITY_BRIEFS_DIR, { recursive: true });
+  mkdirSync(join(ASSET_LIBRARY_DIR, 'files'), { recursive: true });
+  mkdirSync(EXPERTISE_PACKS_DIR, { recursive: true });
   mkdirSync(join(TEST_ROOT, 'artifacts'), { recursive: true });
   writeFileSync(join(TEST_ROOT, 'artifacts', 'quality-proof.md'), '# INT-002 {#INT-002}\n\n基线、候选、稳定性与取舍证据。\n');
+  writeFileSync(join(VERIFICATIONS_DIR, 'INT-001-host-render.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
 
   // Intent Map（基于模板，填入可测试的数据）
   writeFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), JSON.stringify({
@@ -57,6 +65,63 @@ function setup() {
       },
     },
     topo_order: ['INT-001', 'INT-002', 'INT-003'],
+  }, null, 2));
+
+  writeFileSync(join(CAPABILITY_BRIEFS_DIR, 'CAP-PROJECT-CREATION.md'), [
+    '# CAP-PROJECT-CREATION — 项目创建的可理解流程',
+    '',
+    '## 项目问题',
+    '',
+    '用户首次创建项目时必须理解名称、错误反馈和后续进入路径。',
+    '',
+    '## 成功判断',
+    '',
+    '窄屏与错误路径均可复现，且不会破坏既有认证状态。',
+  ].join('\n'));
+  writeFileSync(join(LOOM_DIR, '07_CAPABILITY_GRAPH.json'), JSON.stringify({
+    _meta: { _version: '1.0', _loom_version: 'v1', _generated_by: 'architect' },
+    nodes: {
+      'OUTCOME-IDENTITY': {
+        id: 'OUTCOME-IDENTITY', kind: 'outcome', title: '用户自主控制身份与项目空间',
+        status: 'covered', impact: 'high', route: 'intent', intent_refs: ['INT-001'],
+        relationships: [
+          { type: 'refines', target: 'CONCERN-PROJECT-CREATION' },
+          { type: 'validated_by', target: 'EVIDENCE-IDENTITY-HOST' },
+        ],
+      },
+      'EVIDENCE-IDENTITY-HOST': {
+        id: 'EVIDENCE-IDENTITY-HOST', kind: 'evidence', title: '用户在目标宿主中完成身份管理',
+        status: 'covered', impact: 'high', route: 'intent', intent_refs: ['INT-001'],
+        verification: {
+          method: 'manual_visual',
+          target: '目标客户端的身份管理界面',
+          procedure: '在干净会话中注册并登录，观察身份状态和项目入口是否呈现',
+          pass_criteria: '用户无需依赖外部链接即可看到已登录状态并进入自己的项目空间',
+          artifact: 'verifications/INT-001-host-render.png',
+        },
+        relationships: [],
+      },
+      'CONCERN-PROJECT-CREATION': {
+        id: 'CONCERN-PROJECT-CREATION', kind: 'concern', title: '首次创建项目的体验与业务边界',
+        status: 'covered', impact: 'high', route: 'intent', intent_refs: ['INT-002'],
+        relationships: [{ type: 'requires', target: 'CAP-PROJECT-CREATION' }],
+      },
+      'CAP-PROJECT-CREATION': {
+        id: 'CAP-PROJECT-CREATION', kind: 'capability', title: '设计项目创建的可理解流程',
+        status: 'researched', impact: 'high', route: 'brief', intent_refs: ['INT-002'],
+        acquisition_mode: 'adaptive',
+        acquisition_rationale: '测试基线：当前项目已有可复现的内部实现与验证夹具，不需要额外来源。',
+        brief_ref: '07_CAPABILITY_BRIEFS/CAP-PROJECT-CREATION.md',
+        question: '用户能否理解输入、错误反馈和创建后的下一步？', relationships: [],
+      },
+      'CONCERN-COLLABORATION': {
+        id: 'CONCERN-COLLABORATION', kind: 'concern', title: '协作邀请的成员边界',
+        status: 'covered', impact: 'medium', route: 'intent', intent_refs: ['INT-003'], relationships: [],
+      },
+    },
+  }, null, 2));
+  writeFileSync(join(ASSET_LIBRARY_DIR, 'manifest.json'), JSON.stringify({
+    _meta: { _version: '1.0', _loom_version: 'v1', _generated_by: 'architect' }, assets: {},
   }, null, 2));
 
   // 哲学文档
@@ -101,8 +166,140 @@ function setup() {
     '邀请是协作的起点——必须简单、可靠、可追踪。',
   ].join('\n'));
 
+  writeFileSync(join(LOOM_DIR, '02_ARCHITECTURE.md'), [
+    '# 系统架构',
+    '',
+    '认证、项目与协作保持明确边界；Intent Map 是执行承诺的唯一来源。',
+  ].join('\n'));
+  writeFileSync(join(LOOM_DIR, '05_VERIFICATION.md'), [
+    '# 验证契约',
+    '',
+    '每个 Intent 的 acceptance 直接写在 Intent Map；完成前必须有独立验证记录。',
+  ].join('\n'));
+  writeFileSync(join(PHILOSOPHY_DIR, 'DECISION_RUBRIC.md'), [
+    '# 决策量尺',
+    '',
+    '优先选择可理解、可验证且不伤害用户控制权的方案。',
+  ].join('\n'));
+
   // 写入 current 指针
   writeFileSync(join(TEST_ROOT, '.loom', 'current'), 'v1', 'utf-8');
+}
+
+function makeLensContract(overrides = {}) {
+  const questions = {
+    journey: '用户从开始到离开，是否能完成有意义的完整路径？',
+    interaction_accessibility: '状态、反馈、失败恢复和不同使用条件是否真实可用？',
+    visual_editorial: '视觉语言、层级、版式与资产是否帮助用户理解并形成该产品的气质？',
+    content_communication: '文案、信息呈现或对话是否准确、可理解且符合产品立场？',
+    system_data: '数据、模型、集成、权限与运行边界是否支撑而非伤害用户结果？',
+    quality_risk: '可靠性、隐私、安全、性能、素材来源与独立验证是否被处理？',
+  };
+  return {
+    selection_basis: '项目有面向用户的创建流程，因此旅程与交互需要具体审视；其余方向在本夹具中不改变产品结果。',
+    lenses: Object.entries(questions).map(([id, question]) => ({
+      id,
+      title: id,
+      question,
+      status: id === 'interaction_accessibility' ? 'applicable' : 'not_applicable',
+      ...(id === 'interaction_accessibility'
+        ? { node_refs: ['CAP-PROJECT-CREATION'] }
+        : { rationale: '本夹具不交付该方向的用户结果；这里只验证 Lens Contract 的结构。' }),
+    })),
+    ...overrides,
+  };
+}
+
+function makeCapabilityDomains() {
+  return [{
+    id: 'DOMAIN-INTERACTION-DESIGN',
+    title: 'Interaction Design / UX',
+    question: '怎样让输入、错误反馈和创建后的下一步在真实界面中保持可理解？',
+    why_now: '项目创建是本夹具唯一直接面向用户的流程；这一领域会改变错误状态和恢复方式。',
+    node_refs: ['CAP-PROJECT-CREATION'],
+  }];
+}
+
+function makeImpactReview(overrides = {}) {
+  return {
+    reviewer_mode: 'independent_agent_thread',
+    assessments: [{
+      capability_id: 'CAP-PROJECT-CREATION',
+      recommended_impact: 'high',
+      external_acquisition_required: true,
+      rationale: '交互与无障碍方法会改变流程、错误恢复与验收方式。',
+    }],
+    ...overrides,
+  };
+}
+
+function writeReadyExpertisePack(intentId = 'INT-002') {
+  const map = JSON.parse(readFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), 'utf-8'));
+  const pack = {
+    _meta: {
+      _description: 'test expertise pack',
+      _version: '1.0',
+      _loom_version: 'v1',
+      _generated_by: 'forge',
+    },
+    intent_id: intentId,
+    intent_revision: map.intents[intentId].revision ?? 1,
+    required_capability_refs: ['CAP-PROJECT-CREATION'],
+    status: 'ready',
+    search_plan: {
+      decision_question: '怎样让首次项目创建既容易理解，又有可观察的反馈与后续路径？',
+      project_signals: ['当前 Capability Brief 要求覆盖输入、错误反馈和创建后的下一步'],
+      derived_queries: [
+        {
+          channel: 'skill_registry',
+          query: 'interaction design first run project creation feedback skill',
+          rationale: '寻找可复用的交互设计决策框架与失败模式',
+        },
+        {
+          channel: 'web',
+          query: 'project creation onboarding inline validation interaction patterns',
+          rationale: '交叉核对真实产品模式与可观察验证信号',
+        },
+      ],
+      constraints: ['不改变项目创建业务规则', '不得损害已有认证状态'],
+      stop_condition: '至少一个外部来源直接支持每个 Capsule，并能写出可观察的决策门与失败模式。',
+    },
+    sources: [{
+      id: 'SRC-001',
+      kind: 'skill',
+      authority: 'expert',
+      title: 'Interaction design workflow reference',
+      locator: 'https://example.com/interaction-design-skill',
+      retrieved_at: '2026-07-31T09:00:00Z',
+      why_selected: '包含触发、反馈、决策门与可观察检查，直接对应当前 Capability question。',
+      retrieval_evidence: '已打开来源正文并核对触发、反馈、失败路径和验证章节。',
+    }],
+    capsules: [{
+      capability_ref: 'CAP-PROJECT-CREATION',
+      professional_problem: '把项目创建的输入、错误和下一步编排成无需猜测的连续反馈。',
+      when_to_use: '首次创建、空输入、服务端失败和创建成功后的进入路径。',
+      rules: ['每次操作都给出与当前状态对应的反馈', '错误反馈靠近发生位置且保留用户输入'],
+      workflow: ['冻结当前流程基线', '按正常、空输入、服务失败、成功四条路径设计反馈'],
+      decision_gates: ['用户是否能在一次观察内说明当前状态和下一步'],
+      failure_modes: ['只做漂亮表单但错误和成功后的状态含糊'],
+      verification_signals: ['窄屏和错误路径可复现，认证状态不丢失'],
+      source_refs: ['SRC-001'],
+    }],
+    blocker: null,
+  };
+  writeFileSync(join(EXPERTISE_PACKS_DIR, `${intentId}.json`), JSON.stringify(pack, null, 2));
+  return pack;
+}
+
+function expertisePackDigest(pack) {
+  return createHash('sha256').update(JSON.stringify(pack)).digest('hex');
+}
+
+function useDefaultHighImpactAcquisition() {
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  delete graph.nodes['CAP-PROJECT-CREATION'].acquisition_mode;
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
 }
 
 function completeAllIntents() {
@@ -112,11 +309,38 @@ function completeAllIntents() {
   writeFileSync(mapPath, JSON.stringify(map, null, 2), 'utf-8');
 }
 
+function writeValidAtlas(projectRoot = TEST_ROOT) {
+  const build = JSON.parse(runFromRoot('atlas build'));
+  const atlasPath = join(projectRoot, 'loom-atlas.html');
+  writeFileSync(atlasPath, [
+    '<!doctype html>',
+    '<html><head>',
+    `<meta name="loom-atlas-source-digest" content="${build.source_digest}">`,
+    '</head><body data-atlas-experience="deck-map-v1">',
+    '<button data-atlas-view="deck"></button>',
+    '<button data-atlas-view="map"></button>',
+    '<button data-atlas-control="previous"></button>',
+    '<button data-atlas-control="next"></button>',
+    '<section id="atlas-origin"></section>',
+    '<section id="atlas-structure"></section>',
+    '<section id="atlas-capabilities"></section>',
+    '<section id="atlas-decisions"></section>',
+    '<section id="atlas-review"></section>',
+    '<div id="atlas-audit-map"></div>',
+    '</body></html>',
+  ].join('\n'), 'utf-8');
+  return { ...build, atlasPath };
+}
+
 function run(args, allowFailure = false) {
   try {
-    return execSync(`node "${CLI}" ${args} --loom-dir "${LOOM_DIR}"`, {
+    const verifiedArgs = args.startsWith('verify pass ') && !args.includes('--verified-by')
+      ? `${args} --verified-by "keeper-test-thread" --verification-context independent_thread`
+      : args;
+    return execSync(`node "${CLI}" ${verifiedArgs} --loom-dir "${LOOM_DIR}"`, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, NODE_ENV: 'test' },
     });
   } catch (e) {
     if (allowFailure) {
@@ -133,6 +357,7 @@ function runFromRoot(args, allowFailure = false) {
       encoding: 'utf-8',
       cwd: TEST_ROOT,
       stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, NODE_ENV: 'test' },
     });
   } catch (e) {
     if (allowFailure) return (e.stdout || '') + (e.stderr || '');
@@ -228,6 +453,7 @@ test('intent validate — 质量契约与专业能力字段按最小结构校验
     map.intents['INT-002'].continuity_required = true;
     map.intents['INT-002'].capability_needs = ['交互设计', '可用性测量'];
     map.intents['INT-002'].creative_scope = '允许调整信息层级和反馈机制，不改变项目创建业务规则。';
+    map.intents['INT-002'].quality_strategy = 'atelier';
     writeFileSync(mapPath, JSON.stringify(map, null, 2));
     assertContains(run('intent validate'), '校验通过');
 
@@ -237,14 +463,20 @@ test('intent validate — 质量契约与专业能力字段按最小结构校验
     writeFileSync(mapPath, JSON.stringify(map, null, 2));
     const out = run('intent validate', true);
     assertContains(out, 'quality_contract');
+    assertContains(out, 'quality_strategy=atelier');
     assertContains(out, 'continuity_required');
     assertContains(out, '重复专业领域');
+
+    map.intents['INT-002'].quality_strategy = 'persona';
+    writeFileSync(mapPath, JSON.stringify(map, null, 2));
+    assertContains(run('intent validate', true), '合法: adaptive|atelier');
   } finally {
     writeFileSync(mapPath, original);
   }
 });
 
 test('intent validate — 缺失 revision 兼容为 1，非法显式 revision 被拒绝', () => {
+  setup();
   const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
   const original = readFileSync(mapPath, 'utf-8');
   try {
@@ -607,13 +839,21 @@ test('activate --intent — draft 与官方角色都只加载对应作用域', (
 
   const officialPrompt = run('activate forge --intent INT-001');
   assertContains(officialPrompt, '## 2. Active Objective');
-  assertContains(officialPrompt, '## 6. Expertise Inputs');
+  assertContains(officialPrompt, '## 7. Expertise Inputs');
   assertContains(officialPrompt, '用户注册与登录');
   assertContains(officialPrompt, '身份自治的入口');
   assertContains(officialPrompt, '注册并登录');
   assertContains(officialPrompt, '掌控自己的数据');
+  assertContains(officialPrompt, 'quality_strategy: adaptive');
+  assert(!officialPrompt.includes('Authorship Method'), 'adaptive Intent 不应注入 Atelier 方法');
   assert(!officialPrompt.includes('协作是产品的核心'), '官方 Intent 只应加载精确 Doctrine anchor');
   assertContains(run('activate forge --intent INT-004', true), 'Intent 不存在');
+});
+
+test('activate forge/keeper — 显式 Intent 也不得绕过未完成依赖', () => {
+  setup();
+  assertContains(run('activate forge --intent INT-003', true), '依赖尚未闭合: INT-002');
+  assertContains(run('activate keeper --intent INT-003', true), '不得通过 activate --intent 绕过执行顺序');
 });
 
 test('activate forge — Context Pack 顺序稳定并注入质量与专业能力输入', () => {
@@ -622,6 +862,7 @@ test('activate forge — Context Pack 顺序稳定并注入质量与专业能力
   const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
   Object.assign(map.intents['INT-001'], {
     quality_contract: '相对当前基线，首次登录理解时间至少降低 20%，安全行为与错误率不回退。',
+    quality_strategy: 'atelier',
     capability_needs: ['身份安全', '交互反馈设计'],
     creative_scope: '允许探索信息层级和反馈机制，不改变认证业务语义与安全边界。',
   });
@@ -634,9 +875,10 @@ test('activate forge — Context Pack 顺序稳定并注入质量与专业能力
     '## 3. Hard Invariants',
     '## 4. Success Contracts',
     '## 5. Project Judgment',
-    '## 6. Expertise Inputs',
-    '## 7. Working Facts',
-    '## 8. Role Contract / Output / Reflow / Stop',
+    '## 6. Stage Inputs (command-assembled)',
+    '## 7. Expertise Inputs',
+    '## 8. Working Facts',
+    '## 9. Role Contract / Output / Reflow / Stop',
   ];
   for (let i = 1; i < headings.length; i++) {
     assert(out.indexOf(headings[i - 1]) < out.indexOf(headings[i]), `Context Pack 顺序错误: ${headings[i]}`);
@@ -644,9 +886,518 @@ test('activate forge — Context Pack 顺序稳定并注入质量与专业能力
   assertContains(out, '身份安全');
   assertContains(out, '交互反馈设计');
   assertContains(out, '首次登录理解时间');
+  assertContains(out, 'quality_strategy: atelier');
+  assertContains(out, 'Authorship Method');
+  assertContains(out, 'Authorial Stance');
+  assertContains(out, '09_ATELIER/INT-001.json');
+  assertContains(out, 'provenance-backed Capability Graph proposal');
   assertContains(out, '只代表可发现入口');
   assert(!out.includes('协作者邀请'), '当前 Intent 不应注入无关 Intent');
   setup();
+});
+
+test('atelier — 只为显式 atelier Intent 创建并校验版本化创作记录', () => {
+  setup();
+  assertContains(run('atelier init INT-001', true), '未启用 quality_strategy=atelier');
+
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  Object.assign(map.intents['INT-001'], {
+    quality_contract: '相对当前基线，用户对核心命题的复述准确率提高，且登录任务成功率不回退。',
+    quality_strategy: 'atelier',
+    creative_scope: '允许改变登录入口的构图、节奏和反馈；不得改变认证语义与安全边界。',
+    status: 'in_progress',
+  });
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  assertContains(runFromRoot('guide --dry-run'), 'loom atelier init INT-001');
+  assertContains(run('doctor'), 'atelier_record_invalid');
+
+  const created = JSON.parse(run('atelier init INT-001'));
+  assert(created.status === 'draft' && created.stance_revision === 1, 'atelier init 必须创建 revision=1 的 draft');
+  assertContains(run('atelier validate INT-001'), '"valid": true');
+  assertContains(run('atelier init INT-001', true), '不会覆盖');
+
+  const atelierDir = join(LOOM_DIR, '09_ATELIER');
+  const filesDir = join(atelierDir, 'files', 'INT-001');
+  const recordPath = join(atelierDir, 'INT-001.json');
+  const blocked = JSON.parse(readFileSync(recordPath, 'utf-8'));
+  blocked.status = 'blocked';
+  writeFileSync(recordPath, JSON.stringify(blocked, null, 2));
+  assertContains(run('atelier validate INT-001', true), 'blocker 对象');
+  blocked.blocker = {
+    reason: '缺少目标宿主的可访问测试环境。',
+    recovery_condition: '获得测试环境权限并能保存真实基线。',
+  };
+  writeFileSync(recordPath, JSON.stringify(blocked, null, 2));
+  assertContains(run('atelier validate INT-001'), '"status": "blocked"');
+
+  for (const file of ['baseline.png', 'candidate-a.png', 'candidate-b.png', 'comparison.md']) {
+    writeFileSync(join(filesDir, file), file.endsWith('.png')
+      ? Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])
+      : '# comparison\n\n匿名顺序交换比较记录。\n');
+  }
+  const record = JSON.parse(readFileSync(recordPath, 'utf-8'));
+  Object.assign(record, {
+    status: 'selected',
+    blocker: null,
+    stance: {
+      creative_thesis: '让身份确认像一次清晰的交接，而不是填写表单。',
+      gaze: ['先确认控制权，再输入凭证'],
+      tension: '明确的安全感与轻盈的完成节奏同时成立',
+      signature_bet: {
+        claim: '用连续确认过程替代等权字段堆叠',
+        mechanism: '分阶段显露信息并持续反馈当前控制状态',
+        cost: '首次流程增加一个明确确认动作',
+      },
+      refusals: ['默认居中卡片表单'],
+      reference_mechanisms: [],
+      medium_grammar: { composition: '连续单路径', motion: '只反馈状态变化' },
+      surprise_budget: {
+        level: 'medium',
+        allowed: '改变布局与反馈节奏',
+        protected: '认证语义、安全边界和键盘可用性',
+      },
+      anti_fixation: ['至少一个候选禁止使用卡片容器'],
+      verification_lens: ['用户能否复述当前控制权状态'],
+    },
+    baseline: {
+      artifact_refs: ['09_ATELIER/files/INT-001/baseline.png'],
+      observed_limit: '字段可靠但全部等权，用户无法先确认控制权。',
+    },
+    diversity_axes: [
+      { id: 'structure', low: '离散字段', high: '连续确认', why: '改变理解顺序' },
+      { id: 'guidance', low: '一次展示', high: '渐进显露', why: '改变首次理解成本' },
+    ],
+    candidates: [
+      {
+        id: 'CAND-A',
+        stance_revision: 1,
+        mechanism: '连续确认路径',
+        artifact_refs: ['09_ATELIER/files/INT-001/candidate-a.png'],
+        floor_check: 'passed',
+        floor_evidence: '认证回归与键盘路径通过。',
+      },
+      {
+        id: 'CAND-B',
+        stance_revision: 1,
+        mechanism: '分区控制面板',
+        artifact_refs: ['09_ATELIER/files/INT-001/candidate-b.png'],
+        floor_check: 'passed',
+        floor_evidence: '认证回归与键盘路径通过。',
+      },
+    ],
+    selection: {
+      status: 'selected',
+      selected_candidate: 'CAND-A',
+      method: '匿名顺序交换比较',
+      evidence_refs: ['09_ATELIER/files/INT-001/comparison.md'],
+      why: '核心命题复述更准确，任务成功率未回退。',
+      remaining_tradeoff: '首次流程多一个确认动作。',
+    },
+  });
+  writeFileSync(recordPath, JSON.stringify(record, null, 2));
+  assertContains(run('atelier validate INT-001'), '"status": "selected"');
+  assertContains(run('atelier get INT-001'), '"selected_candidate": "CAND-A"');
+  const keeper = run('activate keeper --intent INT-001');
+  assertContains(keeper, 'Atelier Record');
+  assertContains(keeper, '"selected_candidate": "CAND-A"');
+  writeFileSync(join(TEST_ROOT, 'artifacts', 'quality-proof-int001.md'), '# INT-001 {#INT-001}\n\n基线、候选、作者命题、稳定性与取舍证据。\n');
+  run('verify pass INT-001 --summary "匿名比较证明作者命题可被复述，认证回归与键盘路径均未退化" --quality-proof "artifacts/quality-proof-int001.md#INT-001"');
+  const verification = JSON.parse(readFileSync(join(VERIFICATIONS_DIR, 'INT-001.json'), 'utf-8'));
+  const latest = verification.records[verification.records.length - 1];
+  assert(latest.atelier?.stance_revision === 1, 'Atelier passed 验证必须绑定 stance_revision');
+  assert(latest.atelier?.record_ref === '09_ATELIER/INT-001.json', 'Atelier passed 验证必须绑定 Record');
+
+  record.intent_revision = 99;
+  record.candidates[0].floor_check = 'failed';
+  writeFileSync(recordPath, JSON.stringify(record, null, 2));
+  const invalid = run('atelier validate INT-001', true);
+  assertContains(invalid, '已过期');
+  assertContains(invalid, 'selected candidate 必须通过 Reliability Floor');
+  assertContains(
+    run('verify pass INT-001 --summary "再次验证作者命题与认证回归，准备写入新一轮结果" --quality-proof "artifacts/quality-proof-int001.md#INT-001"', true),
+    '必须有当前且合法的 Atelier Record',
+  );
+  assertContains(run('intent done INT-001', true), 'Atelier Record 校验失败');
+  record.intent_revision = 1;
+  record.candidates[0].floor_check = 'passed';
+  writeFileSync(recordPath, JSON.stringify(record, null, 2));
+  assertContains(run('intent done INT-001'), '已完成');
+  setup();
+});
+
+console.log('\n测试 Capability Graph 命令');
+
+test('asset library — imports local approved bytes, supports Chinese search, and rejects incomplete or duplicate provenance', () => {
+  const source = join(TEST_ROOT, 'emoji-测试.png');
+  writeFileSync(source, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]));
+  const incomplete = run(`asset import "${source}" --tags "庆祝,表情" --source "用户导入" --author "测试作者" --approval approved`, true);
+  assertContains(incomplete, '--license is required');
+  const imported = JSON.parse(run(`asset import "${source}" --tags "庆祝,表情" --source "用户导入" --author "测试作者" --license "CC0-1.0" --approval approved`));
+  assert(imported.id.startsWith('ASSET-'), '资产必须获得内容派生 stable id');
+  assert(existsSync(join(LOOM_DIR, '08_ASSET_LIBRARY', imported.path)), '资产字节必须被复制进版本化库内');
+  const found = JSON.parse(run('asset search 表情'));
+  assert(found.length === 1 && found[0].id === imported.id, '中文标签必须可检索');
+  assert(JSON.parse(run(`asset get ${imported.id}`)).content_hash === imported.content_hash, 'asset get 必须返回可追溯哈希');
+  assert(JSON.parse(run('asset validate')).valid === true, '无 evidence 回链的已批准资产应可校验');
+  const evidenceSource = join(TEST_ROOT, 'emoji-evidence.png');
+  writeFileSync(evidenceSource, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x01]));
+  const evidenceAsset = JSON.parse(run(`asset import "${evidenceSource}" --tags "宿主呈现" --source "用户导入" --author "测试作者" --license "CC0-1.0" --approval approved --evidence EVIDENCE-IDENTITY-HOST`));
+  const graphWithAsset = JSON.parse(readFileSync(join(LOOM_DIR, '07_CAPABILITY_GRAPH.json'), 'utf-8'));
+  assert(graphWithAsset.nodes['EVIDENCE-IDENTITY-HOST'].asset_refs.includes(evidenceAsset.id), '带 evidence 导入必须原子写入 evidence → asset 回链');
+  assert(JSON.parse(run('asset validate')).valid === true, '自动双向回链后的资产库必须可校验');
+  const duplicate = run(`asset import "${source}" --tags "庆祝" --source "用户导入" --author "测试作者" --license "CC0-1.0" --approval approved`, true);
+  assertContains(duplicate, 'duplicate asset bytes');
+});
+
+test('asset import transaction — second metadata write failure rolls back, and validate recovers an interrupted journal', () => {
+  setup();
+  const source = join(TEST_ROOT, 'transaction-emoji.png');
+  writeFileSync(source, Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x77]));
+  const manifestPath = join(ASSET_LIBRARY_DIR, 'manifest.json');
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const beforeManifest = readFileSync(manifestPath, 'utf-8');
+  const beforeGraph = readFileSync(graphPath, 'utf-8');
+  const command = `asset import "${source}" --tags "transaction" --source "test" --author "test" --license "CC0-1.0" --approval approved --evidence EVIDENCE-IDENTITY-HOST`;
+
+  const failed = run(`${command} --test-fail-after manifest`, true);
+  assertContains(failed, 'injected asset import failure after manifest write');
+  assert(readFileSync(manifestPath, 'utf-8') === beforeManifest, 'second write failure must restore manifest bytes exactly');
+  assert(readFileSync(graphPath, 'utf-8') === beforeGraph, 'second write failure must restore graph bytes exactly');
+  assert(readdirSync(join(ASSET_LIBRARY_DIR, 'files')).length === 0, 'second write failure must not orphan copied asset bytes');
+  assert(!existsSync(join(ASSET_LIBRARY_DIR, '.asset-import-journal.json')), 'successful rollback must remove its journal');
+
+  const interrupted = run(`${command} --test-fail-after crash-manifest`, true);
+  assertContains(interrupted, 'injected crash after manifest write');
+  assert(existsSync(join(ASSET_LIBRARY_DIR, '.asset-import-journal.json')), 'interrupted transaction must leave a recovery journal');
+  const validation = JSON.parse(run('asset validate'));
+  assert(validation.recovered_transaction?.recovered === true, 'asset validate must explicitly report recovered transaction');
+  assert(readFileSync(manifestPath, 'utf-8') === beforeManifest, 'recovery must restore manifest bytes exactly');
+  assert(readFileSync(graphPath, 'utf-8') === beforeGraph, 'recovery must restore graph bytes exactly');
+  assert(readdirSync(join(ASSET_LIBRARY_DIR, 'files')).length === 0, 'recovery must remove staged/copied bytes');
+  assert(!existsSync(join(ASSET_LIBRARY_DIR, '.asset-import-journal.json')), 'recovery must clear the completed journal');
+});
+
+test('capability proposal — incoming requirement is audited, blocks guide, and closes only after Architect decision', () => {
+  const proposalPath = join(TEST_ROOT, 'CGP-ASSET-RENDER.json');
+  writeFileSync(proposalPath, JSON.stringify({
+    id: 'CGP-ASSET-RENDER', origin: 'user_request', candidate_kind: 'constraint', title: '素材必须在目标宿主可见',
+    why_now: '外链成功不等于用户可见，需要强制宿主呈现验收。',
+    provenance: { source: '用户反馈', observed_at: '2026-07-30', evidence: '上一轮外链在目标宿主未呈现。' }, status: 'submitted',
+  }, null, 2));
+  const submitted = JSON.parse(run(`capability proposal submit --json-file "${proposalPath}"`));
+  assert(submitted.status === 'submitted', 'proposal 必须从 submitted 开始');
+  assertContains(runFromRoot('guide'), 'capability_graph_proposals_pending');
+  const decided = JSON.parse(run('capability proposal decide CGP-ASSET-RENDER graph_update --rationale "将呈现约束写入 evidence 节点并建立资产双向回链"'));
+  assert(decided.status === 'decided' && decided.decision === 'graph_update', 'Architect 决策必须显式落盘');
+  assertContains(runFromRoot('guide'), 'capability_graph_proposals_pending');
+  const prematureResolution = join(TEST_ROOT, 'CGP-ASSET-RENDER-premature.json');
+  writeFileSync(prematureResolution, JSON.stringify({ graph: { node_ids: ['EVIDENCE-IDENTITY-HOST'] } }));
+  assertContains(run(`capability proposal close CGP-ASSET-RENDER --resolution-file "${prematureResolution}"`, true), 'real change to 07_CAPABILITY_GRAPH.json');
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph.nodes['EVIDENCE-IDENTITY-HOST'].proposal_refs = ['CGP-ASSET-RENDER'];
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  const resolution = join(TEST_ROOT, 'CGP-ASSET-RENDER-resolution.json');
+  writeFileSync(resolution, JSON.stringify({ graph: { node_ids: ['EVIDENCE-IDENTITY-HOST'] } }));
+  assertContains(run(`capability proposal close CGP-ASSET-RENDER --resolution-file "${resolution}"`, true), 'requires a formal Graph constraints carrier');
+  graph.constraints = [{ proposal_id: 'CGP-ASSET-RENDER', title: '素材必须在目标宿主可见', node_refs: ['EVIDENCE-IDENTITY-HOST'] }];
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  const closed = JSON.parse(run(`capability proposal close CGP-ASSET-RENDER --resolution-file "${resolution}"`));
+  assert(closed.status === 'closed' && closed.resolution.graph.node_ids[0] === 'EVIDENCE-IDENTITY-HOST', 'proposal 必须以结构化 resolution 和真实 Graph 变更关闭');
+  assert(!runFromRoot('guide').includes('capability_graph_proposals_pending'), 'closed proposal 不得持续阻断 loop');
+});
+
+test('capability graph/frontier/get/coverage/compile — 图谱、Brief 与 Intent 回链可查询', () => {
+  setup();
+  const graph = JSON.parse(run('capability graph'));
+  assert(graph.summary.total === 5, '图谱节点数不正确');
+  assertContains(graph.mermaid, 'CAP-PROJECT-CREATION');
+  assert(JSON.parse(run('capability frontier')).length === 0, '已路由高影响节点不应进入 frontier');
+
+  const node = JSON.parse(run('capability get CAP-PROJECT-CREATION'));
+  assert(node.node.brief_ref.includes('CAP-PROJECT-CREATION'), '能力节点应返回 Brief 引用');
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.ready === true, '完整图谱应通过 coverage');
+  assert(coverage.summary.unmapped_intents === 0, '所有 Intent 应回链图谱');
+  assert(coverage.summary.routing_gaps === 0, '完整图谱不应存在无依据的路由');
+
+  const compiled = JSON.parse(run('capability compile INT-002'));
+  assert(compiled.available === true, 'Capability Graph 应可用');
+  assert(compiled.nodes.some((item) => item.id === 'CAP-PROJECT-CREATION'), '编译输入缺少能力节点');
+  assertContains(compiled.briefs[0].content, '项目创建的可理解流程');
+  assertContains(run('activate forge --intent INT-002'), 'Capability Brief: CAP-PROJECT-CREATION');
+});
+
+test('capability graph — 1.2 Lens Contract 与 Capability Domains 进入 Intent Context Pack', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph._meta._version = '1.2';
+  graph.lens_contract = makeLensContract();
+  graph.capability_domains = makeCapabilityDomains();
+  graph.nodes['CAP-PROJECT-CREATION'].domain_refs = ['DOMAIN-INTERACTION-DESIGN'];
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.ready === true, '有效的 Lens Contract 不应阻断已闭合图谱');
+  assert(coverage.summary.lenses.applicable === 1, 'coverage 必须汇报适用透镜数');
+  assertContains(run('activate forge --intent INT-002'), 'Lens Contract');
+  assertContains(run('activate forge --intent INT-002'), 'interaction_accessibility');
+  assertContains(run('activate forge --intent INT-002'), 'Capability Domains');
+  assertContains(run('activate forge --intent INT-002'), 'DOMAIN-INTERACTION-DESIGN');
+
+  graph.lens_contract.lenses[1].node_refs = ['CAP-NOT-REAL'];
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('capability coverage', true), '指向不存在节点');
+});
+
+test('capability graph — 1.3 Impact Gate 不允许把需要外部判断的能力降级以跳过检索', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph._meta._version = '1.3';
+  graph.lens_contract = makeLensContract();
+  graph.capability_domains = makeCapabilityDomains();
+  graph.impact_review = makeImpactReview();
+  const capability = graph.nodes['CAP-PROJECT-CREATION'];
+  capability.domain_refs = ['DOMAIN-INTERACTION-DESIGN'];
+  capability.acquisition_mode = 'external_required';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+
+  delete graph.impact_review;
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('capability coverage', true), '要求 impact_assessment');
+  assertContains(run('doctor'), 'capability_impact_gate_missing');
+
+  capability.impact_assessment = {
+    affected_user_result: '用户可以理解并完成项目创建流程',
+    failure_cost: 'material',
+    external_knowledge_changes_decision: true,
+    rationale: '交互与无障碍方法会改变流程、错误恢复与验收方式。',
+  };
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('doctor'), 'capability_impact_gate_missing');
+
+  graph.impact_review = makeImpactReview();
+
+  capability.impact = 'medium';
+  capability.impact_assessment = {
+    affected_user_result: '用户可以理解并完成项目创建流程',
+    failure_cost: 'material',
+    external_knowledge_changes_decision: true,
+    rationale: '交互与无障碍方法会改变流程、错误恢复与验收方式。',
+  };
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('capability coverage', true), 'impact 必须为 high');
+
+  capability.impact = 'high';
+  capability.acquisition_mode = 'adaptive';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('capability coverage', true), '只允许 acquisition_mode=external_required');
+
+  capability.acquisition_mode = 'external_required';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.ready === true, '完成 Impact Gate 的高影响能力应继续通过已有闭合检查');
+  assert(coverage.summary.required_high_capabilities === 1, 'coverage 必须暴露按 30% 计算的 high capability 下限');
+  assertContains(run('activate impact-reviewer'), 'Proposed Capability Graph');
+});
+
+test('capability graph — 1.2 缺少 Capability Domains 不能被 coverage 误判为 ready', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph._meta._version = '1.2';
+  graph.lens_contract = makeLensContract();
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.ready === false, '新 schema 缺少 Capability Domains 不得 ready');
+  assert(coverage.summary.capability_domain_gaps === 1, 'coverage 必须报告能力领域缺口');
+  assertContains(run('doctor'), 'capability_domain_contract_missing');
+});
+
+test('capability graph — 1.1 缺少 Lens Contract 不能被 coverage 误判为 ready', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph._meta._version = '1.1';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.ready === false, '新 schema 缺少 Lens Contract 不得 ready');
+  assert(coverage.summary.lens_contract_gaps === 1, 'coverage 必须报告透镜契约缺口');
+  assertContains(run('doctor'), 'capability_lens_contract_missing');
+});
+
+test('capability coverage — 高影响未路由节点必须被发现', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph.nodes['CAP-PROJECT-CREATION'].status = 'open';
+  graph.nodes['CAP-PROJECT-CREATION'].route = 'expand';
+  graph.nodes['CAP-PROJECT-CREATION'].brief_ref = undefined;
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  const frontier = JSON.parse(run('capability frontier'));
+  assert(frontier.some((item) => item.id === 'CAP-PROJECT-CREATION'), '高影响 open 节点必须出现在 frontier');
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.high_unrouted === 1, 'coverage 必须统计未路由高影响节点');
+  assertContains(run('doctor'), 'capability_frontier_open');
+});
+
+test('capability coverage — Intent 漏回链或路由缺证据不得显示 ready', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph.nodes['CONCERN-COLLABORATION'].intent_refs = [];
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.ready === false, '任一 Intent 漏回链时 coverage 不得 ready');
+  assert(coverage.summary.routing_gaps === 1, 'intent 路由缺少回链必须被统计');
+  assert(coverage.summary.unmapped_intents === 1, '漏回链 Intent 必须被统计');
+  assertContains(run('doctor'), 'capability_route_evidence');
+  assertContains(run('doctor'), 'intent_graph_unmapped');
+});
+
+test('capability coverage — outcome 必须展开为 concern', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph.nodes['OUTCOME-IDENTITY'].relationships = [];
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.ready === false, '未展开的 outcome 不得通过 coverage');
+  assert(coverage.summary.outcomes_without_concern === 1, '缺少 concern 的 outcome 必须被统计');
+  assertContains(run('doctor'), 'capability_outcome_unexpanded');
+});
+
+test('capability coverage/doctor/guide — 高影响 outcome 必须拥有目标宿主中的可观察验证链', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph.nodes['OUTCOME-IDENTITY'].relationships = graph.nodes['OUTCOME-IDENTITY'].relationships
+    .filter((relation) => relation.type !== 'validated_by');
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.ready === false, '缺少宿主可观察验证链时 coverage 不得 ready');
+  assert(coverage.summary.high_outcomes_without_observable_evidence === 1, '高影响 outcome 的可观察验证缺口必须被统计');
+  assertContains(run('doctor'), 'capability_outcome_unobservable');
+  const guide = runFromRoot('guide');
+  assertContains(guide, 'capability_graph_incomplete');
+  assertContains(guide, '不可观察 outcome 1');
+});
+
+test('capability coverage — 设计阶段的可观察验证计划不要求预先伪造 artifact', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-001'].status = 'pending';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  rmSync(join(VERIFICATIONS_DIR, 'INT-001-host-render.png'), { force: true });
+  const coverage = JSON.parse(run('capability coverage'));
+  assert(coverage.summary.high_outcomes_without_observable_evidence === 0, '验证入口完整时，未开始的 Intent 不应被 artifact 文件阻断');
+  assert(coverage.summary.evidence_artifact_gaps === 0, '只有完成 Intent 缺失产物才应报告证据文件缺口');
+  assert(coverage.summary.ready === true, '规划闭合不应依赖尚未实现的证据文件');
+});
+
+test('capability graph — evidence artifact and covered_by must be real, direct and local', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph.nodes['EVIDENCE-IDENTITY-HOST'].verification.artifact = 'verifications/not-written.png';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  const missingArtifact = JSON.parse(run('capability coverage'));
+  assert(missingArtifact.summary.ready === false && missingArtifact.summary.evidence_artifact_gaps === 1, '完成 Intent 的 evidence artifact 只是路径文本而未真实落盘时不得通过');
+
+  setup();
+  const invalidCoveredBy = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  invalidCoveredBy.nodes['CAP-PROJECT-CREATION'].status = 'covered';
+  invalidCoveredBy.nodes['CAP-PROJECT-CREATION'].route = 'covered_by';
+  invalidCoveredBy.nodes['CAP-PROJECT-CREATION'].covered_by = 'CAP-PROJECT-CREATION';
+  invalidCoveredBy.nodes['CAP-PROJECT-CREATION'].relationships = [{ type: 'covered_by', target: 'CAP-PROJECT-CREATION' }];
+  writeFileSync(graphPath, JSON.stringify(invalidCoveredBy, null, 2));
+  assertContains(run('capability coverage', true), 'covered_by 不得指向自身');
+});
+
+test('external acquisition — 高影响能力默认进入强门，并由 guide/activate/doctor 暴露', () => {
+  setup();
+  useDefaultHighImpactAcquisition();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].quality_contract = '相对当前基线，项目创建首次成功时间至少降低 20%，错误率不回退。';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+
+  const compiled = JSON.parse(run('capability compile INT-002'));
+  assert(compiled.acquisition.required === true, '未显式豁免的高影响 capability 应启用外部获取强门');
+  assert(compiled.acquisition.required_node_ids.includes('CAP-PROJECT-CREATION'), '必须报告强门能力节点');
+  assertContains(runFromRoot('guide'), 'loom expertise init INT-002');
+  const activation = run('activate forge --intent INT-002');
+  assertContains(activation, 'External Acquisition Gate — OPEN');
+  assertContains(activation, 'find skill');
+  assertContains(run('doctor'), 'expertise_pack_invalid');
+});
+
+test('expertise pack — draft 不能冒充 ready，来源化 Capsule 闭合后才注入 Forge', () => {
+  setup();
+  useDefaultHighImpactAcquisition();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].quality_contract = '相对当前基线，项目创建首次成功时间至少降低 20%，错误率不回退。';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+
+  const draft = JSON.parse(run('expertise init INT-002'));
+  assert(draft.status === 'draft', 'init 应只创建 draft');
+  assertContains(run('expertise validate INT-002', true), '必须为 ready');
+
+  const pack = writeReadyExpertisePack();
+  const validation = JSON.parse(run('expertise validate INT-002'));
+  assert(validation.external_source_count === 1, 'ready Pack 必须统计外部来源');
+  const activation = run('activate forge --intent INT-002');
+  assertContains(activation, 'External Acquisition Gate — READY');
+  assertContains(activation, pack.capsules[0].professional_problem);
+
+  pack.capsules[0].source_refs = [];
+  writeFileSync(join(EXPERTISE_PACKS_DIR, 'INT-002.json'), JSON.stringify(pack, null, 2));
+  assertContains(run('expertise validate INT-002', true), '至少需要一个来源');
+});
+
+test('capability acquisition_mode — 显式 required 生效，project_only 必须说明理由', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph.nodes['CAP-PROJECT-CREATION'].acquisition_mode = 'external_required';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assert(JSON.parse(run('capability compile INT-002')).acquisition.required === true, '显式 external_required 应生效');
+
+  graph.nodes['CAP-PROJECT-CREATION'].acquisition_mode = 'project_only';
+  delete graph.nodes['CAP-PROJECT-CREATION'].acquisition_rationale;
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('capability coverage', true), 'acquisition_rationale');
+  graph.nodes['CAP-PROJECT-CREATION'].acquisition_rationale = '这是对未公开内部协议的机械迁移，不存在可适用的外部专业知识。';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assert(JSON.parse(run('capability compile INT-002')).acquisition.required === false, '有理由的 project_only 不应强制外部获取');
+});
+
+test('1.2.1 — 高影响 adaptive 必须留下不获取的理由，完成后丢失 evidence artifact 必须被 doctor 发现', () => {
+  setup();
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  delete graph.nodes['CAP-PROJECT-CREATION'].acquisition_rationale;
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('capability coverage', true), 'adaptive');
+  graph.nodes['CAP-PROJECT-CREATION'].acquisition_rationale = '当前任务已有经验证的项目内方法，外部获取不会改变本轮判断。';
+  graph.nodes['EVIDENCE-IDENTITY-HOST'].verification.artifact = 'verifications/missing-proof.png';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  assertContains(run('doctor'), 'capability_evidence_artifact_missing');
+  setup();
+});
+
+test('1.2.1 — 快捷 passed 必须声明可审计的独立验证来源', () => {
+  setup();
+  const out = run('verify pass INT-002 --summary "独立复现项目创建的完整行为与失败边界" --verified-by "keeper-test-thread"', true);
+  assertContains(out, '--verification-context');
 });
 
 console.log('\n测试 philosophy 命令');
@@ -703,6 +1454,8 @@ test('philosophy check — 无灵感来源章节报 high', () => {
   const out = run('philosophy check', true);
   assertContains(out, '哲学文档校验未通过');
   assertContains(out, '灵感来源');
+  assertContains(out, 'loom activate weaver');
+  assert(!out.includes('参见 meta/PHILOSOPHY_WEAVER.md'), '哲学恢复不应让 Agent 手动寻找框架文件');
 });
 
 test('philosophy check — 单个决策相关的 Wikipedia 来源可以通过', () => {
@@ -871,14 +1624,28 @@ test('verify contract — 引用 acceptance 解析 05_VERIFICATION.md', () => {
 
 test('verify pass — 质量契约强制第五维，相对提升可附 Quality Proof', () => {
   setup();
+  useDefaultHighImpactAcquisition();
   const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
   const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
   map.intents['INT-002'].quality_contract = '相对当前基线，项目创建首次成功时间至少降低 20%，错误率不回退。';
   writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  writeReadyExpertisePack();
 
   writeFileSync(join(VERIFICATIONS_DIR, 'INT-002.json'), JSON.stringify({
     intent_id: 'INT-002',
-    records: [{ round: 1, intent_revision: 1, verdict: 'passed' }],
+    records: [{
+      round: 1,
+      intent_revision: 1,
+      verdict: 'passed',
+      expertise: {
+        record_ref: '10_EXPERTISE_PACKS/INT-002.json',
+        intent_revision: 1,
+        required_node_ids: ['CAP-PROJECT-CREATION'],
+        source_count: 1,
+        capsule_count: 1,
+        pack_digest: expertisePackDigest(JSON.parse(readFileSync(join(EXPERTISE_PACKS_DIR, 'INT-002.json'), 'utf-8'))),
+      },
+    }],
   }));
   assertContains(run('intent done INT-002', true), 'quality_achievement');
   rmSync(join(VERIFICATIONS_DIR, 'INT-002.json'), { force: true });
@@ -912,6 +1679,13 @@ test('verify pass — 质量契约强制第五维，相对提升可附 Quality P
   const latest = history.records.at(-1);
   assert(latest.dimensions.quality_achievement.verdict === 'passed', '应自动写入第五维');
   assert(latest.dimensions.quality_achievement.quality_proof_ref === 'artifacts/quality-proof.md#INT-002', '应在质量维度保留 Quality Proof 引用');
+  assert(latest.expertise.record_ref === '10_EXPERTISE_PACKS/INT-002.json', 'passed 必须绑定当前 Expertise Pack');
+  assert(latest.expertise.source_count === 1 && latest.expertise.capsule_count === 1, 'passed 必须绑定来源与 Capsule 计数');
+  assert(/^[a-f0-9]{64}$/.test(latest.expertise.pack_digest), 'passed 必须绑定 Pack 内容摘要，内容变化后旧验证失效');
+  const changedPack = JSON.parse(readFileSync(join(EXPERTISE_PACKS_DIR, 'INT-002.json'), 'utf-8'));
+  changedPack.capsules[0].rules.push('验证后新增但尚未由 Keeper 重验的规则');
+  writeFileSync(join(EXPERTISE_PACKS_DIR, 'INT-002.json'), JSON.stringify(changedPack, null, 2));
+  assertContains(run('intent done INT-002', true), '未绑定当前 Expertise Pack');
   setup();
 });
 
@@ -972,6 +1746,10 @@ test('verify write — 写入验证记录（追加模式）', () => {
     timestamp: '2026-06-26T12:00:00Z',
     summary: '实现忠实于意图',
     reproduction_command: 'npm test',
+    verification_provenance: {
+      verified_by: 'keeper-write-test',
+      context: 'independent_thread',
+    },
     dimensions: {
       intent_fidelity: { verdict: 'passed', evidence: '对照意图叙事第 2 段，实现忠实于原始意图' },
       philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2/AP3 均未违反' },
@@ -1040,6 +1818,10 @@ test('verify write — deviated 连续计数遇到 passed 会重置', () => {
       verdict,
       timestamp: `2026-06-26T13:0${i}:00Z`,
       summary: `第 ${i + 1} 轮 ${verdict}`,
+      verification_provenance: {
+        verified_by: 'keeper-reset-test',
+        context: 'independent_thread',
+      },
       dimensions: {
         intent_fidelity: { verdict, evidence: '对照意图叙事第 2 段，记录连续偏离计数行为' },
         philosophy_consistency: { verdict: 'passed', evidence: '反模式逐条对照：AP1/AP2 均未违反' },
@@ -1219,6 +2001,7 @@ test('验证 epoch — completed 回流后旧 passed 记录不能再次闭合', 
     intent_id: 'INT-001',
     records: [{ intent_revision: 1, verification_epoch: 1, verdict: 'passed' }],
   }, null, 2));
+
   run('intent update INT-001 --status needs_review');
   const map = JSON.parse(readFileSync(join(LOOM_DIR, '04_INTENT_MAP.json'), 'utf-8'));
   assert(map.intents['INT-001'].verification_epoch === 2, '回流必须推进验证 epoch');
@@ -1251,9 +2034,13 @@ test('init — 初始化项目目录', () => {
   assertContains(out, 'LOOM 项目已初始化');
   assert(existsSync(join(initRoot, '.loom', 'v1', '00_PHILOSOPHY')), '哲学目录未创建');
   assert(existsSync(join(initRoot, '.loom', 'v1', '04_INTENT_MAP.json')), 'Intent Map 模板未复制');
+  assert(existsSync(join(initRoot, '.loom', 'v1', '07_CAPABILITY_GRAPH.json')), 'Capability Graph 模板未复制');
+  assert(existsSync(join(initRoot, '.loom', 'v1', '07_CAPABILITY_BRIEFS')), 'Capability Brief 目录未创建');
   const initMap = JSON.parse(readFileSync(join(initRoot, '.loom', 'v1', '04_INTENT_MAP.json'), 'utf-8'));
   assert(initMap._meta._loom_version === 'v1', 'v1 模板应写入实际版本');
   assert(initMap._meta._parent_version === null, 'v1 parent 应为 null');
+  const initGraph = JSON.parse(readFileSync(join(initRoot, '.loom', 'v1', '07_CAPABILITY_GRAPH.json'), 'utf-8'));
+  assert(initGraph._meta._loom_version === 'v1', 'Capability Graph 应写入实际版本');
   assert(existsSync(join(initRoot, '.loom', 'v1', '01_VISION.md')), '愿景模板未复制');
   assert(existsSync(join(initRoot, '.loom', 'v1', '02_ARCHITECTURE.md')), '02_ARCHITECTURE.md 未 scaffold');
   assert(existsSync(join(initRoot, '.loom', 'v1', '05_VERIFICATION.md')), '05_VERIFICATION.md 未 scaffold');
@@ -1292,6 +2079,17 @@ test('activate weaver — 输出激活提示词', () => {
   const out = run('activate weaver');
   assertContains(out, 'Project Doctrine');
   assertContains(out, 'BASELINE');
+  assertContains(out, 'Search Methodology');
+  assertContains(out, 'Available Dimension Catalog');
+  assertContains(out, '不要为了取得这些输入而搜索 CLI 安装目录');
+});
+
+test('activate architect — 设计阶段直接装配愿景、图谱与 Intent Map', () => {
+  const out = run('activate architect');
+  assertContains(out, 'Stage Inputs (command-assembled)');
+  assertContains(out, 'Vision Input (01_VISION.md)');
+  assertContains(out, 'Capability Graph Input (07_CAPABILITY_GRAPH.json)');
+  assertContains(out, 'Intent Map Input (04_INTENT_MAP.json)');
 });
 
 test('activate keeper — 输出激活提示词', () => {
@@ -1473,7 +2271,7 @@ console.log('\n测试 version 命令');
 
 test('--version / -v — 输出版本号', () => {
   const out2 = execSync(`node "${CLI}" --version`, { encoding: 'utf-8' });
-  assertContains(out2, '1.0.0');
+  assertContains(out2, '1.3.1');
   assertContains(out2, 'loom');
   const out3 = execSync(`node "${CLI}" -v`, { encoding: 'utf-8' });
   assertContains(out3, 'loom');
@@ -1542,6 +2340,31 @@ test('doctor — 健康检查（INT-001 completed 无验证记录 → 应报告�
   // INT-001 是 completed 但无验证记录，应该被检测到
   assertContains(out, 'completed_no_record');
   assertContains(out, '问题');
+  assertContains(out, 'loom guide');
+  assert(!out.includes('参见 meta/PHILOSOPHY_WEAVER.md'), 'doctor 应回到可执行引导，不应暴露框架路径');
+});
+
+test('doctor — 哲学文件存在但章节锚点失效时必须报告', () => {
+  setup();
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-001'].philosophy_anchors = ['PRODUCT_PHILOSOPHY.md#missing-section'];
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  const out = run('doctor');
+  assertContains(out, 'orphan_philosophy_anchor');
+  assertContains(out, 'loom philosophy get');
+});
+
+test('doctor/guide — 必需设计文档仍是模板时不得进入 Intent Loop', () => {
+  setup();
+  writeFileSync(join(LOOM_DIR, '02_ARCHITECTURE.md'), '<!-- LOOM_TEMPLATE -->\n# 架构模板');
+  const out = run('doctor');
+  assertContains(out, 'project_document_template');
+  const guide = runFromRoot('guide --dry-run');
+  assertContains(guide, 'need_architecture');
+  assertContains(guide, '02_ARCHITECTURE.md');
+  // 后续 lineage 用例需要 v2；本用例的 setup 会重建 v1，因此恢复同一前置条件。
+  runFromRoot('version new');
 });
 
 test('doctor — completed 的最后一条非 passed 验证必须报 high', () => {
@@ -1712,6 +2535,7 @@ test('help workflow — 输出工作流指南', () => {
   const out = run('help workflow');
   assertContains(out, 'Weaver');
   assertContains(out, 'Visionary');
+  assertContains(out, 'impact-reviewer');
   assertContains(out, 'Architect');
   assertContains(out, 'Quality Engine');
 });
@@ -1720,8 +2544,17 @@ test('help concepts — 输出核心概念', () => {
   const out = run('help concepts');
   assertContains(out, 'Doctrine');
   assertContains(out, 'Intent');
+  assertContains(out, 'Impact Gate');
   assertContains(out, 'Keeper');
   assertContains(out, 'Quality Proof');
+});
+
+test('help expertise — 解释外部检索强门与来源化 Capsule', () => {
+  const out = run('help expertise');
+  assertContains(out, 'External Acquisition');
+  assertContains(out, 'Capability Capsule');
+  assertContains(out, '不允许 `adaptive` 或 `project_only`');
+  assertContains(out, '模型自行生成');
 });
 
 test('help loop — 输出 Loop 详细流程', () => {
@@ -1939,6 +2772,9 @@ test('guide — 刚 init 完引导 activate weaver', () => {
   const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
   assertContains(out, 'need_philosophy');
   assertContains(out, 'loom activate weaver');
+  assertContains(out, '它会输出当前阶段所需的 Context Pack');
+  assert(!out.includes('需要读取:'), 'guide 不应把路径清单暴露成 Agent 待办');
+  assert(!out.includes('PHILOSOPHY_WEAVER.md'), '阶段源文件应由 activate 装配，不应由 guide 要求寻找');
   rmSync(guideRoot, { recursive: true, force: true });
 });
 
@@ -1953,6 +2789,49 @@ test('guide — 哲学已织造引导 activate visionary', () => {
   const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
   assertContains(out, 'need_vision');
   assertContains(out, 'loom activate visionary');
+  rmSync(guideRoot, { recursive: true, force: true });
+});
+
+test('guide — 愿景完成后先要求 Capability Graph，再允许设计 Intent Map', () => {
+  const guideRoot = join(process.cwd(), 'test', '.tmp-guide-capability-graph');
+  rmSync(guideRoot, { recursive: true, force: true });
+  mkdirSync(guideRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: guideRoot, encoding: 'utf-8' });
+  writeFileSync(join(guideRoot, '.loom', 'v1', '00_PHILOSOPHY', 'PRODUCT_PHILOSOPHY.md'),
+    '# 真实哲学\n\n## Core Belief\n\n我们相信清晰优先。', 'utf-8');
+  writeFileSync(join(guideRoot, '.loom', 'v1', '01_VISION.md'),
+    '# 真实愿景\n\n用户需要一个可理解的项目空间。', 'utf-8');
+  const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
+  assertContains(out, 'need_capability_graph');
+  assertContains(out, 'loom activate architect');
+  assert(!out.includes('07_CAPABILITY_GRAPH.json'), 'guide 不应泄露阶段文件清单');
+  writeFileSync(join(guideRoot, '.loom', 'v1', '07_CAPABILITY_GRAPH.json'), JSON.stringify({
+    _meta: { _version: '1.0', _loom_version: 'v1', _generated_by: 'architect' },
+    nodes: {
+      'CONCERN-ONBOARDING': {
+        id: 'CONCERN-ONBOARDING', kind: 'concern', title: '首次使用体验',
+        status: 'open', impact: 'high', route: 'expand', relationships: [],
+      },
+    },
+  }, null, 2));
+  const incomplete = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
+  assertContains(incomplete, 'capability_graph_incomplete');
+  assertContains(incomplete, 'loom activate architect');
+  rmSync(guideRoot, { recursive: true, force: true });
+});
+
+test('guide — 缺少图谱的旧项目保留兼容路径', () => {
+  const guideRoot = join(process.cwd(), 'test', '.tmp-guide-legacy-no-graph');
+  rmSync(guideRoot, { recursive: true, force: true });
+  mkdirSync(guideRoot, { recursive: true });
+  execSync(`node "${CLI}" init`, { cwd: guideRoot, encoding: 'utf-8' });
+  writeFileSync(join(guideRoot, '.loom', 'v1', '00_PHILOSOPHY', 'PRODUCT_PHILOSOPHY.md'),
+    '# 真实哲学\n\n## Core Belief\n\n我们相信清晰优先。', 'utf-8');
+  writeFileSync(join(guideRoot, '.loom', 'v1', '01_VISION.md'),
+    '# 真实愿景\n\n用户需要一个可理解的项目空间。', 'utf-8');
+  rmSync(join(guideRoot, '.loom', 'v1', '07_CAPABILITY_GRAPH.json'), { force: true });
+  const out = execSync(`node "${CLI}" guide`, { cwd: guideRoot, encoding: 'utf-8' });
+  assertContains(out, 'need_architecture');
   rmSync(guideRoot, { recursive: true, force: true });
 });
 
@@ -2040,6 +2919,7 @@ test('guide — 健康的全部完成后提示 Patch / Minor / Major 三档演�
       }],
     }, null, 2), 'utf-8');
   }
+  writeValidAtlas();
   const out = execSync(`node "${CLI}" guide --dry-run`, { cwd: TEST_ROOT, encoding: 'utf-8' });
   assertContains(out, 'done');
   assertContains(out, 'Patch');
@@ -2082,74 +2962,80 @@ test('auto on/off/status — 三模式切换', () => {
   rmSync(autoRoot, { recursive: true, force: true });
 });
 
-console.log('\n测试 preview 命令');
+console.log('\n测试 Atlas 命令');
 
-test('preview — 输出提示词', () => {
-  const out = run('preview');
-  assertContains(out, 'To Agent');
-  assertContains(out, 'PPT');
-  assertContains(out, 'SVG');
-  assertContains(out, '.loom/');
-  assertContains(out, 'loom-preview.html');
+test('help atlas — 暴露生成、验证与固定章节约束', () => {
+  const help = runFromRoot('help atlas');
+  assertContains(help, 'loom atlas --regen');
+  assertContains(help, '#atlas-review');
 });
 
-test('preview --help — 输出 preview 用法', () => {
-  const out = run('preview --help');
-  assertContains(out, 'loom preview --regen');
-  assertContains(out, 'loom preview status');
-  assertContains(out, 'loom preview --stale');
+test('atlas template — 默认提供可滑动放映与关系审查基线', () => {
+  const template = readFileSync(join(process.cwd(), 'templates', 'ATLAS_TEMPLATE.html'), 'utf-8');
+  assertContains(template, 'data-atlas-experience="deck-map-v1"');
+  assertContains(template, 'data-atlas-control="previous"');
+  assertContains(template, 'data-atlas-control="next"');
+  assertContains(template, 'touchstart');
+  assertContains(template, 'id="atlas-audit-map"');
 });
 
-test('preview status — 报告 preview 新鲜度', () => {
-  const previewRoot = join(process.cwd(), 'test', '.tmp-preview-status');
-  rmSync(previewRoot, { recursive: true, force: true });
-  mkdirSync(previewRoot, { recursive: true });
-  execSync(`node "${CLI}" init`, { cwd: previewRoot, encoding: 'utf-8' });
-  const previewPath = join(previewRoot, 'loom-preview.html');
-  writeFileSync(previewPath, '<html></html>', 'utf-8');
-  const oldTime = new Date('2026-01-01T00:00:00Z');
-  const newTime = new Date('2026-01-02T00:00:00Z');
-  const newestTime = new Date('2026-01-03T00:00:00Z');
-  utimesSync(previewPath, oldTime, oldTime);
-  utimesSync(join(previewRoot, '.loom', 'v1', '00_PHILOSOPHY', 'PRODUCT_PHILOSOPHY.md'), oldTime, oldTime);
-  utimesSync(join(previewRoot, '.loom', 'v1', '02_ARCHITECTURE.md'), oldTime, oldTime);
-  utimesSync(join(previewRoot, '.loom', 'v1', '04_INTENT_MAP.json'), oldTime, oldTime);
-  utimesSync(join(previewRoot, '.loom', 'v1', '05_VERIFICATION.md'), oldTime, oldTime);
-  utimesSync(join(previewRoot, '.loom', 'v1', '06_CHANGELOG.json'), newTime, newTime);
-  utimesSync(join(previewRoot, '.loom', 'v1', '06_CHANGELOG.md'), oldTime, oldTime);
-  const sourcePath = join(previewRoot, '.loom', 'v1', '01_VISION.md');
-  utimesSync(sourcePath, oldTime, oldTime);
+test('atlas — 编译无进度资料模型，并输出 command-assembled Composer Pack', () => {
+  setup();
+  const build = JSON.parse(runFromRoot('atlas build'));
+  assert(existsSync(build.path), 'atlas build 必须写入版本化 model');
+  const model = JSON.parse(readFileSync(build.path, 'utf-8'));
+  assert(model._meta.scope === 'architecture_and_decision_structure_only', 'Atlas 必须限定为架构与决策结构');
+  assert(model._meta.excluded.includes('intent status'), 'Atlas Model 不得承载进度状态');
+  assert(model.capability_graph.nodes['CAP-PROJECT-CREATION'], 'Atlas 必须包含 Capability Graph');
+  assert(!('status' in model.intent_structure[0]), 'Atlas Intent 结构不得泄露当前状态');
 
-  let out = execSync(`node "${CLI}" preview status`, { cwd: previewRoot, encoding: 'utf-8' });
-  let data = JSON.parse(out);
-  assert(data.exists === true, 'preview 应存在');
-  assert(data.fresh === false, 'preview 应过期');
-  assert(data.latest_source_file === '.loom/v1/06_CHANGELOG.json', `latest_source_file 不匹配: ${data.latest_source_file}`);
-
-  utimesSync(join(previewRoot, '.loom', 'v1', '06_CHANGELOG.md'), newestTime, newestTime);
-  out = execSync(`node "${CLI}" preview status`, { cwd: previewRoot, encoding: 'utf-8' });
-  data = JSON.parse(out);
-  assert(data.latest_source_file === '.loom/v1/06_CHANGELOG.md', `Markdown 投影未纳入 freshness: ${data.latest_source_file}`);
-  rmSync(previewRoot, { recursive: true, force: true });
+  const pack = runFromRoot('atlas --regen');
+  assertContains(pack, 'To Agent');
+  assertContains(pack, 'Fixed Content Contract');
+  assertContains(pack, 'atlas-capabilities');
+  assertContains(pack, '五张横向章节幻灯片');
+  assertContains(pack, '检查台');
+  assertContains(pack, 'SVG Composition Playbook');
+  assertContains(pack, '可审查的论证图');
+  assertContains(pack, 'Visual Quality Loop');
+  assertContains(pack, '390px');
+  assertContains(pack, '可翻阅的图文决策日报');
+  assertContains(pack, 'loom-atlas.html');
 });
 
-test('preview — 过期时提示 regen，不打开旧投影', () => {
-  const previewRoot = join(process.cwd(), 'test', '.tmp-preview-stale');
-  rmSync(previewRoot, { recursive: true, force: true });
-  mkdirSync(previewRoot, { recursive: true });
-  execSync(`node "${CLI}" init`, { cwd: previewRoot, encoding: 'utf-8' });
-  const previewPath = join(previewRoot, 'loom-preview.html');
-  writeFileSync(previewPath, '<html></html>', 'utf-8');
-  const oldTime = new Date('2026-01-01T00:00:00Z');
-  const newTime = new Date('2026-01-02T00:00:00Z');
-  utimesSync(previewPath, oldTime, oldTime);
-  utimesSync(join(previewRoot, '.loom', 'v1', '04_INTENT_MAP.json'), newTime, newTime);
+test('atlas — HTML 必须绑定当前资料 digest 和固定审查章节', () => {
+  setup();
+  let validation = runFromRoot('atlas validate', true);
+  assertContains(validation, '缺少 Atlas model');
+  const built = writeValidAtlas();
+  validation = JSON.parse(runFromRoot('atlas validate'));
+  assert(validation.valid === true, '合格 Atlas 应通过 validate');
+  const status = JSON.parse(runFromRoot('atlas status'));
+  assert(status.fresh === true, '同 digest 的 Atlas 应新鲜');
 
-  const out = execSync(`node "${CLI}" preview`, { cwd: previewRoot, encoding: 'utf-8' });
-  assertContains(out, 'preview 已过期');
-  assertContains(out, 'loom preview --regen');
-  assertContains(out, 'loom preview --stale');
-  rmSync(previewRoot, { recursive: true, force: true });
+  const mapPath = join(LOOM_DIR, '04_INTENT_MAP.json');
+  const map = JSON.parse(readFileSync(mapPath, 'utf-8'));
+  map.intents['INT-002'].status = 'completed';
+  writeFileSync(mapPath, JSON.stringify(map, null, 2));
+  assert(JSON.parse(runFromRoot('atlas status')).fresh === true, '进度状态变化不应令只解释结构的 Atlas 过期');
+
+  const graphPath = join(LOOM_DIR, '07_CAPABILITY_GRAPH.json');
+  const graph = JSON.parse(readFileSync(graphPath, 'utf-8'));
+  graph.nodes['CAP-PROJECT-CREATION'].title = '变更后的能力标题';
+  writeFileSync(graphPath, JSON.stringify(graph, null, 2));
+  const stale = JSON.parse(runFromRoot('atlas status'));
+  assert(stale.fresh === false, 'Capability Graph 改动必须令 Atlas 过期');
+  assertContains(runFromRoot('atlas validate', true), '未绑定当前 Atlas source digest');
+  assert(existsSync(built.atlasPath), '测试 Atlas 文件应被保留到断言结束');
+});
+
+test('atlas — 所有 Intent 闭合后，guide 必须把 Atlas 作为必交付物', () => {
+  setup();
+  completeAllIntents();
+  const guide = runFromRoot('guide --dry-run');
+  assertContains(guide, 'need_decision_atlas');
+  assertContains(guide, 'loom atlas --regen');
+  assertContains(runFromRoot('doctor'), 'decision_atlas_missing');
 });
 
 // ─── 清理 ──────────────────────────────────────────────

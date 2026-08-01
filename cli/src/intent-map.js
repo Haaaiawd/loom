@@ -174,6 +174,17 @@ function validateLifecycle(data, id, lifecycle, errors) {
 
 function validateOptionalIntentFields(id, intent, errors) {
   const prefix = `intents["${id}"]`;
+  const qualityStrategy = intent.quality_strategy ?? 'adaptive';
+
+  if (!['adaptive', 'atelier'].includes(qualityStrategy)) {
+    errors.push(`${prefix}.quality_strategy 非法: ${JSON.stringify(qualityStrategy)} (合法: adaptive|atelier)`);
+  }
+
+  if ('proposal_refs' in intent) {
+    if (!Array.isArray(intent.proposal_refs) || intent.proposal_refs.some((ref) => typeof ref !== 'string' || !ref.trim())) {
+      errors.push(`${prefix}.proposal_refs 必须是非空 proposal ID 字符串数组`);
+    }
+  }
 
   if ('continuity_required' in intent && typeof intent.continuity_required !== 'boolean') {
     errors.push(`${prefix}.continuity_required 必须是布尔值；仅在本 Intent 会变更既有用户或系统状态且必须证明未误伤旧状态时设为 true`);
@@ -208,6 +219,15 @@ function validateOptionalIntentFields(id, intent, errors) {
   if ('creative_scope' in intent) {
     if (typeof intent.creative_scope !== 'string' || intent.creative_scope.trim().length < 10) {
       errors.push(`${prefix}.creative_scope 必须说明可以改变什么、必须保持什么`);
+    }
+  }
+
+  if (qualityStrategy === 'atelier') {
+    if (typeof intent.quality_contract !== 'string' || intent.quality_contract.trim().length < 10) {
+      errors.push(`${prefix}.quality_strategy=atelier 必须声明有效 quality_contract`);
+    }
+    if (typeof intent.creative_scope !== 'string' || intent.creative_scope.trim().length < 10) {
+      errors.push(`${prefix}.quality_strategy=atelier 必须声明有效 creative_scope`);
     }
   }
 }

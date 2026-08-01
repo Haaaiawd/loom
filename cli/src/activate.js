@@ -1,20 +1,25 @@
 // activate — compile a role- and intent-scoped Context Pack.
 
-import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { getLoomRoot } from './shared/paths.js';
 import { getIntent, getNarrative } from './intent-map.js';
 import { getIntentDraft } from './intent-draft.js';
 import { getPhilosophy } from './philosophy.js';
 import { getVerificationContract } from './verify.js';
 import { extractMdSection } from './shared/md-utils.js';
+import { compileCapabilityInputs } from './capability-graph.js';
+import { getAtelierRecord } from './atelier.js';
+import { formatExpertisePackForPrompt, getExpertisePack, getExpertisePackState } from './expertise-pack.js';
+import { listCapabilityProposals } from './capability-proposals.js';
 
-const VALID_ROLES = ['weaver', 'visionary', 'architect', 'forge', 'keeper'];
+const VALID_ROLES = ['weaver', 'visionary', 'architect', 'impact-reviewer', 'forge', 'keeper'];
 
 const ROLE_FILES = {
   weaver: 'meta/PHILOSOPHY_WEAVER.md',
   visionary: 'roles/visionary.md',
   architect: 'roles/architect.md',
+  'impact-reviewer': 'roles/impact-reviewer.md',
   forge: 'roles/forge.md',
   keeper: 'roles/keeper.md',
 };
@@ -22,6 +27,7 @@ const ROLE_FILES = {
 const ROLE_PHILOSOPHY_FILES = {
   visionary: ['PRODUCT_PHILOSOPHY.md', 'DECISION_RUBRIC.md'],
   architect: ['ENGINEERING_CREED.md', 'DECISION_RUBRIC.md'],
+  'impact-reviewer': ['PRODUCT_PHILOSOPHY.md', 'DECISION_RUBRIC.md'],
   forge: ['ENGINEERING_CREED.md'],
   keeper: ['PRODUCT_PHILOSOPHY.md', 'DECISION_RUBRIC.md'],
 };
@@ -75,6 +81,10 @@ function compileEnvelope(role, intentId) {
   if (role === 'keeper') {
     lines.push('- Keeper 必须在新的 Agent thread 中运行；同一会话切换角色不构成独立验证。');
     lines.push('- 无法获得独立上下文时降低声明，关键判断使用 pending_human。');
+  }
+  if (role === 'impact-reviewer') {
+    lines.push('- Impact Reviewer 必须在新的 Agent thread 中运行；不得与 Architect 共用本轮推理上下文。');
+    lines.push('- 只审能力影响等级与外部获取必要性；不改产品目标、不写 Intent、不实现功能。');
   }
   return lines.join('\n');
 }
@@ -130,6 +140,12 @@ function compileObjective(role, versionDir, intentId) {
   }
 
   const intent = getIntent(versionDir, intentId);
+  if (['forge', 'keeper'].includes(role)) {
+    const unfinishedDependencies = intent.depends_on.filter((dependencyId) => getIntent(versionDir, dependencyId).status !== 'completed');
+    if (unfinishedDependencies.length) {
+      throw new Error(`Intent ${intentId} 的依赖尚未闭合: ${unfinishedDependencies.join(', ')}。不得通过 activate --intent 绕过执行顺序；先运行 loom intent next 或完成依赖 Intent。`);
+    }
+  }
   const narrative = getNarrative(versionDir, intentId);
   const objectiveView = {
     id: intent.id,
@@ -241,19 +257,104 @@ function compileProjectJudgment(role, versionDir, objective) {
   return blocks.join('\n\n');
 }
 
-function compileExpertiseInputs(role, objective) {
+function compileExpertiseInputs(role, versionDir, objective) {
   const subject = objective.intent || objective.draft;
   if (!subject || !['architect', 'forge', 'keeper'].includes(role)) {
     return '当前阶段不编译任务级 Expertise Pack。';
   }
   const needs = Array.isArray(subject.capability_needs) ? subject.capability_needs : [];
+  const qualityStrategy = subject.quality_strategy ?? 'adaptive';
   const lines = [
     `- capability_needs: ${needs.length ? needs.join(', ') : '未声明；按当前任务发现必要能力'}`,
     `- creative_scope: ${subject.creative_scope || '未声明；遵循最小完整干预'}`,
+    `- quality_strategy: ${qualityStrategy}`,
     '- Skill、工具和资产名称只代表可发现入口；实际检查并加载后才进入 Expertise Pack。',
   ];
+  let compiled = null;
+  if (versionDir && objective.intent) {
+    compiled = compileCapabilityInputs(versionDir, objective.intent.id);
+    if (!compiled.available) {
+      lines.push(`- Capability Graph: ${compiled.warnings.join(' ')}`);
+    } else if (compiled.nodes.length === 0) {
+      lines.push('- Capability Graph: 当前 Intent 没有回链节点；不得凭任务标题猜测能力，回流 Architect 补图谱或明确兼容原因。');
+    } else {
+      lines.push('- Capability Graph: 以下节点是本 Intent 的能力与风险输入：');
+      for (const node of compiled.nodes) {
+        lines.push(`  - ${node.id} [${node.kind}/${node.impact}] ${node.title}${node.question ? ` — ${node.question}` : ''}`);
+      }
+      if (compiled.lenses?.length) {
+        lines.push('- Lens Contract: 以下透镜是本 Intent 不可忽略的结果维度；它们不是额外任务，也不能被“功能能跑”替代。');
+        for (const lens of compiled.lenses) {
+          lines.push(`  - ${lens.id} / ${lens.title}: ${lens.question}（节点: ${lens.node_refs.join(', ')}）`);
+        }
+      }
+      if (compiled.capability_domains?.length) {
+        lines.push('- Capability Domains: 以下是会改变本 Intent 方案或验证方法的专业领域；它们不是贴在结果上的专家标签。');
+        for (const domain of compiled.capability_domains) {
+          lines.push(`  - ${domain.id} / ${domain.title}: ${domain.question} 为什么现在需要：${domain.why_now}（能力: ${domain.node_refs.join(', ')}）`);
+        }
+      }
+      for (const brief of compiled.briefs) {
+        lines.push(`\n### Capability Brief: ${brief.node_id}\n\n${brief.content.trim()}`);
+      }
+      for (const warning of compiled.warnings) lines.push(`- Capability Graph warning: ${warning}`);
+    }
+  }
+  if (compiled?.acquisition?.nodes?.length) {
+    lines.push('- External acquisition modes:');
+    for (const node of compiled.acquisition.nodes) {
+      lines.push(`  - ${node.node_id}: ${node.mode}（${node.reason}）`);
+    }
+  }
+  if (versionDir && objective.intent && ['forge', 'keeper'].includes(role)) {
+    const state = getExpertisePackState(versionDir, subject.id);
+    if (state.required && !state.ready) {
+      lines.push(
+        '\n### External Acquisition Gate — OPEN',
+        `- required_capabilities: ${state.required_node_ids.join(', ')}`,
+        '- 先根据 Capability question、Authorial Stance/creative_scope、媒介约束与已观察缺口派生搜索词；搜索词属于本轮计划，不得写死进 Capability Graph。',
+        '- 必须实际使用外部 find skill、网络搜索、官方文档或研究资料获取信息。模型自行生成的常识、内部复述和未打开的搜索结果不能充当来源。',
+        `- ${state.reason === 'missing' ? `运行 \`loom expertise init ${subject.id}\`` : `修正 \`10_EXPERTISE_PACKS/${subject.id}.json\``}，记录可回查来源与 Capability Capsules，再运行 \`loom expertise validate ${subject.id}\`。`,
+        '- 门未闭合时，只能完成机械性勘察、基线冻结与检索；不得声称专业方案已形成，也不得通过验证。',
+      );
+    } else if (state.required && role === 'forge') {
+      const pack = getExpertisePack(versionDir, subject.id);
+      lines.push(
+        '\n### External Acquisition Gate — READY',
+        '- 以下内容是本 Intent revision 的来源化核心信息组。它不是永久 Doctrine，也不是复制进仓库的第三方 Skill。',
+        `\n${formatExpertisePackForPrompt(pack)}`,
+      );
+    } else if (state.required && role === 'keeper') {
+      lines.push(
+        '\n### External Acquisition Evidence — PRESENT',
+        `- record_ref: 10_EXPERTISE_PACKS/${subject.id}.json`,
+        `- required_capabilities: ${state.required_node_ids.join(', ')}`,
+        `- source_count: ${state.validation.source_count}; capsule_count: ${state.validation.capsule_count}`,
+        '- 不继承 Forge 的 Capsule 结论。重新打开至少一个关键来源，检查来源确实支持规则与判断门，并把绑定写入本轮验证记录。',
+      );
+    }
+  }
   if (role === 'keeper') {
     lines.push('- 不继承 Forge Expertise Pack；按契约独立准备验证能力。');
+    if (qualityStrategy === 'atelier') {
+      const record = getAtelierRecord(versionDir, subject.id);
+      lines.push(
+        '- 当前 Intent 使用 Atelier：以下 Record 是创作证据入口，不是通过结论。',
+        `\n### Atelier Record\n\n\`\`\`json\n${JSON.stringify(record, null, 2)}\n\`\`\``,
+      );
+    }
+  }
+  if (role === 'forge' && qualityStrategy === 'atelier') {
+    const authorshipPath = join(getLoomRoot(), 'dimensions', 'AUTHORSHIP.md');
+    if (!existsSync(authorshipPath)) {
+      throw new Error(`Atelier 方法文件不存在: ${authorshipPath}`);
+    }
+    lines.push(
+      '- 当前 Intent 进入 Atelier Path：先冻结基线并形成 Authorial Stance，再生成机制不同的候选。',
+      `- Atelier Record: \`09_ATELIER/${subject.id}.json\`；候选必须绑定 stance_revision。`,
+      '- Author 只能修正局部创作假设；结构性发现提交 provenance-backed Capability Graph proposal，由 Architect 裁决。',
+      `\n### Authorship Method\n\n${readFileSync(authorshipPath, 'utf-8').trim()}`,
+    );
   }
   return lines.join('\n');
 }
@@ -263,12 +364,113 @@ function compileWorkingFacts(versionDir, objective) {
   const subject = objective.intent || objective.draft;
   const refs = [
     '- architecture: `.loom/.../02_ARCHITECTURE.md`（只读取与当前决定相关部分）',
+    '- capability_graph: 从 `07_CAPABILITY_GRAPH.json` 查询与当前 Intent 回链的能力、风险与 Brief；不能用会话记忆补全未路由分支。',
     '- artifacts: 从真实工作区检查，不从会话记忆猜测。',
   ];
   const systemId = subject?._optional?.system_id || subject?.system_id;
   if (systemId) refs.push(`- system_id: ${systemId}`);
   if (subject?.quality_contract) refs.push('- baseline: 声明相对提升时，修改前证据必须在实现前保存。');
   return refs.join('\n');
+}
+
+function readStageFile(path, label) {
+  if (!existsSync(path)) return `> ${label} 当前不存在；不要猜测其内容。按角色契约创建或回流。`;
+  return readFileSync(path, 'utf-8').trim();
+}
+
+function listMarkdownFiles(root, current = root) {
+  if (!existsSync(current)) return [];
+  return readdirSync(current, { withFileTypes: true })
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .flatMap((entry) => {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) return listMarkdownFiles(root, path);
+      return entry.isFile() && entry.name.endsWith('.md')
+        ? [relative(root, path).replaceAll('\\', '/')]
+        : [];
+    });
+}
+
+/**
+ * Compile the stage inputs that used to be merely named by `loom guide`.
+ * These are intentionally separate from Working Facts: they are the source
+ * material for a role's immediate decision, not a request to hunt for paths.
+ */
+function compileStageInputs(role, versionDir, objective) {
+  if (role === 'weaver') {
+    const dimensionsRoot = join(getLoomRoot(), 'dimensions');
+    const catalog = listMarkdownFiles(dimensionsRoot)
+      .filter((path) => path !== 'SEARCH_METHODOLOGY.md')
+      .map((path) => `- dimensions/${path}`);
+    return [
+      '本节由 `loom activate weaver` 直接装配。不要为了取得这些输入而搜索 CLI 安装目录。',
+      '',
+      '### Search Methodology',
+      '',
+      readStageFile(join(dimensionsRoot, 'SEARCH_METHODOLOGY.md'), 'SEARCH_METHODOLOGY.md'),
+      '',
+      '### Available Dimension Catalog',
+      '',
+      catalog.length
+        ? `${catalog.join('\n')}\n\n只打开会实质改变当前项目原则或取舍的维度；目录本身不是要求逐个阅读。`
+        : '> 当前没有可用的 dimensions 文档。',
+    ].join('\n');
+  }
+
+  if (role === 'architect' && versionDir && !objective.intent && !objective.draft) {
+    let proposals = [];
+    let proposalsError = null;
+    try {
+      proposals = listCapabilityProposals(versionDir, { unresolvedOnly: true });
+    } catch (error) {
+      proposalsError = error.message;
+    }
+    return [
+      '本节由 `loom activate architect` 直接装配。以下是当前设计决策所需的版本化输入，不要先手动查找路径。',
+      '',
+      '### Vision Input (01_VISION.md)',
+      '',
+      readStageFile(join(versionDir, '01_VISION.md'), '01_VISION.md'),
+      '',
+      '### Capability Graph Input (07_CAPABILITY_GRAPH.json)',
+      '',
+      readStageFile(join(versionDir, '07_CAPABILITY_GRAPH.json'), '07_CAPABILITY_GRAPH.json'),
+      '',
+      '### Intent Map Input (04_INTENT_MAP.json)',
+      '',
+      readStageFile(join(versionDir, '04_INTENT_MAP.json'), '04_INTENT_MAP.json'),
+      '',
+      '### Open Capability Graph Proposals',
+      '',
+      proposalsError
+        ? `> Proposal 记录无法读取：${proposalsError}。先修复这份记录，不要猜测其状态。`
+        : proposals.length
+        ? `\`\`\`json\n${JSON.stringify(proposals, null, 2)}\n\`\`\``
+        : '无。',
+    ].join('\n');
+  }
+
+  if (role === 'impact-reviewer' && versionDir && !objective.intent && !objective.draft) {
+    return [
+      '本节由 `loom activate impact-reviewer` 直接装配。以下是独立判断 Impact Gate 所需的最小版本化输入；不要先手动查找路径。',
+      '',
+      '### Vision Input (01_VISION.md)',
+      '',
+      readStageFile(join(versionDir, '01_VISION.md'), '01_VISION.md'),
+      '',
+      '### Proposed Capability Graph (07_CAPABILITY_GRAPH.json)',
+      '',
+      readStageFile(join(versionDir, '07_CAPABILITY_GRAPH.json'), '07_CAPABILITY_GRAPH.json'),
+    ].join('\n');
+  }
+
+  if (role === 'visionary') {
+    return '产品哲学与决策准则已在上方 Project Judgment 中装配；不要重新搜索 `.loom` 目录。';
+  }
+  if (role === 'forge' || role === 'keeper') {
+    return '当前 Intent 的叙事、契约、图谱路由与已就绪的 Expertise 输入已在上方装配；只有产物本身需要按 Working Facts 检查。';
+  }
+  return '当前角色没有额外的阶段输入。';
 }
 
 /**
@@ -294,9 +496,10 @@ export function activateRole(role, versionDir, intentId = null) {
     section('3. Hard Invariants', compileInvariants(role, versionDir)),
     section('4. Success Contracts', compileContracts(role, versionDir, objective)),
     section('5. Project Judgment', compileProjectJudgment(role, versionDir, objective)),
-    section('6. Expertise Inputs', compileExpertiseInputs(role, objective)),
-    section('7. Working Facts', compileWorkingFacts(versionDir, objective)),
-    section('8. Role Contract / Output / Reflow / Stop', readRole(role)),
+    section('6. Stage Inputs (command-assembled)', compileStageInputs(role, versionDir, objective)),
+    section('7. Expertise Inputs', compileExpertiseInputs(role, versionDir, objective)),
+    section('8. Working Facts', compileWorkingFacts(versionDir, objective)),
+    section('9. Role Contract / Output / Reflow / Stop', readRole(role)),
   ];
   return `${parts.join('\n\n---\n\n')}\n`;
 }

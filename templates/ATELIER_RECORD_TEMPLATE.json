@@ -1,0 +1,48 @@
+{
+  "_meta": {
+    "_description": "quality_strategy=atelier 时由 Forge 为单个 Intent 创建的创作记录模板。",
+    "_version": "1.0",
+    "_loom_version": "v1",
+    "_generated_by": "forge"
+  },
+  "intent_id": "INT-001",
+  "intent_revision": 1,
+  "status": "draft",
+  "stance_revision": 1,
+  "stance": {
+    "creative_thesis": "",
+    "gaze": [],
+    "tension": "",
+    "signature_bet": {
+      "claim": "",
+      "mechanism": "",
+      "cost": ""
+    },
+    "refusals": [],
+    "reference_mechanisms": [],
+    "medium_grammar": {},
+    "surprise_budget": {
+      "level": "low|medium|high",
+      "allowed": "",
+      "protected": ""
+    },
+    "anti_fixation": [],
+    "verification_lens": []
+  },
+  "baseline": {
+    "artifact_refs": [],
+    "observed_limit": ""
+  },
+  "diversity_axes": [],
+  "candidates": [],
+  "corrections": [],
+  "blocker": null,
+  "selection": {
+    "status": "pending",
+    "selected_candidate": null,
+    "method": "",
+    "evidence_refs": [],
+    "why": "",
+    "remaining_tradeoff": ""
+  }
+}

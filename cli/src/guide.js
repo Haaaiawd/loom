@@ -6,8 +6,12 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { readCurrentPointer } from './version.js';
 import { loadIntentMap } from './intent-map.js';
+import { getCapabilityCoverage } from './capability-graph.js';
+import { listCapabilityProposals } from './capability-proposals.js';
 import { isAutoOn, getAutoMode, writeHeartbeat, needsHumanReview } from './auto.js';
 import { doctor } from './diagnostics.js';
+import { getExpertisePackState } from './expertise-pack.js';
+import { validateAtlas } from './atlas.js';
 
 /**
  * 检测文件是否还是模板（未填充真实内容）。
@@ -64,16 +68,37 @@ export function guideProject(projectDir, options = {}) {
       inputs: ['meta/PHILOSOPHY_WEAVER.md', 'meta/BASELINE.md', 'dimensions/SEARCH_METHODOLOGY.md'],
       outputs: [`.loom/${current}/00_PHILOSOPHY/PRODUCT_PHILOSOPHY.md`, `.loom/${current}/00_PHILOSOPHY/ENGINEERING_CREED.md`, `.loom/${current}/00_PHILOSOPHY/DECISION_RUBRIC.md`],
       verify_command: 'loom philosophy check',
+      input_delivery: 'context_pack',
     },
     need_vision: {
       inputs: ['roles/visionary.md', `.loom/${current}/00_PHILOSOPHY/`],
       outputs: [`.loom/${current}/01_VISION.md`],
       verify_command: 'loom guide',
+      input_delivery: 'context_pack',
     },
     need_architecture: {
       inputs: ['roles/architect.md', `.loom/${current}/01_VISION.md`],
       outputs: [`.loom/${current}/02_ARCHITECTURE.md`, `.loom/${current}/04_INTENT_MAP.json`],
       verify_command: 'loom doctor',
+      input_delivery: 'context_pack',
+    },
+    need_capability_graph: {
+      inputs: ['roles/architect.md', `.loom/${current}/01_VISION.md`],
+      outputs: [`.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/07_CAPABILITY_BRIEFS/`],
+      verify_command: 'loom capability coverage',
+      input_delivery: 'context_pack',
+    },
+    capability_graph_incomplete: {
+      inputs: ['roles/architect.md', `.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/04_INTENT_MAP.json`],
+      outputs: [`.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/07_CAPABILITY_BRIEFS/`],
+      verify_command: 'loom capability coverage',
+      input_delivery: 'context_pack',
+    },
+    capability_graph_proposals_pending: {
+      inputs: ['roles/architect.md', `.loom/${current}/07_GRAPH_PROPOSALS/`, `.loom/${current}/07_CAPABILITY_GRAPH.json`],
+      outputs: [`.loom/${current}/07_GRAPH_PROPOSALS/`, `.loom/${current}/07_CAPABILITY_GRAPH.json`, `.loom/${current}/04_INTENT_MAP.json`],
+      verify_command: 'loom capability proposal list',
+      input_delivery: 'context_pack',
     },
     intent_map_broken: {
       inputs: [`.loom/${current}/04_INTENT_MAP.json`],
@@ -105,6 +130,7 @@ export function guideProject(projectDir, options = {}) {
   result.inputs = meta.inputs || [];
   result.outputs = meta.outputs || [];
   result.verify_command = meta.verify_command || null;
+  result.input_delivery = meta.input_delivery || null;
   // 统一后处理：写心跳 + 加 AUTO 提示词 + 判断是否需要人类 review
   if (existsSync(loomRoot) && !options.dryRun) {
     try {
@@ -128,7 +154,7 @@ export function guideProject(projectDir, options = {}) {
     }
   } else if (result.stage_num >= 4) {
     if (auto) {
-      result.message += '\n\n> AUTO 模式开启——直接执行 next_command，无需人类确认。';
+      result.message += '\n\n> AUTO 模式开启——可继续进入下一阶段；契约、证据与 Keeper 门禁仍不会被跳过。';
     } else {
       result.message += '\n\n> ⚠ AUTO 模式关闭——执行 next_command 后等人类确认再继续。';
     }
@@ -171,6 +197,7 @@ function diagnoseStage(cwd, loomRoot, auto) {
   const philosophyDir = join(versionDir, '00_PHILOSOPHY');
   const visionPath = join(versionDir, '01_VISION.md');
   const intentMapPath = join(versionDir, '04_INTENT_MAP.json');
+  const capabilityGraphPath = join(versionDir, '07_CAPABILITY_GRAPH.json');
 
   // 状态 1: 哲学未织造
   const philosophyFile = join(philosophyDir, 'PRODUCT_PHILOSOPHY.md');
@@ -199,16 +226,82 @@ function diagnoseStage(cwd, loomRoot, auto) {
     };
   }
 
-  // 状态 3: 愿景已定义，Intent Map 未设计
-  if (isTemplate(intentMapPath)) {
+  // 状态 3: 愿景已定义，先展开项目问题面与能力缺口，再承诺 Intent。
+  if (existsSync(capabilityGraphPath) && isTemplate(capabilityGraphPath)) {
     return {
-      stage: 'need_architecture',
+      stage: 'need_capability_graph',
       stage_num: 3,
       details: { version: current },
       auto,
-      next_action: '设计系统架构 + Intent Map',
+      next_action: '展开 Capability Graph，路由高影响问题与能力缺口',
       next_command: 'loom activate architect',
-      message: `当前版本 ${current}：愿景已定义，Intent Map 还是模板，需要 Architect 设计。`,
+      message: `当前版本 ${current}：愿景已定义，但 Capability Graph 还是模板。Architect 必须先判断哪些体验、系统、资产、风险与能力适用，再创建正式 Intent。`,
+    };
+  }
+
+  // 图谱一旦存在，就不能把不完整路由悄悄跨过去。旧项目缺少该文件仍保留兼容路径。
+  if (existsSync(capabilityGraphPath)) {
+    try {
+      const pendingProposals = listCapabilityProposals(versionDir, { unresolvedOnly: true });
+      if (pendingProposals.length) {
+        return {
+          stage: 'capability_graph_proposals_pending',
+          stage_num: 3,
+          details: { version: current, proposals: pendingProposals.map((proposal) => proposal.id) },
+          auto,
+          next_action: '审计新信息对 Capability Graph、Intent 和契约的影响',
+          next_command: 'loom activate architect',
+          message: `当前版本 ${current} 有 ${pendingProposals.length} 个未闭合的 Capability Graph proposal。它们是新要求、研究或实现发现，不得由 Forge 静默变成当前 Intent 范围。`,
+        };
+      }
+    } catch (error) {
+      return {
+        stage: 'capability_graph_proposals_pending', stage_num: 3, details: { version: current, error: error.message }, auto,
+        next_action: '修复 Capability Graph proposal', next_command: 'loom activate architect',
+        message: `Capability Graph proposal 无法审计: ${error.message}`,
+      };
+    }
+    try {
+      const coverage = getCapabilityCoverage(versionDir);
+      if (!coverage.summary.ready) {
+        return {
+          stage: 'capability_graph_incomplete',
+          stage_num: 3.1,
+          details: { version: current, coverage: coverage.summary },
+          auto,
+          next_action: '补齐 Capability Graph 的透镜审视、路由、可观察验证入口与 Intent 回链',
+          next_command: 'loom activate architect',
+          message: `当前版本 ${current}：Capability Graph 尚未闭合（透镜契约缺口 ${coverage.summary.lens_contract_gaps || 0}、能力领域缺口 ${coverage.summary.capability_domain_gaps || 0}、高影响前沿 ${coverage.summary.high_unrouted}、路由缺口 ${coverage.summary.routing_gaps}、不可观察 outcome ${coverage.summary.high_outcomes_without_observable_evidence}、未映射 Intent ${coverage.summary.unmapped_intents}）。先由 Architect 补图谱，再继续设计 Intent。`,
+        };
+      }
+    } catch (error) {
+      const impactGateError = /impact_assessment|impact 必须为 high|外部获取门禁/.test(error.message);
+      return {
+        stage: 'capability_graph_incomplete',
+        stage_num: 3.1,
+        details: { version: current, error: error.message },
+        auto,
+        next_action: impactGateError
+          ? '先完成每个 capability 的 Impact Gate，再决定哪些必须外部获取'
+          : '修复 Capability Graph',
+        next_command: 'loom activate architect',
+        message: impactGateError
+          ? `Capability Graph 的 Impact Gate 尚未通过：${error.message} 先由 Architect 判断影响的用户结果、错判代价与外部知识是否会改变决定，不能靠降级 impact 继续。`
+          : `Capability Graph 无法通过校验: ${error.message}`,
+      };
+    }
+  }
+
+  // 状态 3.5: 图谱已建立，Intent Map 未设计。
+  if (isTemplate(intentMapPath)) {
+    return {
+      stage: 'need_architecture',
+      stage_num: 3.5,
+      details: { version: current },
+      auto,
+      next_action: '从 Capability Graph 编译系统架构 + Intent Map',
+      next_command: 'loom activate architect',
+      message: `当前版本 ${current}：Capability Graph 已建立，Intent Map 还是模板。Architect 需要将已路由的问题面编译为系统架构与可闭合 Intent。`,
     };
   }
 
@@ -231,6 +324,41 @@ function diagnoseStage(cwd, loomRoot, auto) {
   }
 
   const allIntents = Object.values(intents);
+  const incompleteDesignDocuments = ['02_ARCHITECTURE.md', '05_VERIFICATION.md']
+    .filter((filename) => isTemplate(join(versionDir, filename)));
+  if (incompleteDesignDocuments.length) {
+    return {
+      stage: 'need_architecture',
+      stage_num: 3.5,
+      details: { version: current, incomplete_documents: incompleteDesignDocuments },
+      auto,
+      next_action: '完成当前版本的系统架构与验证契约文档',
+      next_command: 'loom activate architect',
+      message: `当前版本 ${current} 的 Intent Map 已存在，但 ${incompleteDesignDocuments.join('、')} 仍缺失或是模板。Architect 必须先把系统边界与完成契约落到真实文档，再进入 Intent Loop。`,
+    };
+  }
+  const documentIntegrityIssues = doctor(versionDir, join(versionDir, 'verifications'), philosophyDir).issues
+    .filter((issue) => [
+      'project_document_missing',
+      'project_document_template',
+      'orphan_philosophy_ref',
+      'orphan_philosophy_anchor',
+      'intent_narrative_invalid',
+      'intent_contract_invalid',
+      'capability_impact_gate_missing',
+    ].includes(issue.type));
+  if (documentIntegrityIssues.length) {
+    const issueTypes = [...new Set(documentIntegrityIssues.map((issue) => issue.type))];
+    return {
+      stage: 'document_integrity_incomplete',
+      stage_num: 3.6,
+      details: { version: current, issue_types: issueTypes },
+      auto,
+      next_action: '修复 LOOM 文档引用与结构完整性，再进入 Intent Loop',
+      next_command: 'loom activate architect',
+      message: `当前版本 ${current} 的 LOOM 文档完整性尚未通过（${issueTypes.join('、')}）。先让 Architect 修复真实文档、章节引用或 Impact Gate；不要带着断开的叙事/契约进入 Intent Loop。`,
+    };
+  }
   const counts = {
     pending: allIntents.filter((i) => i.status === 'pending').length,
     in_progress: allIntents.filter((i) => i.status === 'in_progress').length,
@@ -259,6 +387,18 @@ function diagnoseStage(cwd, loomRoot, auto) {
 
   // 状态 6: 全部 completed
   if (counts.completed === total && total > 0) {
+    const atlas = validateAtlas(join(versionDir, '..', '..'), versionDir);
+    if (!atlas.valid) {
+      return {
+        stage: 'need_decision_atlas',
+        stage_num: 5.8,
+        details: { version: current, atlas_errors: atlas.errors },
+        auto,
+        next_action: '生成并校验当前版本的决策图谱交付物',
+        next_command: 'loom atlas --regen',
+        message: `当前版本 ${current} 的 Intent 已全部完成，但决策图谱尚未交付。它只说明当前架构与决策结构，不展示项目进度；生成 loom-atlas.html 后运行 loom atlas validate。`,
+      };
+    }
     const health = doctor(versionDir, join(versionDir, 'verifications'), philosophyDir);
     const blocking = health.issues.filter((issue) => issue.severity === 'fatal' || issue.severity === 'high');
     if (blocking.length) {
@@ -294,6 +434,53 @@ function diagnoseStage(cwd, loomRoot, auto) {
   // 状态 5: 有 in_progress
   if (counts.in_progress > 0) {
     const inProgressIds = allIntents.filter((i) => i.status === 'in_progress').map((i) => i.id);
+    const expertiseOpen = allIntents
+      .filter((intent) => intent.status === 'in_progress')
+      .map((intent) => ({ intent, state: getExpertisePackState(versionDir, intent.id) }))
+      .find(({ state }) => state.required && !state.ready);
+    if (expertiseOpen) {
+      const missing = expertiseOpen.state.reason === 'missing';
+      const blocked = expertiseOpen.state.reason?.startsWith('blocked:');
+      return {
+        stage: 'in_loop',
+        stage_num: 5,
+        details: {
+          version: current,
+          counts,
+          in_progress_ids: inProgressIds,
+          expertise_intent: expertiseOpen.intent.id,
+          expertise_reason: expertiseOpen.state.reason,
+        },
+        auto,
+        next_action: missing
+          ? '创建搜索计划并执行外部能力获取'
+          : blocked
+            ? '解决 Expertise Pack 记录的外部获取阻塞'
+            : '补齐来源化 Expertise Pack',
+        next_command: missing
+          ? `loom expertise init ${expertiseOpen.intent.id}`
+          : blocked
+            ? `loom expertise get ${expertiseOpen.intent.id}`
+            : `loom expertise validate ${expertiseOpen.intent.id}`,
+        message: blocked
+          ? `${expertiseOpen.intent.id} 的外部能力获取已明确 blocked：${expertiseOpen.state.reason.slice('blocked: '.length)}。满足 Pack 中的 recovery_condition 后再继续；不能让模型补齐空白。`
+          : `${expertiseOpen.intent.id} 需要外部能力获取。先由任务信号派生搜索词，实际使用 find skill、网络搜索、官方文档或研究资料，再把可回查来源编译为 Capability Capsules；模型临时生成内容不能代替来源。`,
+      };
+    }
+    const atelierWithoutRecord = allIntents.find((intent) => intent.status === 'in_progress'
+      && intent.quality_strategy === 'atelier'
+      && !existsSync(join(versionDir, '09_ATELIER', `${intent.id}.json`)));
+    if (atelierWithoutRecord) {
+      return {
+        stage: 'in_loop',
+        stage_num: 5,
+        details: { version: current, counts, in_progress_ids: inProgressIds, atelier_intent: atelierWithoutRecord.id },
+        auto,
+        next_action: '创建 Atelier Record 并冻结基线',
+        next_command: `loom atelier init ${atelierWithoutRecord.id}`,
+        message: `${atelierWithoutRecord.id} 已进入 Atelier Path，但还没有唯一创作记录。先创建 Record，再按 Forge Context Pack 形成 Authorial Stance。`,
+      };
+    }
     return {
       stage: 'in_loop',
       stage_num: 5,

@@ -398,7 +398,25 @@ Weaver 不再产出“实现部分清单”作为准架构。它只识别需要�
 - 功能与项目北极星一致。
 - 结果是否意外扩大了产品范围。
 
-### Stage 3：Execution Contract
+### Stage 3：Capability Boundary / Lens Contract
+
+**负责人**：Architect
+
+Capability Graph 的第一层不是 Intent 路由，而是 `lens_contract`：它要求 Architect 先对用户旅程、交互与可访问性、视觉与信息表达、内容与沟通、系统与数据、横切质量与风险逐项作出项目化判断。适用的方向必须用 `node_refs` 连接到实际的 outcome、concern、capability、risk 或 evidence；不适用必须留下理由。它的作用是防止“模型刚好没有想到视觉或交互”被误当成“项目不需要”。
+
+这六项不是六个固定部门，更不是要创建 `CAP-UI`、`CAP-UX`、`CAP-后端` 之类空泛节点。透镜只负责追问，Capability 必须表达可观察、可取舍、可验证的用户结果，例如：
+
+- “让状态、失败恢复与键盘路径保持可理解”；
+- “让报告中的证据、推断与待验证问题在窄屏仍可扫读”；
+- “让结论以条件化语言回链用户可核对的事实”。
+
+`capability_domains` 是第二层：它记录会改变方案或验证方法的专业知识来源。UI/UX、3D、光影与材质、网络安全、心理学、生物学等都可以进入，但前提不是“领域看起来厉害”，而是能回答“不了解它，当前设计、实现或验证会怎样不同”。Domain 要连接具体 capability，Capability 也要回链 Domain；前者不是功能承诺，后者不是学科标签。
+
+一张合格的图允许一个能力服务多个 outcome、同时被多个透镜引用、回链多个专业领域，也允许一个 concern 同时约束交互、内容与数据能力；风险和 evidence 往往横切多个 Intent。若图自然地退化成 `一个 Outcome → 一个 Capability → 一个 Intent`，Architect 必须把它当作信号：要么项目的真实边界尚未展开，要么应明确说明为什么不存在共享关系。完整结构例子位于 `templates/CAPABILITY_GRAPH_EXAMPLE.json`。
+
+旧版 `1.0` Graph 保持可读；`1.1` 起的新 Graph 强制 Lens Contract，`1.2` 起还要求 Capability Domain Contract。迁移既有项目时先通过 Graph Proposal 让 Architect 判断现有 Intent、证据与架构是否受影响，不能由 Forge 静默补图。
+
+### Stage 4：Execution Contract
 
 **负责人**：Architect
 
@@ -452,19 +470,21 @@ Architect 在定义契约时应先问：
 
 将有实质风险的答案转为防御承诺或验证方法。
 
-### Stage 4：Expertise Compiler
+### Stage 5：Expertise Compiler
 
 **使命**：为当前 Intent 编译足够而不过量的专业认知，使“专家”成为任务级能力，
 而不是角色称号或永久提示词。
 
 ```text
-Capability Needs + Project Facts + Available Skills / Tools / Evidence
+Capability Graph + Project Facts + Available Skills / Tools / Evidence
 → Expertise Compiler
 → Expertise Pack
 ```
 
-Architect 只声明 `capability_needs`。Forge 检查真实环境、加载需要的能力并生成临时
-**Expertise Pack**；Keeper 不继承它，而是按质量契约独立准备验证能力。
+Architect 在 Capability Graph 中只声明能力问题与 `acquisition_mode`，不写死网站、
+Skill 或检索词。Forge 从 Brief、契约、媒介约束和已观察缺口派生 Search Plan，实际调用
+find skill、网络、官方文档或研究入口，再生成 revision-scoped **Expertise Pack**；
+Keeper 不继承其结论，而是按质量契约重新打开关键来源。
 
 Expertise Pack 只回答六件事：
 
@@ -487,11 +507,14 @@ Compiler 按需调用四种认知职能，而不创建四个固定角色：
 同一强模型的独立采样、Skill、工具、外部资料、专业人员或 Agent 都可以承担这些职能。
 来源质量优先于数量；“资深专家认为”必须还原为会改变候选或验证方式的机制与证据。
 
-Expertise Pack 默认只存在于当前工作上下文，不新增目录。方法会跨 Intent 重复使用时
-进入 Skill；长期项目取舍回流 Doctrine；重要架构判断进入决策记录。CLI 必须区分
-“发现了能力入口”和“能力已经加载”，但只维护一个 Expertise Pack 对象。
+当外部获取为 required 时，Expertise Pack 写入
+`.loom/vN/10_EXPERTISE_PACKS/<intent-id>.json`，只保存搜索计划、来源定位与项目化
+Capability Capsules，不复制第三方 Skill 或网页正文。它绑定 Intent revision；方法会跨
+Intent 重复使用且被 Quality Proof 支持时才考虑进入 Skill，长期项目取舍回流 Doctrine，
+重要架构判断进入决策记录。CLI 必须区分“发现了能力入口”“实际打开来源”和“来源支持
+当前判断”。
 
-### Stage 5：Quality Arena
+### Stage 6：Quality Arena
 
 **负责人**：Forge
 
@@ -1192,7 +1215,7 @@ System Boundary 与角色职责保持跨模型稳定；工具声明、会话隔�
 |---|---|
 | `cli/help/*.md` | 与新认知飞轮一致 |
 | `README.md` | 展示产品模型和最短路径 |
-| `cli/src/preview-prompt.md` | 使用质量契约，不再依赖规则堆叠 |
+| `cli/src/atlas.js` | 编译可追溯的架构与决策资料模型，并为 Atlas H5 提供固定内容契约 |
 | `cli/test/run-all.js` | 增加结构、Quality Arena 与行为夹具 |
 
 验收：
@@ -1445,3 +1468,87 @@ Codex goal 是这四门的运行容器：未全部通过就保持 active 并回�
     设计影响：成熟 SDD 已包含意图、研究、反馈、分支探索和持续修订。LOOM 不以“我们也
     有这些步骤”宣称差异；其可检验主张收窄为任务级专家装配、基线相对选择、双轨验证
     与 Quality Proof 支持的经验晋升。
+
+---
+
+## 19. 反例校准：光域仪揭示的“自洽闭环”问题
+
+光域仪的 `loom doctor` 显示健康、五个 Intent 也都处于完成态，但审计发现：部分
+契约没有落到产物，Capability Graph 的证据文件不存在，验证记录没有复现入口或独立
+验证来源，且高影响能力没有留下实际外部获取的痕迹。它是一个重要反例：**文档能够
+彼此解释、状态能够彼此闭合，并不等于结果已被外部事实反驳过。**
+
+这不增加新角色或新阶段；它收紧 Architect、Forge、Keeper 和 CLI 对“完成”的现有
+定义。
+
+### 19.1 语义不能在 Intent 之间悄悄降级
+
+Visionary 的叙事表达的是用户要观察的真实现象；Architect 的契约不得把其中的核心
+现象替换成一个看似相近、却更容易实现的代理。比如“颜色随时间过渡”不能在没有明确
+回流的情况下，被缩减为“在静态渐变上移动位置指针”。
+
+Architect 必须为每个 Intent 标出一项 **语义守恒主张**：哪一种表面相似的替代实现
+不算完成，以及 Keeper 用什么反例把它区分出来。它不是把验收切成更细的任务，而是
+守住结果的类别不被实现便利性偷换。
+
+### 19.2 证据引用在产物存在前只是计划
+
+Capability Graph 中的验证方法、报告位置和截图位置，只有在对应产物真实存在、可读、
+属于当前 revision，并说明输入、方法、观察结果与限制后，才可被当作证据。否则它们
+只能标为待生成的验证计划。
+
+`loom doctor` 不得因“字段里写了 artifact 路径”就把高影响证据视为闭合；缺失、空白
+或与当前 Intent 不匹配的证据应阻止完成。自动测试须留下实际测试向量和结果；人工
+观察须留下观察条件与可查看产物；往返类主张须留下前后状态及其比较。自由文本摘要
+不能同时充当所有验证维度的依据。
+
+### 19.3 Keeper 的独立性必须成为可审计事实
+
+验证记录应说明验证由谁、在何种独立条件下完成，以及复现入口是什么。没有独立来源、
+复现方法或可查看证据时，记录最多表示 Forge 的自检，不可作为 Keeper 的 `passed`。
+
+无法由宿主可靠提供独立 thread / context 时，LOOM 不伪造独立性：降低证据等级，或
+转为 `pending_human`。这不是增加一个审核角色，而是让既有 Keeper 的责任不再只靠
+名字成立。
+
+### 19.4 外部张力按主张类型进入系统
+
+Evidence Map 必须区分四类依据：用户意图、项目事实、设计假设、外部领域事实。前两类
+可以来自本地；关于标准、色彩科学、可访问性、交互机制或人的感知的主张，不能只写
+“领域知识”或“设计判断”。它们需要与主张匹配的可回查来源，或被诚实标为尚未证实的
+假设。
+
+对高影响 `adaptive` 能力，Forge 必须在真正开始工作前作出可审查的选择：实际获取并
+留下任务级 Expertise Pack，或说明为什么此任务能够以项目既有事实完成。`adaptive`
+不是“以后随机决定要不要研究”，更不是模型自行补全空白的别名。Keeper 还应重新检查
+支撑关键判断的少量来源，而不是继承 Forge 的结论。
+
+### 19.5 仪器的“参考”也会形成裁决
+
+数值本身可以是观察；一条被突出显示的临界线、分档标签或视觉上方/下方的区域，则
+可能把参考量变成了无文字的判决。若 Doctrine 主张“显示而不裁决”，Architect 必须
+明确参考信息在默认观察中应处于什么位置、何时与字号/字重等条件相关、怎样避免把
+局部标准偷换成整体审美结论。
+
+同样，“计算透明”要求当前观察状态的计算过程可被追踪，而不是只展示一张静态公式
+海报。实现不必预设，但使用者必须能把当前数值追溯到当前输入和中间量。
+
+### 19.6 默认内容与算法假设也属于契约
+
+出厂示例必须是中性、可解释的校准材料；未经明确授权，不得把协作中的个人文字、旧
+项目内容或私有资产带入默认体验。算法若依赖单调变化、单次交叉、固定字体或其他输入
+假设，必须显式写入契约并用反例验证；否则应对真实允许的输入成立。多色标、亮度反复
+变化的渐变会多次穿越同一对比度值，不能用“从高到低”的单次搜索伪装成完整观察。
+
+### 19.7 新增反例场景
+
+后续行为验证至少加入以下场景：
+
+1. 叙事核心被相似代理替换，普通验收看似通过时，Keeper 必须判出语义偏差。
+2. 图谱引用了不存在的报告、截图或测量文件时，doctor 不得报告健康。
+3. 实现者重复同一段总结填满多个验证维度时，记录不得升级为独立通过。
+4. 高影响能力没有实际研究或明确不研究理由时，Intent 不得闭合。
+5. 已知数学向量、非单调输入、Unicode 分享状态与减弱动态状态必须成为真实运行证据，
+   而不是写在“procedure”里的愿望。
+6. 当用户体验原则与通行标准的呈现方式相冲突时，必须记录取舍；不能靠“参考”二字
+   逃过设计审查。

@@ -15,8 +15,9 @@ LOOM 是一个**哲学驱动的 Agent 质量框架**，核心理念：
 LOOM 的核心机制：
 1. **Project Doctrine** 从项目事实中形成长期判断，而不是套用规范模板
 2. **Intent + Contract** 同时定义可靠完成的底线与可选的质量上限
-3. **Expertise Compiler** 为当前任务临时组装领域、品味、批评与验证能力
+3. **Expertise Compiler** 为当前任务临时组装领域、品味、作者、批评与验证能力
 4. **Quality Arena + Quality Proof** 用机制不同的候选和独立证据支撑质量提升
+5. **Authorship + Atelier** 在真正需要创作判断时形成作者命题、媒介原型与可审计选择
 
 ---
 
@@ -27,7 +28,10 @@ LOOM 的核心机制：
 | **哲学** | 项目的价值观和工程原则——为什么存在、什么不做、冲突时谁优先。由 Weaver 从真实思想体系织造，不是模板填空 |
 | **Intent** | 一个意图单元——不是"做什么"（任务），是"为什么做"（意图）。每个 Intent 有验收契约，Keeper 据此判定实现是否忠实 |
 | **Intent Map** | 所有 Intent 的依赖图（JSON）。Architect 绘制，定义拓扑序和依赖关系 |
-| **Expertise Pack** | Forge 针对当前任务临时编译的专业认知，不成为永久规则 |
+| **Capability Graph** | 先用 Lens Contract 审视用户旅程、交互、视觉、内容、系统与风险，再用 Capability Domains 声明 UI/UX、3D 光影、安全、心理学等真正相关的专业来源；每个 capability 经 Architect 初判与独立子代理的 Impact Gate 审查，high 至少占 30%，不能靠降级影响等级跳过外部获取，最后才展开问题面、能力缺口、风险和证据并回链 Intent |
+| **Expertise Pack** | Forge 通过真实外部检索为当前 Intent 编译的来源化核心信息组；绑定 revision，不成为永久规则 |
+| **Authorial Stance** | 针对单个 Intent 编译的创作命题、选择、拒绝项、媒介语法和验证视角，不是 Persona 扮演 |
+| **Atelier Path** | 可选创作深路径：冻结基线、形成机制不同候选、比较或保留原版，并把证据写入唯一 Atelier Record |
 | **Quality Arena** | 以基线和机制不同候选进行探索、比较、实现与观察 |
 | **Quality Proof** | Keeper 独立验证完成与质量声明，证据不足时不允许宣称提升 |
 | **Intent Loop** | 选择 → 编译专业能力 → 实现/比较 → 独立证明 → 闭合或回流 |
@@ -60,6 +64,19 @@ Keeper 验证（基础四维；有质量契约时增加 quality_achievement，�
 
 ## 快速开始
 
+### 安装
+
+```bash
+npm install --global @haaaiawd/loom
+loom --version
+```
+
+也可以不做全局安装，直接运行：
+
+```bash
+npx @haaaiawd/loom --help
+```
+
 ### 步骤 0：诊断当前阶段
 
 ```bash
@@ -71,10 +88,13 @@ guide 检测项目当前在哪个阶段，输出"你在阶段 X，下一步做 Y
 Agent 每完成一步都跑 guide 确认下一步。
 如果只是审计或探测，不希望产生任何状态写入，用 `loom guide --dry-run`。
 
+当 `guide` 的下一步是 `loom activate <role>` 时，先运行这条命令：它会把该阶段需要的
+规范与版本化输入编译为 Context Pack。`guide` 只负责导航，不输出待阅读文件清单。
+
 ### AUTO 模式
 
 ```bash
-loom auto on      # Agent 自动连续执行，不等确认
+loom auto on      # Agent 在允许阶段连续推进；不会跳过契约、证据或 Keeper 门禁
 loom auto off     # 每步需要用户确认
 ```
 
@@ -119,9 +139,9 @@ loom activate architect
 ```
 
 **输入**：愿景文档 + 哲学文档
-**Architect 会做什么**：设计系统边界 → 绘制 Intent Map → 定义完成契约、按需的质量契约与专业能力需求
-**产出**：`.loom/v1/02_ARCHITECTURE.md` + `.loom/v1/04_INTENT_MAP.json`
-**怎么判断合格**：完成契约可观察，质量契约可比较，依赖无环，每个 Intent 有叙事引用
+**Architect 会做什么**：先展开 Capability Graph → 设计系统边界 → 绘制 Intent Map → 定义完成契约、按需的质量契约与专业能力需求
+**产出**：`.loom/v1/07_CAPABILITY_GRAPH.json` + `07_CAPABILITY_BRIEFS/` + `.loom/v1/02_ARCHITECTURE.md` + `.loom/v1/04_INTENT_MAP.json`
+**怎么判断合格**：高影响图谱节点都有路由、Intent 都可回链到图谱，完成契约可观察，质量契约可比较，依赖无环
 **下一步**：进入 Intent Loop
 
 ### 步骤 5：进入 Intent Loop
@@ -133,6 +153,10 @@ loom intent update INT-001 --status in_progress
 
 # Forge 编译专业能力并实现
 loom activate forge --intent INT-001
+
+# 仅当 Architect 为该 Intent 声明 quality_strategy=atelier
+loom atelier init INT-001
+loom atelier validate INT-001
 
 # Keeper 独立形成 Quality Proof
 loom activate keeper --intent INT-001
@@ -147,23 +171,20 @@ loom intent update INT-001 --status blocked      # blocked
 loom intent status
 ```
 
-**Loop 结束**：`loom intent status` 显示所有 Intent 为 completed。
+**Loop 结束**：所有 Intent 为 completed，且 `loom atlas validate` 通过当前版本的决策图谱交付门。
 
-### 步骤 6：人类预览
+### 步骤 6：决策图谱交付
 
 ```bash
-loom preview status   # 先检查 preview 是否新鲜
-loom preview          # 新鲜则打开；过期则提示重新生成
-loom preview --regen  # 输出生成提示词，让 Agent 重写 loom-preview.html
+loom atlas build      # 编译当前版本的架构与决策资料模型
+loom atlas --regen    # 输出已装配资料的 Composer Pack，生成 loom-atlas.html
+loom atlas validate   # 校验 Atlas 是否是当前版本合格交付物
+loom atlas            # 打开合格的决策图谱
 ```
 
-preview 是人类总览用的只读投影：哲学、愿景、架构、Intent 进度、验证历史。
-`loom preview` 会用 mtime 检查 `.loom/v{N}` 是否比 `loom-preview.html` 更新：
-- 新鲜：直接打开 `loom-preview.html`
-- 过期：不打开旧投影，提示 `loom preview --regen`
-- 强行打开旧投影：`loom preview --stale`
+Atlas 是当前版本的必交付 H5：它解释哲学、愿景、架构、Capability Graph、专业领域、Intent 契约、验证设计与关键决策，不承载项目进度或验证历史。CLI 为资料建立内容 digest；`loom-atlas.html` 必须绑定该 digest 和五个固定审查章节，才能被打开或视为收尾完成。
 
-Agent 在用户说"看看进度 / 打开 preview / 看全局"时，先跑 `loom preview status`。
+视觉 Agent 可以自由选择风格和叙事节奏，但内容结构与来源回链固定。所有 Intent 完成后，`loom guide` 会先要求 Atlas，不能跳过。
 
 **版本演进三档**：
 
@@ -185,11 +206,11 @@ Agent 在用户说"看看进度 / 打开 preview / 看全局"时，先跑 `loom 
 | `loom auto on\|off\|status` | AUTO 模式开关 |
 | `loom activate <role>` | 输出角色激活提示词 |
 | `loom activate <role> --intent <id>` | 输出仅含指定 draft/官方 Intent 的角色上下文 |
-| `loom preview` | 打开新鲜 HTML 预览；过期时提示重新生成 |
-| `loom preview status` | 检查 `loom-preview.html` 是否存在、是否新鲜 |
-| `loom preview --regen` | 输出提示词，让 Agent 重写 HTML 预览 |
-| `loom preview --stale` | 强行打开过期预览 |
-| `loom help <topic>` | 分层指南（workflow\|concepts\|loop\|version\|patch\|doctor\|preview） |
+| `loom atlas build` | 编译当前版本的 Atlas Model |
+| `loom atlas --regen` | 输出 command-assembled Composer Pack，生成 `loom-atlas.html` |
+| `loom atlas status\|validate` | 检查资料与 HTML 是否新鲜、完整且可交付 |
+| `loom atlas` | 打开通过校验的决策图谱 |
+| `loom help <topic>` | 分层指南（含 workflow、concepts、loop、capability、atelier、version、patch、doctor、atlas） |
 | `loom version list` | 列出所有版本（* 标记当前） |
 | `loom version new` | 创建新版本 + 自动切换（Major 升级） |
 | `loom version use <v>` | 切换当前版本 |
@@ -205,6 +226,11 @@ Agent 在用户说"看看进度 / 打开 preview / 看全局"时，先跑 `loom 
 | `loom intent revise <id> --reason <text>` | 创建修订 draft 并报告反向依赖 |
 | `loom intent draft <id>` | 查看 draft |
 | `loom intent finalize <id> [--review <ids> --unaffected <ids>]` | 校验 draft 并原子更新官方 Map/topo_order；修订时必须分类全部下游影响 |
+| `loom capability graph\|frontier\|get\|coverage\|compile` | 查看能力图谱、未路由前沿、覆盖缺口和当前 Intent 的能力编译输入 |
+| `loom capability proposal list\|get\|submit\|decide\|close` | 以 provenance 提交新发现，并由 Architect 裁决和闭合 |
+| `loom asset import\|list\|search\|get\|validate` | 管理带来源、许可、哈希、批准状态与 evidence 回链的本地素材 |
+| `loom expertise init\|get\|validate <id>` | 创建和校验 revision-scoped Search Plan、外部来源与 Capability Capsules |
+| `loom atelier init\|get\|validate <id>` | 为显式 Atelier Intent 创建、读取和校验创作记录 |
 | `loom intent deprecate <id> --reason <text>` | 只读评估当前版本弃用影响；加 `--confirm` 并完整分类依赖方后原子写入 |
 | `loom intent narrative <id>` | Intent 意图叙事 |
 | `loom intent trace <id>` | Intent 完整追溯链（依赖+验证+哲学+叙事） |
@@ -243,25 +269,33 @@ LOOM/
 │
 ├── dimensions/                  哲学维度库（Weaver 的弹药库）
 │   ├── SEARCH_METHODOLOGY.md    检索方法论（怎么找到优质思想）
+│   ├── AUTHORSHIP.md             Atelier 启用时加载的作者性方法
 │   ├── universal/               通用层：产品/工程/协作（按需填充）
 │   ├── domain/                  领域层：UX/游戏/后端/AI（按需填充）
 │   └── crosscutting/            交叉层：性能/安全/心理学/增长（按需填充）
 │
 ├── roles/                       角色原型定义
 │   ├── visionary.md             远见者——定义愿景，织造意图叙事
-│   ├── architect.md             建筑师——设计系统，绘制 Intent Map
+│   ├── architect.md             建筑师——展开图谱，设计系统，绘制 Intent Map
 │   ├── forge.md                 锻造师——在哲学约束下自主实现
 │   └── keeper.md                守护者——验证意图忠实度
 │
 ├── cli/                         CLI 传感器层（Agent 通过 CLI 访问磁盘数据）
 │   ├── bin/loom.js              命令入口
-│   ├── src/                     核心库（intent-map / philosophy / verify）
+│   ├── src/                     核心库（intent-map / capability / atelier / verify）
+│   ├── help/                    Agent 可直接读取的工作流指南
 │   └── test/                    端到端测试
 │
 └── templates/                   项目级起点骨架
     ├── PHILOSOPHY_TEMPLATE.md   哲学文档起点
     ├── VISION_TEMPLATE.md       愿景文档起点
-    └── INTENT_MAP_TEMPLATE.json Intent Map 起点
+    ├── INTENT_MAP_TEMPLATE.json Intent Map 起点
+    ├── CAPABILITY_GRAPH_TEMPLATE.json Capability Graph 起点
+    ├── CAPABILITY_BRIEF_TEMPLATE.md   Capability Brief 起点
+    ├── ASSET_LIBRARY_MANIFEST_TEMPLATE.json Asset Library 起点
+    ├── EXPERTISE_PACK_TEMPLATE.json   外部能力获取记录起点
+    ├── ATELIER_RECORD_TEMPLATE.json   Atelier Record 起点
+    └── ATLAS_TEMPLATE.html             决策图谱 H5 起点
 ```
 
 ### 文档导航
@@ -280,6 +314,10 @@ LOOM/
 | Keeper 做什么 | `roles/keeper.md` |
 | 哲学文档长什么样 | `templates/PHILOSOPHY_TEMPLATE.md` |
 | 愿景文档长什么样 | `templates/VISION_TEMPLATE.md` |
+| Capability Graph、Lens Contract 与 Brief 长什么样 | `cli/help/capability.md`、`templates/CAPABILITY_GRAPH_TEMPLATE.json`、`templates/CAPABILITY_GRAPH_EXAMPLE.json` |
+| 为什么必须外部检索、Expertise Pack 怎么闭合 | `cli/help/expertise.md`、`EXTERNAL_ACQUISITION_DESIGN.md` |
+| Author 与 Atelier 怎么工作 | `cli/help/atelier.md`、`dimensions/AUTHORSHIP.md` |
+| 决策图谱如何生成、怎样验收 | `cli/help/atlas.md`、`templates/ATLAS_TEMPLATE.html` |
 | Intent Map 长什么样 | `templates/INTENT_MAP_TEMPLATE.json` |
 | 怎么搜索高质量参考 | `dimensions/SEARCH_METHODOLOGY.md` |
 
@@ -296,6 +334,7 @@ LOOM/
 - 哲学文档体系（Weaver 决定要几个、多详细）
 - 愿景文档（带意图叙事）
 - 架构文档（根据哲学决定结构）
+- Capability Graph 与按需生成的 Capability Brief
 - Intent Map（意图依赖图，JSON）
 - 验证契约和验证记录
 
@@ -308,7 +347,7 @@ LOOM/
 | 角色 | 原型 | 职责 | 激活时机 |
 |---|---|---|---|
 | **Visionary** 远见者 | 产品联合创始人 | 定义愿景，织造意图叙事 | 项目启动 |
-| **Architect** 建筑师 | 系统建筑师 | 设计系统，绘制 Intent Map | Visionary 完成后 |
+| **Architect** 建筑师 | 系统建筑师 | 展开 Capability Graph，设计系统，绘制 Intent Map | Visionary 完成后 |
 | **Forge** 锻造师 | 高级工程师 | 在哲学约束下自主实现 | Intent Loop 实现阶段 |
 | **Keeper** 守护者 | 独立验证者（独立激活） | 从磁盘事实验证意图与质量主张 | Intent Loop 验证阶段 |
 
@@ -364,6 +403,8 @@ Agent 在项目中生成的文档结构：
     ├── 05_VERIFICATION.md         每个 Intent 的验证契约
     ├── 06_CHANGELOG.json          Patch 变更记录（唯一权威来源）
     ├── 06_CHANGELOG.md            确定性生成的只读投影
+    ├── 07_CAPABILITY_GRAPH.json   问题面、能力缺口、风险、证据与 Intent 回链
+    ├── 07_CAPABILITY_BRIEFS/      按需生成的项目化能力 Brief
     └── verifications/             Keeper 的验证记录
         ├── INT-001.json
         ├── INT-001.md
@@ -393,11 +434,12 @@ Agent 通过 **CLI 访问** JSON，不直接读文件——省 token、更高效
 2. Visionary 定义愿景
    → 基于哲学写愿景 → 每个意图带意图叙事 → 识别需要的哲学维度
 
-3. Architect 设计系统
-   → 基于愿景设计结构 → 绘制 Intent Map → 定义验证契约
+3. Architect 先展开 Capability Graph，再设计系统
+   → 基于愿景检查问题面、能力缺口、风险与证据 → Impact Gate 经独立子代理复审 → 路由高影响节点并外部获取 → 绘制 Intent Map → 定义验证契约
 
 4. LOOM Quality Engine
-   → Forge 编译 Expertise Pack → Quality Arena 实现/比较 → Keeper 形成 Quality Proof
+   → Forge 编译 Expertise Pack → 按需编译 Authorial Stance / 进入 Atelier
+   → Quality Arena 实现/比较 → Keeper 形成 Quality Proof
    → 循环直到所有 Intent 闭合
 ```
 
@@ -406,12 +448,13 @@ Agent 通过 **CLI 访问** JSON，不直接读文件——省 token、更高效
 ## 当前状态
 
 - [x] `meta/` 元规范（4 个文件）
-- [x] `roles/` 角色原型（4 个角色）
-- [x] `templates/` 起点骨架（3 个模板）
+- [x] `roles/` 角色契约（6 个角色，含独立 Impact Reviewer）
+- [x] `templates/` 起点骨架
 - [x] `README.md` 系统总览
 - [x] `dimensions/SEARCH_METHODOLOGY.md` 检索方法论
-- [x] `cli/` CLI 访问层（118 个测试全过）
-- [ ] `dimensions/` 维度文件（按需填充，Weaver 可自主判断）
+- [x] `cli/` CLI 访问层（Capability Graph / Proposal / Asset Library / Atelier / Quality Proof）
+- [x] `dimensions/AUTHORSHIP.md` 按需创作方法
+- [ ] 继续通过真实项目校准专业维度与 Atelier 的质量增益
 
 ---
 
