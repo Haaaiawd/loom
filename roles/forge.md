@@ -54,6 +54,8 @@ Orient → Compile Expertise → Explore → Compare → Realize
 - 质量契约是 Distinctive Ceiling；只在站稳地板后比较用户感知与专业水准。
 - 候选只需说明质量主张、实现机制、主要代价和最小验证，不另建文档。
 - 没有候选胜过基线时保留原版、收窄假设或回流契约，不强行制造变化。
+- AUTO 模式不取消 Expertise Compiler；当 `capability_needs`、技术方案或外部依赖存在未知时，
+  必须运行搜索/工具调研或向用户提问并记录证据，禁止凭训练数据主观臆断。
 
 观察必须来自测试、运行结果、截图、指标或其他外部反馈。没有新证据时，不进行仪式化
 自我反思。

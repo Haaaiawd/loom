@@ -1,7 +1,7 @@
 // shared/paths.js — LOOM 路径解析的公共工具
 // 统一 getLoomRoot / findLoomRoot / findVersionDir 的命名和实现。
 
-import { resolve, join, dirname } from 'node:path';
+import { resolve, join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { argv, cwd } from 'node:process';
@@ -40,7 +40,11 @@ export function findLoomRoot() {
 export function findVersionDir() {
   const flagIdx = argv.indexOf('--loom-dir');
   if (flagIdx !== -1 && argv[flagIdx + 1]) {
-    return resolve(argv[flagIdx + 1]);
+    const dir = resolve(argv[flagIdx + 1]);
+    if (!/^v\d+$/.test(basename(dir))) {
+      throw new Error(`--loom-dir 必须指向 .loom/v{N} 版本目录: ${dir}`);
+    }
+    return dir;
   }
   const loomRoot = join(cwd(), '.loom');
   if (!existsSync(loomRoot)) {

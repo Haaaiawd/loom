@@ -211,6 +211,13 @@ try {
           // loom intent done <id> — 自动走 pending→in_progress→completed，检查验证记录
           const id = rest[0];
           if (!id) die('用法: loom intent done <id>');
+          // 先确认 Intent 存在且状态，避免无效 id 进入验证文件路径解析
+          const intent = getIntent(versionDir, id);
+          const currentStatus = intent.status;
+          if (currentStatus === 'completed') {
+            console.log(`${id} 已经是 completed，无需操作`);
+            break;
+          }
           const verificationsDir = getVerificationsDir(versionDir);
           // 检查有没有验证记录
           const history = getVerificationHistory(verificationsDir, id);
@@ -222,15 +229,8 @@ try {
           if (latest.verdict !== 'passed') {
             die(`${id} 最新验证记录是 ${latest.verdict}（非 passed）。只有 passed 的 Intent 才能 done。`);
           }
-          // 获取当前状态，自动走两步
-          const intent = getIntent(versionDir, id);
           if (!isVerificationCurrent(intent, latest)) {
             die(`${id} 最新 passed 验证不属于当前 Intent revision ${intent.revision ?? 1}。先重新验证。`);
-          }
-          const currentStatus = intent.status;
-          if (currentStatus === 'completed') {
-            console.log(`${id} 已经是 completed，无需操作`);
-            break;
           }
           if (currentStatus === 'pending') {
             updateIntentStatus(versionDir, id, 'in_progress');

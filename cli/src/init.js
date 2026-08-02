@@ -162,7 +162,7 @@ export function initProject(projectDir) {
       '2. 用 `loom activate <role>` 获取当前角色上下文；实现或验证单个 Intent 时必须加 `--intent <id>`。',
       '3. 只在当前角色的权限内行动；发现目标、契约或架构需要改变时，按 LOOM 回流，不要静默扩展范围。',
       '4. 完成前运行当前 Intent 的验证方法与 `loom doctor`；声称质量提升时必须提供基线相对 Quality Proof，以磁盘证据而非会话记忆判断状态。',
-      '5. Keeper 验证必须运行在新的 Agent thread 中；同一会话切换角色不构成独立验证。',
+      '5. Keeper 验证必须运行在新的 Agent thread 中；同一会话切换角色不构成独立验证。无子代理支持时应在验证记录中声明共享上下文并降低独立性声明，必要时使用 `pending_human`。',
       '',
       '常用入口：',
       '- `loom --help`',

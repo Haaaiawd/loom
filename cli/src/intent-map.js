@@ -2,7 +2,7 @@
 // 真相源是磁盘上的 04_INTENT_MAP.json，这个库负责按需查询，不返回整个文件。
 
 import { readFileSync, writeFileSync, existsSync, renameSync, unlinkSync } from 'node:fs';
-import { resolve, dirname, join } from 'node:path';
+import { resolve, dirname, join, basename } from 'node:path';
 import { extractMdSection, readJsonFile } from './shared/md-utils.js';
 import { formatIntentRef, INTENT_ID_PATTERN, VERSION_PATTERN } from './shared/intent-ref.js';
 import { commandCoversVerificationMethod, getIntentVerificationMethod } from './shared/verification-method.js';
@@ -22,6 +22,25 @@ export const VALID_TRANSITIONS = {
 };
 
 const LEGACY_REVISION = Symbol('legacyIntentRevision');
+
+/** 意图叙事引用格式: 01_VISION.md#anchor */
+const NARRATIVE_REF_RE = /^(?:see\s+)?([^#]+)#([\w-]+)$/i;
+const NARRATIVE_FILE = '01_VISION.md';
+
+function parseNarrativeRef(ref, label = 'narrative_ref') {
+  if (typeof ref !== 'string') {
+    throw new Error(`${label} 必须是字符串`);
+  }
+  const match = ref.trim().match(NARRATIVE_REF_RE);
+  if (!match) {
+    throw new Error(`${label} 格式非法: ${ref}（应为 ${NARRATIVE_FILE}#<anchor>）`);
+  }
+  const file = match[1].trim();
+  if (basename(file) !== file || file !== NARRATIVE_FILE) {
+    throw new Error(`${label} 只能指向 ${NARRATIVE_FILE}: ${ref}`);
+  }
+  return { file, section: match[2].trim() };
+}
 
 function withEffectiveRevision(intent) {
   if (intent.revision !== undefined) return intent;
@@ -76,6 +95,38 @@ export function validateIntentMap(data) {
         errors.push(`intents["${id}"] 缺少必填字段: ${field}`);
       }
     }
+
+    if (!Array.isArray(intent.depends_on)) {
+      errors.push(`intents["${id}"].depends_on 必须是数组`);
+    } else {
+      for (const dep of intent.depends_on) {
+        if (!INTENT_ID_PATTERN.test(dep || '')) {
+          errors.push(`intents["${id}"].depends_on 含非法 Intent ID: ${dep}`);
+        }
+      }
+    }
+
+    if (!Array.isArray(intent.philosophy_anchors)) {
+      errors.push(`intents["${id}"].philosophy_anchors 必须是字符串数组`);
+    } else {
+      for (const [index, anchor] of intent.philosophy_anchors.entries()) {
+        if (typeof anchor !== 'string' || anchor.trim() === '') {
+          errors.push(`intents["${id}"].philosophy_anchors[${index}] 必须是合法锚点`);
+        } else {
+          const file = anchor.split('#')[0]?.trim();
+          if (!file || basename(file) !== file || !file.endsWith('.md')) {
+            errors.push(`intents["${id}"].philosophy_anchors[${index}] 文件部分必须是 .md 文件名（无路径）: ${anchor}`);
+          }
+        }
+      }
+    }
+
+    try {
+      parseNarrativeRef(intent.narrative_ref);
+    } catch (error) {
+      errors.push(`intents["${id}"].${error.message}`);
+    }
+
     if (intent.status && !VALID_STATUS.includes(intent.status)) {
       errors.push(`intents["${id}"].status 非法: "${intent.status}" (合法: ${VALID_STATUS.join('|')})`);
     }
@@ -88,7 +139,7 @@ export function validateIntentMap(data) {
     validateLineage(data, id, intent.lineage, errors);
     validateLifecycle(data, id, intent.lifecycle, errors);
     validateOptionalIntentFields(id, intent, errors);
-    if (intent.depends_on) {
+    if (Array.isArray(intent.depends_on)) {
       for (const dep of intent.depends_on) {
         if (!(dep in data.intents)) {
           errors.push(`intents["${id}"].depends_on 引用了不存在的 Intent: ${dep}`);
@@ -126,7 +177,8 @@ export function validateIntentMap(data) {
     }
     const positions = new Map(data.topo_order.map((id, index) => [id, index]));
     for (const [id, intent] of Object.entries(data.intents)) {
-      for (const dependency of intent.depends_on || []) {
+      const deps = Array.isArray(intent.depends_on) ? intent.depends_on : [];
+      for (const dependency of deps) {
         if (positions.has(dependency) && positions.has(id) && positions.get(dependency) >= positions.get(id)) {
           errors.push(`topo_order 顺序非法: ${dependency} 必须位于 ${id} 之前`);
         }
@@ -335,7 +387,8 @@ export function computeTopoOrder(intents, previousOrder = []) {
   const indegree = new Map(ids.map((id) => [id, 0]));
   const dependents = new Map(ids.map((id) => [id, []]));
   for (const [id, intent] of Object.entries(intents)) {
-    for (const dependency of intent.depends_on || []) {
+    const deps = Array.isArray(intent.depends_on) ? intent.depends_on : [];
+    for (const dependency of deps) {
       if (!indegree.has(dependency)) throw new Error(`${id} 引用了不存在的依赖: ${dependency}`);
       indegree.set(id, indegree.get(id) + 1);
       dependents.get(dependency).push(id);
@@ -369,7 +422,8 @@ export function getNextIntent(versionDir) {
     const intent = intents[id];
     if (intent.lifecycle?.deprecation) continue;
     if (intent.status !== 'pending') continue;
-    const depsReady = intent.depends_on.every(
+    const deps = Array.isArray(intent.depends_on) ? intent.depends_on : [];
+    const depsReady = deps.every(
       (dep) => intents[dep]?.status === 'completed'
     );
     if (depsReady) return withEffectiveRevision(intent);
@@ -593,7 +647,25 @@ export function getIntent(versionDir, intentId) {
  * @param {string} newStatus — pending | in_progress | completed | blocked
  * @returns {object} 更新后的 Intent
  */
+function ensureDepsCompleted(data, intentId) {
+  const deps = Array.isArray(data.intents[intentId].depends_on)
+    ? data.intents[intentId].depends_on
+    : [];
+  const incompleteDeps = deps.filter(
+    (dep) => data.intents[dep]?.status !== 'completed'
+  );
+  if (incompleteDeps.length > 0) {
+    throw new Error(
+      `Intent ${intentId} 的依赖尚未完成: ${incompleteDeps.join(', ')}` +
+      '\n先完成依赖，或运行 loom intent next 获取当前可执行 Intent。'
+    );
+  }
+}
+
 export function updateIntentStatus(versionDir, intentId, newStatus) {
+  if (!INTENT_ID_PATTERN.test(intentId || '')) {
+    throw new Error(`Intent ID 非法: ${intentId || '(empty)'}`);
+  }
   if (!VALID_STATUS.includes(newStatus)) {
     throw new Error(`非法 status: "${newStatus}" (合法: ${VALID_STATUS.join('|')})`);
   }
@@ -613,16 +685,9 @@ export function updateIntentStatus(versionDir, intentId, newStatus) {
     );
   }
 
-  if (oldStatus === 'pending' && newStatus === 'in_progress') {
-    const incompleteDeps = data.intents[intentId].depends_on.filter(
-      (dep) => data.intents[dep]?.status !== 'completed'
-    );
-    if (incompleteDeps.length > 0) {
-      throw new Error(
-        `Intent ${intentId} 的依赖尚未完成: ${incompleteDeps.join(', ')}` +
-        '\n先完成依赖，或运行 loom intent next 获取当前可执行 Intent。'
-      );
-    }
+  // in_progress 和 completed 都必须依赖已经完成；completed 还会额外检查验证记录
+  if (newStatus === 'in_progress' || newStatus === 'completed') {
+    ensureDepsCompleted(data, intentId, newStatus);
   }
 
   // completed 是事实声明，不是自由状态标签。无当前 revision 的最后一条 passed
@@ -697,7 +762,15 @@ export function updateIntentStatus(versionDir, intentId, newStatus) {
   if ((newStatus === 'completed' || newStatus === 'blocked') && oldStatus !== 'completed') {
     finishReviewCycleIntent(data, intentId);
   }
-  writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+
+  const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(tempPath, JSON.stringify(data, null, 2), 'utf-8');
+  try {
+    renameSync(tempPath, filePath);
+  } catch (error) {
+    try { unlinkSync(tempPath); } catch {}
+    throw error;
+  }
   return data.intents[intentId];
 }
 
@@ -712,16 +785,12 @@ export function getNarrative(versionDir, intentId) {
     throw new Error(`Intent 不存在: ${intentId}`);
   }
   const ref = intents[intentId].narrative_ref;
-  if (!ref) {
-    throw new Error(`Intent ${intentId} 没有 narrative_ref`);
-  }
+  const { section } = parseNarrativeRef(ref, `intents["${intentId}"].narrative_ref`);
 
-  // 解析 "FILE.md#section" 格式
-  const [file, section] = ref.split('#');
-  const filePath = join(versionDir, file.trim());
+  const filePath = join(versionDir, NARRATIVE_FILE);
   if (!existsSync(filePath)) {
     throw new Error(`愿景文档不存在: ${filePath}`);
   }
   const content = readFileSync(filePath, 'utf-8');
-  return extractMdSection(content, section ? section.trim() : null, '意图叙事');
+  return extractMdSection(content, section, '意图叙事');
 }
