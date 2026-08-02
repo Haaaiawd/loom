@@ -92,6 +92,10 @@ Expertise Compiler。
 4. 能力边界——哪些能力已经存在、哪些需要外部或用户侧补齐。
 5. 失败信号——项目看起来完成但实质失败的反模式是什么。
 
+对以上问题中**尚未由项目事实充分回答**的每一项，执行 SEARCH_METHODOLOGY.md 的
+Research Gate：定义决策问题 → 项目 grounding → 针对性搜索 → 提取机制 → 转译成项目后果。
+研究不是可选补充，而是把主观臆断转成可追溯证据的核心步骤。
+
 Auto 模式不是跳过此门的理由；如果不能直接向用户提问，必须显式记录未确认假设、
 说明其风险，并在该假设会实质改变北极星或不可逆底线时输出 `pending_human`，不得
 主观臆断落笔。
@@ -100,11 +104,11 @@ Auto 模式不是跳过此门的理由；如果不能直接向用户提问，必
 
 1. 读取 BASELINE、仓库事实和用户目标。
 2. 识别会反复影响未来决策的判断领域。
-3. 完成 Clarifying Gate 中列出的问题；对尚无充分依据的问题搜索、萃取和转译证据。
+3. 完成 Clarifying Gate；对外部未知的北极星、用户、场景或能力边界执行 Targeted Search。
 4. 织造 Doctrine，并检查原则之间及其与 BASELINE 的冲突。
 5. 运行 `loom philosophy check`，修正缺失锚点、空洞原则或无法追溯的来源。
 
-Weaver 默认自主完成，但必须先完成 Clarifying Gate。只有缺失答案会改变项目北极星、
+Weaver 默认自主完成，但必须先完成 Clarifying Gate 与对应的 Research Gate。只有缺失答案会改变项目北极星、
 不可逆取舍或项目底线时才允许继续；否则继续记录假设并说明风险。
 
 ## Reflow and Evolution

@@ -84,7 +84,7 @@ function compileEnvelope(role, intentId, versionDir) {
     '- 只在当前角色权限和明确作用域内行动。',
   ];
   if (['weaver', 'visionary', 'architect', 'forge'].includes(role)) {
-    lines.push('- AUTO 模式不是跳过澄清、搜索或反问的许可；若北极星、能力边界或关键取舍存在未知，必须先搜索或向用户提问并记录证据，禁止主观臆断。');
+    lines.push('- AUTO 模式不是跳过 Research Gate 的许可；若北极星、能力边界、外部依赖或关键取舍存在未知，必须优先执行 Targeted Search 并记录证据，禁止主观臆断。');
   }
   if (role === 'keeper') {
     lines.push('- Keeper 必须在新的 Agent thread 中运行；同一会话切换角色不构成独立验证。');
@@ -173,10 +173,19 @@ function compileObjective(role, versionDir, intentId) {
   };
 }
 
+function compileResearchMethodology(role) {
+  if (role === 'keeper') return '';
+  const methodologyPath = join(getLoomRoot(), 'dimensions/SEARCH_METHODOLOGY.md');
+  if (!existsSync(methodologyPath)) return '';
+  return `### Research Methodology\n\n${readFileSync(methodologyPath, 'utf-8')}`;
+}
+
 function compileInvariants(role, versionDir) {
   const blocks = [];
   const baselinePath = join(getLoomRoot(), 'meta/BASELINE.md');
   blocks.push(role === 'weaver' ? readFileSync(baselinePath, 'utf-8') : BASELINE_SUMMARY);
+  const research = compileResearchMethodology(role);
+  if (research) blocks.push(research);
   if (versionDir) {
     const projectBaseline = join(versionDir, '00_PHILOSOPHY', 'PROJECT_BASELINE.md');
     if (existsSync(projectBaseline)) {
