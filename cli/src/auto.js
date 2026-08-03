@@ -22,6 +22,7 @@ export function getAutoMode(loomRoot) {
   const path = join(loomRoot, 'auto');
   if (!existsSync(path)) return 'manual';
   const content = readFileSync(path, 'utf-8').trim();
+  if (content === 'manual') return 'manual';
   if (VALID_MODES.includes(content)) return content;
   return 'auto-loop'; // 旧格式兼容
 }

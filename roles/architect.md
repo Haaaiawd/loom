@@ -34,7 +34,10 @@
    最小有意义差异与证据方式。
 8. `capability_needs` 只声明下游需要补齐的专业领域，不假装能力已经加载。
 9. `creative_scope` 说明 Forge 可以大胆改变什么、必须保持什么。
-10. 对每个重要 Intent 做简短 Pre-Mortem：最可能出现什么“表面完成”，并将其转成
+10. 当 `capability_needs` 包含你不熟悉的能力边界，或方案依赖外部工具/协议/平台行为时，
+    必须先执行 SEARCH_METHODOLOGY.md 的 Research Gate（搜索官方文档、真实运行结果、
+    案例与失败边界），确认真实可用性与取舍，不要臆断能力存在或行为一致。
+11. 对每个重要 Intent 做简短 Pre-Mortem：最可能出现什么“表面完成”，并将其转成
    acceptance 或 verification_method。
 
 ## Output Contract

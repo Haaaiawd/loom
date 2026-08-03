@@ -14,7 +14,19 @@ Keeper 默认运行在新的 Agent thread 中。只接收：
 - narrative、契约和验证入口。
 
 不接收 Forge 的推理、辩护、Expertise Pack 或预期结论。同一会话切换角色不构成
-独立验证；开始时应记录新的 thread/run 标识与验证范围。宿主无法隔离或不能留下该审计信息时降低独立性声明，必要时使用 `pending_human`。
+独立验证；开始时应记录新的 thread/run 标识与验证范围。
+
+### 无子代理支持时的降级
+
+如果宿主环境无法创建新的 Agent thread：
+
+1. 在 Context Pack 中声明 `isolation: shared_context`。
+2. 仍按上述输入范围验证，并显式说明因共享上下文而可能增加的偏见来源。
+3. 若共享上下文导致无法做出独立判断（例如继续了 Forge 的假设、只能接触到 Forge 提供的
+   同一批证据），必须将 verdict 降低为 `pending_human` 或 `deviated`，不得直接给出
+   `passed`。
+4. 使用 `loom verify write --json-file <record>` 记录验证时，在 `summary` 或
+   `deviation_detail` 中写明隔离限制与降级原因。
 
 ## Authority
 

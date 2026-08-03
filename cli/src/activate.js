@@ -1,7 +1,7 @@
 // activate — compile a role- and intent-scoped Context Pack.
 
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { getLoomRoot } from './shared/paths.js';
 import { getIntent, getNarrative } from './intent-map.js';
 import { getIntentDraft } from './intent-draft.js';
@@ -39,6 +39,15 @@ function section(title, body) {
   return `## ${title}\n\n${content || '无。'}`;
 }
 
+function getAutoModeForVersion(versionDir) {
+  if (!versionDir) return 'manual';
+  const autoPath = join(dirname(versionDir), 'auto');
+  if (!existsSync(autoPath)) return 'manual';
+  const content = readFileSync(autoPath, 'utf-8').trim();
+  if (['auto-loop', 'auto-design'].includes(content)) return content;
+  return 'manual';
+}
+
 function readRole(role) {
   const filePath = join(getLoomRoot(), ROLE_FILES[role]);
   if (!existsSync(filePath)) throw new Error(`角色文件不存在: ${filePath}`);
@@ -63,15 +72,20 @@ function resolveContractReference(versionDir, value, label) {
   return extractMdSection(readFileSync(filePath, 'utf-8'), anchor, label);
 }
 
-function compileEnvelope(role, intentId) {
+function compileEnvelope(role, intentId, versionDir) {
   const scope = intentId ? `仅 ${intentId}` : '当前角色的项目阶段';
+  const autoMode = getAutoModeForVersion(versionDir);
   const lines = [
     `- role: ${role}`,
     `- scope: ${scope}`,
+    `- auto_mode: ${autoMode}`,
     '- 本 Context Pack 不会清除现有会话记忆。',
     '- system、developer 与用户指令优先；项目事实冲突时报告，不静默混用。',
     '- 只在当前角色权限和明确作用域内行动。',
   ];
+  if (['weaver', 'visionary', 'architect', 'forge'].includes(role)) {
+    lines.push('- AUTO 模式不是跳过 Research Gate 的许可；若北极星、能力边界、外部依赖或关键取舍存在未知，必须优先执行 Targeted Search 并记录证据，禁止主观臆断。');
+  }
   if (role === 'keeper') {
     lines.push('- Keeper 必须在新的 Agent thread 中运行；同一会话切换角色不构成独立验证。');
     lines.push('- 无法获得独立上下文时降低声明，关键判断使用 pending_human。');
@@ -159,10 +173,19 @@ function compileObjective(role, versionDir, intentId) {
   };
 }
 
+function compileResearchMethodology(role) {
+  if (role === 'keeper') return '';
+  const methodologyPath = join(getLoomRoot(), 'dimensions/SEARCH_METHODOLOGY.md');
+  if (!existsSync(methodologyPath)) return '';
+  return `### Research Methodology\n\n${readFileSync(methodologyPath, 'utf-8')}`;
+}
+
 function compileInvariants(role, versionDir) {
   const blocks = [];
   const baselinePath = join(getLoomRoot(), 'meta/BASELINE.md');
   blocks.push(role === 'weaver' ? readFileSync(baselinePath, 'utf-8') : BASELINE_SUMMARY);
+  const research = compileResearchMethodology(role);
+  if (research) blocks.push(research);
   if (versionDir) {
     const projectBaseline = join(versionDir, '00_PHILOSOPHY', 'PROJECT_BASELINE.md');
     if (existsSync(projectBaseline)) {
@@ -289,7 +312,7 @@ export function activateRole(role, versionDir, intentId = null) {
   const objective = compileObjective(role, versionDir, intentId);
   const parts = [
     '# LOOM Context Pack',
-    section('1. Execution Envelope', compileEnvelope(role, intentId)),
+    section('1. Execution Envelope', compileEnvelope(role, intentId, versionDir)),
     section('2. Active Objective', objective.body),
     section('3. Hard Invariants', compileInvariants(role, versionDir)),
     section('4. Success Contracts', compileContracts(role, versionDir, objective)),

@@ -5,7 +5,7 @@ import { readFileSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { extractMdSection, readJsonFile } from './shared/md-utils.js';
 import { getIntent, getEffectiveVerificationEpoch, hasLegacyIntentRevision } from './intent-map.js';
-import { formatIntentRef, resolveIntentRef } from './shared/intent-ref.js';
+import { formatIntentRef, INTENT_ID_PATTERN, resolveIntentRef } from './shared/intent-ref.js';
 import { resolveQualityProofReference } from './shared/proof-reference.js';
 
 /** 合法判定结果 */
@@ -164,6 +164,9 @@ export function writeVerification(versionDir, verificationsDir, record) {
  * @returns {{ intent_id: string, records: array } | null}
  */
 export function getVerificationHistory(verificationsDir, intentId) {
+  if (!INTENT_ID_PATTERN.test(intentId || '')) {
+    throw new Error(`Intent ID 非法: ${intentId || '(empty)'}`);
+  }
   const filePath = join(verificationsDir, `${intentId}.json`);
   if (!existsSync(filePath)) {
     return null;
