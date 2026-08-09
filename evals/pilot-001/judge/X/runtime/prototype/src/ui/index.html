@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="launch-token" content="__LAUNCH_TOKEN__">
+  <title>Moonwake · Start work</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <p class="eyebrow">Moonwake / local workbench</p>
+      <h1>Find a defensible place to start.</h1>
+      <p class="lede">Read two local project traces, restore recent context, then choose one action—or skip. Nothing in your project is changed.</p>
+    </header>
+
+    <aside id="prior-choice" class="prior" hidden aria-live="polite"></aside>
+
+    <section class="setup" aria-labelledby="setup-title">
+      <div>
+        <p class="section-index">01 / SELECT</p>
+        <h2 id="setup-title">Project and current role</h2>
+      </div>
+      <div class="controls">
+        <label class="field">
+          <span>Project folder</span>
+          <input id="project-files" type="file" webkitdirectory multiple aria-describedby="folder-help">
+          <small id="folder-help">Choose a folder containing BACKLOG.md and GIT_LOG.txt.</small>
+        </label>
+        <label class="field">
+          <span>Working as</span>
+          <select id="role">
+            <option value="producer_designer">Producer / designer</option>
+            <option value="programmer" selected>Programmer</option>
+            <option value="artist">Artist</option>
+          </select>
+        </label>
+        <button id="read-project" class="primary" type="button">Read project</button>
+      </div>
+      <p id="status" class="status" role="status">Select a compatible folder to begin.</p>
+      <ul id="warnings" class="warnings" aria-live="polite"></ul>
+    </section>
+
+    <section id="review" hidden aria-labelledby="review-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-index">02 / REVIEW</p>
+          <h2 id="review-title">What changed</h2>
+        </div>
+        <p id="project-label" class="project-label"></p>
+      </div>
+      <ol id="recent-changes" class="changes"></ol>
+    </section>
+
+    <section id="decide" hidden aria-labelledby="decide-title">
+      <div class="section-heading">
+        <div>
+          <p class="section-index">03 / DECIDE</p>
+          <h2 id="decide-title">Supported next actions</h2>
+        </div>
+        <button id="skip" class="quiet" type="button">Skip for now</button>
+      </div>
+      <div id="candidates" class="candidates"></div>
+      <div id="shortfall" class="shortfall" hidden></div>
+    </section>
+
+    <section id="outcome" class="outcome" hidden aria-live="polite">
+      <p class="section-index">CHOICE SAVED LOCALLY</p>
+      <h2 id="outcome-title"></h2>
+      <p id="outcome-copy"></p>
+      <button id="return-to-results" class="quiet" type="button">Return to choices</button>
+    </section>
+  </main>
+  <script type="module" src="/app.mjs"></script>
+</body>
+</html>

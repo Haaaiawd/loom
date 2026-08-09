@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>开工台</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">START WORKBENCH · 纵向原型</p>
+        <h1>开工台</h1>
+        <p class="intro">从最近变化和未决事项中，找到一个今天可以开始的动作。</p>
+      </div>
+      <div class="boundary"><span></span>本地读取 · 项目只读</div>
+    </header>
+
+    <section id="last-decision" class="decision-strip hidden" aria-live="polite"></section>
+
+    <section class="panel project-panel" aria-labelledby="project-heading">
+      <div class="section-heading">
+        <div><p class="step">01 / 选择项目</p><h2 id="project-heading">先确认读取范围</h2></div>
+        <button id="privacy-toggle" class="link-button" type="button">会保存什么？</button>
+      </div>
+      <p>原型只读取所选文件夹根目录的 <code>BACKLOG.md</code> 和 Git 历史来源，不递归读取源码，也不会修改或执行项目内容。</p>
+      <div id="privacy-copy" class="privacy-copy hidden">
+        <p id="privacy-text"></p>
+        <button id="clear-local-state" class="link-button" type="button">清除全部本地记录</button>
+      </div>
+      <div class="path-row">
+        <input id="project-path" type="text" autocomplete="off" aria-label="项目绝对路径" placeholder="例如 D:\Projects\Moonwake">
+        <button id="choose-folder" class="secondary" type="button">选择文件夹</button>
+        <button id="scan-project" class="primary" type="button">只读扫描</button>
+      </div>
+      <p id="status" class="status" role="status">等待你选择一个项目。</p>
+    </section>
+
+    <div id="workspace" class="hidden">
+      <section class="evidence-grid" aria-label="项目证据">
+        <article class="panel">
+          <p class="step">02 / 最近变化</p>
+          <div class="section-heading compact"><h2>从哪里接回来</h2><span id="commit-count" class="count"></span></div>
+          <p id="source-note" class="source-note"></p>
+          <ol id="commits" class="plain-list"></ol>
+        </article>
+        <article class="panel">
+          <p class="step">03 / 未决事项</p>
+          <div class="section-heading compact"><h2>还有什么没决定</h2><span id="backlog-count" class="count"></span></div>
+          <ul id="backlog" class="plain-list backlog-list"></ul>
+        </article>
+      </section>
+
+      <section class="panel today-panel" aria-labelledby="today-heading">
+        <p class="step">04 / 调整今天</p>
+        <h2 id="today-heading">角色影响相关性，不会把你锁死</h2>
+        <fieldset class="roles">
+          <legend class="sr-only">今天的角色</legend>
+          <label><input type="radio" name="role" value="producer-design"><span>制作 / 设计</span></label>
+          <label><input type="radio" name="role" value="programming" checked><span>程序</span></label>
+          <label><input type="radio" name="role" value="art"><span>美术</span></label>
+          <label><input type="radio" name="role" value="unrestricted"><span>不限定</span></label>
+        </fieldset>
+        <div class="goal-row">
+          <label for="today-goal">今天想推进什么 <small>可选</small></label>
+          <div><input id="today-goal" type="text" maxlength="160" placeholder="例如：先处理存档风险"><button id="update-candidates" class="secondary" type="button">更新候选</button></div>
+        </div>
+      </section>
+
+      <section class="candidates-section" aria-labelledby="candidates-heading">
+        <div class="section-heading">
+          <div><p class="step">05 / 由你选择</p><h2 id="candidates-heading">三个可以开始的切入口</h2></div>
+          <button id="reset-skips" class="link-button hidden" type="button">找回跳过项</button>
+        </div>
+        <p class="candidate-intro">这是基于有限证据整理的候选，不代表团队优先级已经确定。</p>
+        <div id="candidates" class="candidate-list"></div>
+        <button id="none-fit" class="link-button" type="button">都不合适</button>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="consent-dialog">
+    <form method="dialog">
+      <p class="step">首次保存说明</p>
+      <h2>要让下次打开记得这次选择吗？</h2>
+      <p id="consent-location"></p>
+      <p>只保存项目路径、角色、今日目标和这次候选快照；不会写入项目，也不会上传。你可以随时清除。</p>
+      <div class="dialog-actions">
+        <button value="memory" class="secondary">仅本次记住</button>
+        <button value="persist" class="primary">同意保存到本机</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>

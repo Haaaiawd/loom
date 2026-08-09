@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">The LOOM production loop</title>
+  <desc id="desc">Three clean feedback loops for understanding, independent Keeper review, and restartable task delivery.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#17212B"/></marker>
+    <marker id="blue-arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#4169E1"/></marker>
+    <style>
+      text{font-family:Inter,Segoe UI,Arial,sans-serif;fill:#17212B}.title{font-size:34px;font-weight:760}.subtitle{font-size:16px;fill:#58636D}.band-title{font-size:19px;font-weight:740}.eyebrow{font-size:11px;font-weight:750;letter-spacing:1.4px}.node-title{font-size:15px;font-weight:700}.body{font-size:12px;fill:#58636D}.label{font-size:11px;font-weight:720}.edge{fill:none;stroke:#17212B;stroke-width:2.2;marker-end:url(#arrow)}.loop{fill:none;stroke:#4169E1;stroke-width:2.4;stroke-dasharray:7 7;marker-end:url(#blue-arrow)}
+    </style>
+  </defs>
+  <rect width="1600" height="1000" fill="#F5F2EA"/>
+  <text class="title" x="70" y="64">One system. Three honest loops.</text>
+  <text class="subtitle" x="70" y="94">The human talks naturally. The Agent thinks and acts. LOOM quietly preserves state, context, and proof.</text>
+  <g transform="translate(1290 50)"><circle cx="6" cy="6" r="6" fill="#4169E1"/><text class="eyebrow" x="22" y="10">FOR AI AGENTS, NOT END USERS</text></g>
+
+  <!-- Understanding loop -->
+  <g>
+    <rect x="48" y="130" width="1504" height="246" rx="24" fill="#FBFAF6" stroke="#D8D3C8"/>
+    <rect x="48" y="130" width="12" height="246" rx="6" fill="#9AD8C2"/>
+    <text class="eyebrow" x="86" y="163" fill="#367D67">01 · UNDERSTANDING LOOP</text>
+    <text class="band-title" x="86" y="192">Find the whole before pretending to know the task.</text>
+    <g transform="translate(86 224)">
+      <rect width="190" height="82" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/>
+      <rect x="14" y="13" width="52" height="20" rx="10" fill="#E3F3ED"/><text class="eyebrow" x="40" y="27" text-anchor="middle" fill="#367D67">HUMAN</text>
+      <text class="node-title" x="14" y="54">Natural request</text><text class="body" x="14" y="71">idea · correction · answer</text>
+    </g>
+    <g transform="translate(326 224)">
+      <rect width="224" height="82" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/>
+      <rect x="14" y="13" width="48" height="20" rx="10" fill="#E8ECFA"/><text class="eyebrow" x="38" y="27" text-anchor="middle" fill="#4169E1">AGENT</text>
+      <text class="node-title" x="14" y="54">Describe the result</text><text class="body" x="14" y="71">inspect only when relevant</text>
+    </g>
+    <g transform="translate(598 214)">
+      <path d="M96 0 192 51 96 102 0 51Z" fill="#FFFFFF" stroke="#4169E1" stroke-width="1.5"/>
+      <text class="node-title" x="96" y="46" text-anchor="middle">Material unknowns</text><text class="body" x="96" y="65" text-anchor="middle">still change the whole?</text>
+    </g>
+    <g transform="translate(838 224)">
+      <rect width="210" height="82" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/>
+      <text class="node-title" x="14" y="35">Ask one dense round</text><text class="body" x="14" y="55">adaptive · consequential</text><text class="body" x="14" y="72">not a fixed questionnaire</text>
+    </g>
+    <g transform="translate(1096 224)">
+      <rect width="218" height="82" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/>
+      <text class="node-title" x="14" y="35">Update project truth</text><text class="body" x="14" y="55">facts · decisions · designs</text><text class="body" x="14" y="72">separate field dossiers</text>
+    </g>
+    <g transform="translate(1362 224)">
+      <rect width="150" height="82" rx="14" fill="#E3F3ED" stroke="#9AD8C2"/>
+      <text class="node-title" x="75" y="37" text-anchor="middle">Build-ready</text><text class="body" x="75" y="58" text-anchor="middle">candidate</text>
+    </g>
+    <path class="edge" d="M276 265H326"/><path class="edge" d="M550 265H598"/>
+    <path class="edge" d="M790 265H838"/><text class="label" x="804" y="253">YES</text>
+    <path class="edge" d="M1048 265H1096"/>
+    <path class="loop" d="M1205 306V354H694V316"/><text class="label" x="826" y="369" fill="#4169E1">RE-EVALUATE AFTER EVERY MATERIAL ANSWER</text>
+    <path class="edge" d="M694 214V205H1437V224"/><text class="label" x="814" y="198">NO · REMAINING GAPS ARE LOCAL OR USER ACCEPTS THE COST</text>
+  </g>
+
+  <!-- Keeper loop -->
+  <g>
+    <rect x="48" y="404" width="1504" height="246" rx="24" fill="#FBFAF6" stroke="#D8D3C8"/>
+    <rect x="48" y="404" width="12" height="246" rx="6" fill="#E88773"/>
+    <text class="eyebrow" x="86" y="437" fill="#A84D3C">02 · KEEPER LOOP</text>
+    <text class="band-title" x="86" y="466">A stranger must be able to start—otherwise the project is not ready.</text>
+    <g transform="translate(86 498)"><rect width="220" height="82" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/><text class="node-title" x="14" y="34">Validate + freeze digest</text><text class="body" x="14" y="55">PROJECT · designs · dossiers</text><text class="body" x="14" y="72">Work Map · first Task</text></g>
+    <g transform="translate(358 498)"><rect width="220" height="82" rx="14" fill="#FFFFFF" stroke="#E88773"/><rect x="14" y="13" width="94" height="20" rx="10" fill="#F9E4DE"/><text class="eyebrow" x="61" y="27" text-anchor="middle" fill="#A84D3C">FRESH AGENT</text><text class="node-title" x="14" y="55">Independently inspect</text><text class="body" x="14" y="72">same frozen project digest</text></g>
+    <g transform="translate(630 488)"><path d="M100 0 200 51 100 102 0 51Z" fill="#FFFFFF" stroke="#E88773" stroke-width="1.5"/><text class="node-title" x="100" y="46" text-anchor="middle">Can responsibly</text><text class="body" x="100" y="65" text-anchor="middle">start the first Task?</text></g>
+    <g transform="translate(882 498)"><rect width="220" height="82" rx="14" fill="#F9E4DE" stroke="#E88773"/><text class="node-title" x="14" y="34">Return exact gaps</text><text class="body" x="14" y="55">needs_revision / blocked</text><text class="body" x="14" y="72">evidence · files · consequences</text></g>
+    <g transform="translate(1154 498)"><rect width="180" height="82" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/><text class="node-title" x="14" y="34">Repair the source</text><text class="body" x="14" y="55">new digest</text><text class="body" x="14" y="72">different fresh Keeper</text></g>
+    <g transform="translate(1386 498)"><rect width="126" height="82" rx="14" fill="#E3F3ED" stroke="#9AD8C2"/><text class="node-title" x="63" y="37" text-anchor="middle">Passed</text><text class="body" x="63" y="58" text-anchor="middle">handoff once</text></g>
+    <path class="edge" d="M306 539H358"/><path class="edge" d="M578 539H630"/>
+    <path class="edge" d="M830 539H882"/><text class="label" x="846" y="527">NO</text><path class="edge" d="M1102 539H1154"/>
+    <path class="loop" d="M1244 580V616H468V580"/><text class="label" x="720" y="633" fill="#4169E1">REPAIR → NEW DIGEST → NEW RUN_ID → NEW KEEPER</text>
+    <path class="edge" d="M730 488V477H1449V498"/><text class="label" x="751" y="470">YES</text>
+  </g>
+
+  <!-- Delivery loop -->
+  <g>
+    <rect x="48" y="678" width="1504" height="270" rx="24" fill="#FBFAF6" stroke="#D8D3C8"/>
+    <rect x="48" y="678" width="12" height="270" rx="6" fill="#4169E1"/>
+    <text class="eyebrow" x="86" y="711" fill="#4169E1">03 · DELIVERY LOOP</text>
+    <text class="band-title" x="86" y="740">Each Task is a restartable checkpoint, not a miniature bureaucracy.</text>
+    <g transform="translate(86 772)"><rect width="180" height="82" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/><text class="node-title" x="14" y="34">Select next Task</text><text class="body" x="14" y="55">dependencies satisfied</text><text class="body" x="14" y="72">active horizon only</text></g>
+    <g transform="translate(310 772)"><rect width="210" height="82" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/><text class="node-title" x="14" y="34">Compile exact context</text><text class="body" x="14" y="55">declared reads · constraints</text><text class="body" x="14" y="72">done conditions · evidence</text></g>
+    <g transform="translate(564 772)"><rect width="190" height="82" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/><text class="node-title" x="14" y="34">Build → observe</text><text class="body" x="14" y="55">test → adjust</text><text class="body" x="14" y="72">keep local failures local</text></g>
+    <g transform="translate(798 762)"><path d="M90 0 180 51 90 102 0 51Z" fill="#FFFFFF" stroke="#4169E1" stroke-width="1.5"/><text class="node-title" x="90" y="46" text-anchor="middle">Done conditions</text><text class="body" x="90" y="65" text-anchor="middle">actually proven?</text></g>
+    <g transform="translate(1022 772)"><rect width="200" height="82" rx="14" fill="#E8ECFA" stroke="#4169E1"/><text class="node-title" x="14" y="34">Record exact evidence</text><text class="body" x="14" y="55">complete / block / reopen</text><text class="body" x="14" y="72">preserve what comes next</text></g>
+    <g transform="translate(1266 762)"><path d="M82 0 164 51 82 102 0 51Z" fill="#FFFFFF" stroke="#4169E1" stroke-width="1.5"/><text class="node-title" x="82" y="46" text-anchor="middle">More Tasks?</text><text class="body" x="82" y="65" text-anchor="middle">or new upper gap?</text></g>
+    <g transform="translate(1460 772)"><rect width="52" height="82" rx="14" fill="#17212B"/><path d="M17 41h18M28 30l11 11-11 11" fill="none" stroke="#F5F2EA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></g>
+    <path class="edge" d="M266 813H310"/><path class="edge" d="M520 813H564"/><path class="edge" d="M754 813H798"/>
+    <path class="edge" d="M978 813H1022"/><text class="label" x="986" y="801">YES</text><path class="edge" d="M1222 813H1266"/><path class="edge" d="M1430 813H1460"/><text class="label" x="1433" y="801">NO</text>
+    <path class="loop" d="M888 864V899H659V854"/><text class="label" x="716" y="917" fill="#4169E1">LOCAL NO · ITERATE</text>
+    <path class="loop" d="M1348 864V926H176V854"/><text class="label" x="672" y="940" fill="#4169E1">MORE TASKS · OR BLOCK → REPAIR UPPER SOURCE → REOPEN</text>
+  </g>
+  <text class="body" x="70" y="980">Solid line = forward handoff · Dashed cobalt = an explicit correction loop · Human interaction stays natural throughout.</text>
+</svg>

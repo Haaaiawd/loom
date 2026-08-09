@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moonwake.local/contracts/local-state.schema.json",
+  "title": "Moonwake last choice state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "projectLabel", "role", "outcome", "recordedAt"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "projectLabel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100,
+      "pattern": "^[^\\\\/:*?\"<>|]+$"
+    },
+    "role": { "enum": ["producer_designer", "programmer", "artist"] },
+    "outcome": { "enum": ["accepted", "skipped"] },
+    "candidateSnapshot": { "$ref": "#/$defs/candidateSnapshot" },
+    "recordedAt": { "type": "string", "format": "date-time" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "outcome": { "const": "accepted" } } },
+      "then": { "required": ["candidateSnapshot"] },
+      "else": { "not": { "required": ["candidateSnapshot"] } }
+    }
+  ],
+  "$defs": {
+    "candidateSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "actionType", "evidenceLocators"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^candidate:[a-z0-9-]+$" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 240 },
+        "actionType": { "enum": ["direct", "coordination", "clarification"] },
+        "evidenceLocators": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["file", "line"],
+            "properties": {
+              "file": { "enum": ["BACKLOG.md", "GIT_LOG.txt"] },
+              "line": { "type": "integer", "minimum": 1 }
+            }
+          }
+        }
+      }
+    }
+  }
+}

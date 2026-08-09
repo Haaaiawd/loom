@@ -1,0 +1,12 @@
+{
+  "reason": "The final visual and interactive acceptance criterion is only partially verified, so TASK-004 cannot remain complete.",
+  "recovery_conditions": [
+    "Capture and review shortfall, input-error, accepted, and restored states at 1280x720.",
+    "Record a complete keyboard-only core journey and a 200 percent zoom layout check.",
+    "Exercise the actual double-click launcher and interactive Ctrl+C shutdown on Windows 11."
+  ],
+  "evidence": [
+    "RESULT.md explicitly lists the missing checks.",
+    "prototype/evidence/visual-review.md covers only idle, programmer, and artist states."
+  ]
+}

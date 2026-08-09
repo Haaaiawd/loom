@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moonwake.local/contracts/evidence.schema.json",
+  "title": "Moonwake evidence bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "backlog", "recentChanges"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "backlog": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/backlogEvidence" }
+    },
+    "recentChanges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/gitEvidence" }
+    }
+  },
+  "$defs": {
+    "backlogLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "line"],
+      "properties": {
+        "file": { "const": "BACKLOG.md" },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "gitLocator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "line"],
+      "properties": {
+        "file": { "const": "GIT_LOG.txt" },
+        "line": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "backlogEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sourceType", "locator", "rawText", "kind", "text", "order"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^backlog:line:[1-9][0-9]*$" },
+        "sourceType": { "const": "backlog" },
+        "locator": { "$ref": "#/$defs/backlogLocator" },
+        "rawText": { "type": "string", "minLength": 1 },
+        "kind": { "const": "open_backlog_item" },
+        "text": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "gitEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sourceType", "locator", "rawText", "kind", "hash", "message", "order"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^git_log:line:[1-9][0-9]*$" },
+        "sourceType": { "const": "git_log" },
+        "locator": { "$ref": "#/$defs/gitLocator" },
+        "rawText": { "type": "string", "minLength": 1 },
+        "kind": { "const": "commit" },
+        "hash": { "type": "string", "pattern": "^[0-9a-fA-F]{7,40}$" },
+        "message": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

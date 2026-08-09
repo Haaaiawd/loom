@@ -1,0 +1,15 @@
+{
+  "name": "start-workbench-pilot-a",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local, offline, read-only morning workbench prototype",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js --open",
+    "test": "node --test tests/*.test.js",
+    "smoke": "node tests/smoke.js"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

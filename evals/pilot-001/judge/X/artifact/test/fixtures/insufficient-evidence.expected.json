@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "role": "artist",
+  "recentChanges": [],
+  "candidates": [
+    {
+      "id": "candidate:artist-archive-ambience-only",
+      "actionType": "direct",
+      "title": "Replace the flooded archive placeholder ambience",
+      "role": "artist",
+      "anchorEvidenceRef": "backlog:line:5",
+      "evidenceRefs": ["backlog:line:5"],
+      "reasons": [
+        {
+          "classification": "source_fact",
+          "text": "Replace placeholder ambience in the flooded archive.",
+          "evidenceRefs": ["backlog:line:5"]
+        }
+      ],
+      "unknowns": ["The desired ambience specification and acceptance criteria are unknown."],
+      "orderingReasons": [
+        {
+          "kind": "role_actionability",
+          "explanation": "This is the only direct artist anchor in the reduced evidence set.",
+          "evidenceRefs": ["backlog:line:5"]
+        }
+      ]
+    }
+  ],
+  "shortfall": {
+    "code": "insufficient_distinct_evidence",
+    "missingCount": 2,
+    "explanation": "Only one distinct backlog anchor supports an artist candidate; two slots remain empty rather than being padded."
+  }
+}

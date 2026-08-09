@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "role": "artist",
+  "recentChanges": [
+    { "evidenceRef": "git_log:line:1", "summary": "fix: preserve inventory after checkpoint reload" },
+    { "evidenceRef": "git_log:line:2", "summary": "feat: add ranged sentinel encounter" },
+    { "evidenceRef": "git_log:line:3", "summary": "art: update flooded archive lighting pass" },
+    { "evidenceRef": "git_log:line:4", "summary": "chore: bump internal build number" }
+  ],
+  "candidates": [
+    {
+      "id": "candidate:artist-archive-ambience",
+      "actionType": "direct",
+      "title": "Replace the flooded archive placeholder ambience",
+      "role": "artist",
+      "anchorEvidenceRef": "backlog:line:5",
+      "evidenceRefs": ["backlog:line:5"],
+      "reasons": [
+        {
+          "classification": "source_fact",
+          "text": "Replace placeholder ambience in the flooded archive.",
+          "evidenceRefs": ["backlog:line:5"]
+        },
+        {
+          "classification": "bounded_inference",
+          "text": "Replacing a named placeholder is plausibly actionable as an art-content task, but the desired asset specification is absent.",
+          "evidenceRefs": ["backlog:line:5"]
+        }
+      ],
+      "unknowns": ["The desired ambience specification and acceptance criteria are unknown."],
+      "orderingReasons": [
+        {
+          "kind": "role_actionability",
+          "explanation": "The item explicitly asks for placeholder ambience replacement and is directly relevant to the artist role.",
+          "evidenceRefs": ["backlog:line:5"]
+        }
+      ]
+    },
+    {
+      "id": "candidate:artist-capsule-images",
+      "actionType": "direct",
+      "title": "Prepare three capsule images for the internal playtest build",
+      "role": "artist",
+      "anchorEvidenceRef": "backlog:line:7",
+      "evidenceRefs": ["backlog:line:7"],
+      "reasons": [
+        {
+          "classification": "source_fact",
+          "text": "Prepare three capsule images for the next internal playtest build.",
+          "evidenceRefs": ["backlog:line:7"]
+        },
+        {
+          "classification": "bounded_inference",
+          "text": "Creating capsule images is plausibly actionable by the artist role; no delivery date is stated.",
+          "evidenceRefs": ["backlog:line:7"]
+        }
+      ],
+      "unknowns": ["Dimensions, visual brief, approval criteria, and build timing are unknown."],
+      "orderingReasons": [
+        {
+          "kind": "role_actionability",
+          "explanation": "The requested image preparation is directly relevant to the artist role.",
+          "evidenceRefs": ["backlog:line:7"]
+        }
+      ]
+    },
+    {
+      "id": "candidate:artist-save-risk-coordination",
+      "actionType": "coordination",
+      "title": "Confirm ownership and status of the save-corruption investigation",
+      "role": "artist",
+      "anchorEvidenceRef": "backlog:line:6",
+      "evidenceRefs": ["backlog:line:6"],
+      "reasons": [
+        {
+          "classification": "source_fact",
+          "text": "Investigate save corruption reported after force-closing during scene transition.",
+          "evidenceRefs": ["backlog:line:6"]
+        },
+        {
+          "classification": "bounded_inference",
+          "text": "This is not presented as artist-executable work, but the explicit corruption report supports checking that someone is investigating it.",
+          "evidenceRefs": ["backlog:line:6"]
+        }
+      ],
+      "unknowns": [
+        "The owner and current investigation status are unknown.",
+        "The impact and severity are not verified."
+      ],
+      "orderingReasons": [
+        {
+          "kind": "action_type",
+          "explanation": "A labelled cross-role coordination action follows the two direct artist candidates.",
+          "evidenceRefs": ["backlog:line:6"]
+        },
+        {
+          "kind": "explicit_risk_or_blocker",
+          "explanation": "The backlog explicitly reports corruption, making status confirmation defensible without assigning the specialist work to the artist.",
+          "evidenceRefs": ["backlog:line:6"]
+        }
+      ]
+    }
+  ]
+}
