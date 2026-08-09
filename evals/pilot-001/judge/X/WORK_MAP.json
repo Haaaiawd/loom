@@ -1,0 +1,318 @@
+{
+  "schema_version": 2,
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Create executable evidence and recommendation contracts",
+      "outcome": "Versioned JSON Schemas, programmer/artist sample expectations, and a Node test define how parsed evidence plus one fixed current role yields at most three traceable non-padded candidates.",
+      "done_when": [
+        "prototype/contracts/evidence.schema.json defines provenance-preserving backlog and Git evidence with schemaVersion 1.",
+        "prototype/contracts/recommendation.schema.json defines direct, coordination, clarification, source_fact, bounded_inference, unknowns, distinct evidence anchors, and explicit evidence-shortfall output.",
+        "programmer.expected.json proves save-corruption investigation first; artist.expected.json proves two direct art-relevant candidates plus a labelled cross-role coordination candidate.",
+        "The fixtures contain no invented owner, deadline, verified severity, dependency, or free-text goal interpretation.",
+        "Running `node --test prototype/test/contracts/recommendation-contract.test.mjs` from the condition root exits 0 and reports the contract cases passing."
+      ],
+      "boundaries": [
+        "Create contracts and their executable oracle only; do not implement the parser, recommendation engine, UI, server, persistence, or launch script.",
+        "Use only sample-project/BACKLOG.md and sample-project/GIT_LOG.txt as source evidence.",
+        "Do not revive evidence-grounded-triage as a capability; synthesis belongs to the recommendation design."
+      ],
+      "depends_on": [],
+      "reads": [
+        ".loom/PROJECT.md",
+        ".loom/design/input-parsing.md",
+        ".loom/design/evidence-recommendation.md",
+        ".loom/design/application-architecture-contracts.md",
+        ".loom/design/verification.md",
+        ".loom/capabilities/cognitive-psychology.md",
+        ".loom/capabilities/indie-game-production.md",
+        ".loom/capabilities/software-architecture.md",
+        ".loom/capabilities/application-security.md",
+        ".loom/capabilities/software-testing.md",
+        "sample-project/BACKLOG.md",
+        "sample-project/GIT_LOG.txt"
+      ],
+      "touches": [
+        "prototype/contracts/evidence.schema.json",
+        "prototype/contracts/recommendation.schema.json",
+        "prototype/test/fixtures/programmer.expected.json",
+        "prototype/test/fixtures/artist.expected.json",
+        "prototype/test/fixtures/insufficient-evidence.expected.json",
+        "prototype/test/contracts/recommendation-contract.test.mjs"
+      ],
+      "status": "done",
+      "progress": {
+        "completed": [
+          "Created schemaVersion 1 provenance-preserving evidence and recommendation JSON Schemas.",
+          "Created programmer, artist, and insufficient-evidence expected fixtures sourced from sample-project.",
+          "Created an executable Node contract oracle covering vocabulary, source fidelity, role outcomes, distinct anchors, and honest shortfall.",
+          "Ran the named contract command successfully: 5 tests passed, 0 failed."
+        ],
+        "current": "complete",
+        "next": ""
+      },
+      "evidence": [
+        {
+          "command": "node --test prototype/test/contracts/recommendation-contract.test.mjs",
+          "result": "exit 0; 5 tests passed, 0 failed",
+          "proves": "Schemas load; sample facts and Git summaries preserve provenance; programmer save-corruption investigation ranks first with bounded data-loss inference; artist receives two direct candidates plus labelled coordination; duplicate anchors and missing shortfall are rejected."
+        }
+      ],
+      "created_at": "2026-08-09T11:35:49.584Z",
+      "updated_at": "2026-08-09T12:22:01.141Z"
+    },
+    {
+      "id": "TASK-002",
+      "title": "Build the deterministic read-only analysis core",
+      "outcome": "Pure modules parse the supplied files and produce contract-valid recent changes and role-sensitive candidates without hardcoded sample output.",
+      "done_when": [
+        "Parser and recommendation unit tests cover valid, malformed, hostile, mutated, and insufficient-evidence inputs.",
+        "Programmer and artist outputs conform to TASK-001 contracts and fixtures while changed copied input changes output provenance.",
+        "`node --test prototype/test/contracts/recommendation-contract.test.mjs prototype/test/unit/*.test.mjs` exits 0."
+      ],
+      "boundaries": [
+        "No UI, state service, project writes, commands, network, clock, randomness, or real .git parsing.",
+        "Tests mutate copies, never sample-project."
+      ],
+      "depends_on": [
+        "TASK-001"
+      ],
+      "reads": [
+        ".loom/PROJECT.md",
+        ".loom/design/input-parsing.md",
+        ".loom/design/evidence-recommendation.md",
+        ".loom/design/application-architecture-contracts.md",
+        ".loom/design/verification.md",
+        ".loom/capabilities/indie-game-production.md",
+        ".loom/capabilities/software-architecture.md",
+        ".loom/capabilities/application-security.md",
+        ".loom/capabilities/software-testing.md",
+        "sample-project/BACKLOG.md",
+        "sample-project/GIT_LOG.txt",
+        "prototype/contracts/evidence.schema.json",
+        "prototype/contracts/recommendation.schema.json",
+        "prototype/test/fixtures/programmer.expected.json",
+        "prototype/test/fixtures/artist.expected.json",
+        "prototype/test/fixtures/insufficient-evidence.expected.json"
+      ],
+      "touches": [
+        "prototype/package.json",
+        "prototype/src/core/input-parser.mjs",
+        "prototype/src/core/recommendation.mjs",
+        "prototype/test/unit/input-parser.test.mjs",
+        "prototype/test/unit/recommendation.test.mjs",
+        "prototype/test/fixtures/negative/"
+      ],
+      "status": "done",
+      "progress": {
+        "completed": [
+          "Added TASK-001 contract and fixture outputs to the exact reads.",
+          "Implemented a pure size-limited BACKLOG.md and GIT_LOG.txt parser with stable provenance and typed errors/warnings.",
+          "Implemented deterministic fixed-role candidate generation with risk ordering, labelled supplementation, and honest shortfall.",
+          "Added unit and negative tests for valid, malformed, hostile, mutated, insufficient, duplicate, missing, and oversized inputs.",
+          "Ran the Task aggregate command successfully: 13 tests passed, 0 failed."
+        ],
+        "current": "complete",
+        "next": ""
+      },
+      "evidence": [
+        {
+          "command": "node --test prototype/test/contracts/recommendation-contract.test.mjs prototype/test/unit/*.test.mjs",
+          "result": "exit 0; 13 tests passed, 0 failed",
+          "proves": "Contract fixtures plus parser/recommendation behavior pass for sample, CRLF, hostile and malformed text, copied input mutation, insufficient evidence, invalid role, duplicate/missing files, and size limits."
+        }
+      ],
+      "created_at": "2026-08-09T11:35:49.585Z",
+      "updated_at": "2026-08-09T12:25:27.412Z"
+    },
+    {
+      "id": "TASK-003",
+      "title": "Build the two-minute UI, loopback service, and local state",
+      "outcome": "The browser journey reads a selected folder, changes candidates by fixed role, supports accept/skip, and restores valid local state through the narrow loopback service.",
+      "done_when": [
+        "All idle, reading, ready, error, shortfall, accepted, skipped, and restored states are reachable with keyboard-visible controls.",
+        "State writes conform to local-state.schema.json, remain under the explicit app data directory, and recover from corruption.",
+        "`node --test prototype/test/contracts/*.test.mjs prototype/test/unit/*.test.mjs prototype/test/integration/*.test.mjs` exits 0."
+      ],
+      "boundaries": [
+        "No free-text goal, external requests/assets, arbitrary path API, project persistence, or public listener.",
+        "Use Chromium directory selection; do not expand to an installer or desktop shell."
+      ],
+      "depends_on": [
+        "TASK-002"
+      ],
+      "reads": [
+        ".loom/PROJECT.md",
+        ".loom/design/product.md",
+        ".loom/design/ui-ux.md",
+        ".loom/design/visual-direction.md",
+        ".loom/design/local-state.md",
+        ".loom/design/application-architecture-contracts.md",
+        ".loom/design/verification.md",
+        ".loom/capabilities/ui-ux-design.md",
+        ".loom/capabilities/visual-art-direction.md",
+        ".loom/capabilities/cognitive-psychology.md",
+        ".loom/capabilities/software-architecture.md",
+        ".loom/capabilities/application-security.md",
+        ".loom/capabilities/software-testing.md",
+        "prototype/contracts/evidence.schema.json",
+        "prototype/contracts/recommendation.schema.json",
+        "prototype/src/core/input-parser.mjs",
+        "prototype/src/core/recommendation.mjs",
+        "prototype/test/unit/input-parser.test.mjs",
+        "prototype/test/unit/recommendation.test.mjs"
+      ],
+      "touches": [
+        "prototype/contracts/local-state.schema.json",
+        "prototype/src/server.mjs",
+        "prototype/src/state/store.mjs",
+        "prototype/src/ui/index.html",
+        "prototype/src/ui/styles.css",
+        "prototype/src/ui/app.mjs",
+        "prototype/test/contracts/local-state-contract.test.mjs",
+        "prototype/test/integration/state-service.test.mjs",
+        "prototype/test/integration/ui-flow.test.mjs"
+      ],
+      "status": "done",
+      "progress": {
+        "completed": [
+          "Added TASK-002 core and contract outputs to exact reads.",
+          "Implemented strict schemaVersion 1 accepted/skipped local state and atomic app-directory storage.",
+          "Implemented a token-protected 127.0.0.1-only static/state service with no arbitrary path API.",
+          "Implemented the folder/role/recent-change/candidate/accept/skip/restore browser journey and all specified recovery states.",
+          "Added contract and integration proof for persistence, restart, corruption, request boundaries, safe text rendering, keyboard controls, and responsive structure.",
+          "Ran the Task aggregate command successfully: 21 tests passed, 0 failed."
+        ],
+        "current": "complete",
+        "next": ""
+      },
+      "evidence": [
+        {
+          "command": "node --test prototype/test/contracts/*.test.mjs prototype/test/unit/*.test.mjs prototype/test/integration/*.test.mjs",
+          "result": "exit 0; 21 tests passed, 0 failed",
+          "proves": "All contract/core tests plus reachable UI states, strict local state, loopback/token/origin boundaries, restart persistence, corruption recovery, static delivery, safe text rendering, and unchanged sample inputs."
+        }
+      ],
+      "created_at": "2026-08-09T11:35:49.585Z",
+      "updated_at": "2026-08-09T13:20:16.440Z"
+    },
+    {
+      "id": "TASK-004",
+      "title": "Prove and package the Windows 11 vertical slice",
+      "outcome": "A double-click launch and reproducible evidence prove the full sample experience, local persistence, read-only project handling, loopback-only operation, and zero external requests.",
+      "done_when": [
+        "`npm test --prefix prototype` exits 0.",
+        "`node prototype/scripts/verify-readonly.mjs sample-project` exits 0 with matching before/after hashes.",
+        "`node prototype/scripts/verify-offline.mjs` exits 0 with no external request.",
+        "`powershell -NoProfile -ExecutionPolicy Bypass -File prototype/scripts/smoke-launch.ps1` exits 0 and records ready, loopback URL, state round trip, and graceful shutdown.",
+        "Idle, programmer, artist, shortfall, error, accepted, and restored screenshots pass review at 1280x720; keyboard and 200% zoom checks are recorded."
+      ],
+      "boundaries": [
+        "Do not claim real .git, non-Chromium browser, multiplayer, installation, or arbitrary project-format support.",
+        "Do not terminate unrelated Node processes or delete user state automatically."
+      ],
+      "depends_on": [
+        "TASK-003"
+      ],
+      "reads": [
+        ".loom/PROJECT.md",
+        ".loom/design/verification.md",
+        ".loom/design/windows-launch-operations.md",
+        ".loom/design/ui-ux.md",
+        ".loom/design/visual-direction.md",
+        ".loom/design/application-architecture-contracts.md",
+        ".loom/capabilities/ui-ux-design.md",
+        ".loom/capabilities/visual-art-direction.md",
+        ".loom/capabilities/application-security.md",
+        ".loom/capabilities/software-testing.md",
+        "sample-project/BACKLOG.md",
+        "sample-project/GIT_LOG.txt",
+        "prototype/contracts/evidence.schema.json",
+        "prototype/contracts/recommendation.schema.json",
+        "prototype/contracts/local-state.schema.json",
+        "prototype/src/core/input-parser.mjs",
+        "prototype/src/core/recommendation.mjs",
+        "prototype/src/state/store.mjs",
+        "prototype/src/server.mjs",
+        "prototype/src/ui/index.html",
+        "prototype/src/ui/styles.css",
+        "prototype/src/ui/app.mjs",
+        "prototype/test/contracts/recommendation-contract.test.mjs",
+        "prototype/test/contracts/local-state-contract.test.mjs",
+        "prototype/test/unit/input-parser.test.mjs",
+        "prototype/test/unit/recommendation.test.mjs",
+        "prototype/test/integration/state-service.test.mjs",
+        "prototype/test/integration/ui-flow.test.mjs"
+      ],
+      "touches": [
+        "prototype/start-prototype.cmd",
+        "prototype/scripts/verify-readonly.mjs",
+        "prototype/scripts/verify-offline.mjs",
+        "prototype/scripts/smoke-launch.ps1",
+        "prototype/test/e2e/",
+        "prototype/evidence/"
+      ],
+      "status": "blocked",
+      "progress": {
+        "completed": [
+          "Replaced directory-level Task reads with six exact test-file reads; task context and loom check returned healthy.",
+          "Implemented the Windows double-click entry and interactive launcher.",
+          "Implemented independent read-only, offline, loopback readiness/state/shutdown proof scripts.",
+          "Ran npm aggregate tests successfully: 21 passed, 0 failed.",
+          "Ran read-only verification successfully with matching before/after SHA-256.",
+          "Ran offline verification successfully with zero external requests.",
+          "Ran Windows smoke successfully with Node version, assigned loopback URL, state round trip, and graceful shutdown.",
+          "Captured and visually inspected real Chromium idle, programmer, and artist states at a 1280 x 720 viewport."
+        ],
+        "current": "blocked: The final visual and interactive acceptance criterion is only partially verified, so TASK-004 cannot remain complete.",
+        "next": "Capture and review shortfall, input-error, accepted, and restored states at 1280x720.; Record a complete keyboard-only core journey and a 200 percent zoom layout check.; Exercise the actual double-click launcher and interactive Ctrl+C shutdown on Windows 11."
+      },
+      "evidence": [
+        {
+          "command": "npm test --prefix prototype",
+          "result": "exit 0; 21 passed, 0 failed",
+          "proves": "Contracts, parser/recommendation behavior, loopback state service, persistence/corruption recovery, request boundaries, and UI code-path assertions."
+        },
+        {
+          "command": "node prototype/scripts/verify-readonly.mjs sample-project",
+          "result": "exit 0; before and after SHA-256 both 3e56ef730cd38618c3ab8cec406f4bb2011a9592c0a057ce6bcca48da00ee482",
+          "proves": "The sample analysis path did not mutate sample-project."
+        },
+        {
+          "command": "node prototype/scripts/verify-offline.mjs",
+          "result": "exit 0; loopback_requests=5, external_requests=0",
+          "proves": "The verification flow loaded the local page and four local assets with no external request."
+        },
+        {
+          "command": "powershell -NoProfile -ExecutionPolicy Bypass -File prototype/scripts/smoke-launch.ps1",
+          "result": "exit 0; Node v22.16.0, assigned 127.0.0.1 URL, state round trip, graceful shutdown",
+          "proves": "The Windows smoke path starts the service, exercises state, and closes it gracefully."
+        },
+        {
+          "artifact": "prototype/evidence/visual-review.md",
+          "result": "Real Chromium 1280 x 720 visual inspection passed for idle, programmer, and artist screenshots. Shortfall, input-error, accepted, restored, keyboard-only, 200 percent zoom, and actual wrapper interaction remain explicitly unverified.",
+          "proves": "Partial visual acceptance only; no claim is made for the unverified states."
+        },
+        {
+          "type": "completion_reopened",
+          "reason": "Visual and interactive acceptance was only partially verified.",
+          "at": "2026-08-09T13:35:24.113Z"
+        },
+        "RESULT.md explicitly lists the missing checks.",
+        "prototype/evidence/visual-review.md covers only idle, programmer, and artist states."
+      ],
+      "created_at": "2026-08-09T11:35:49.585Z",
+      "updated_at": "2026-08-09T13:35:24.427Z",
+      "reopened_at": "2026-08-09T13:35:24.114Z",
+      "block": {
+        "reason": "The final visual and interactive acceptance criterion is only partially verified, so TASK-004 cannot remain complete.",
+        "recovery_conditions": [
+          "Capture and review shortfall, input-error, accepted, and restored states at 1280x720.",
+          "Record a complete keyboard-only core journey and a 200 percent zoom layout check.",
+          "Exercise the actual double-click launcher and interactive Ctrl+C shutdown on Windows 11."
+        ],
+        "at": "2026-08-09T13:35:24.427Z"
+      }
+    }
+  ]
+}

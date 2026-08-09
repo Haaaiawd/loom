@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="860" viewBox="0 0 1600 860" role="img" aria-labelledby="title desc">
+  <title id="title">LOOM Evil Eval</title>
+  <desc id="desc">A controlled comparison between the same capable Agent without a framework and with LOOM, followed by blinded judging and ablation.</desc>
+  <defs>
+    <marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#17212B"/></marker>
+    <marker id="ba" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto"><path d="M0 0 10 5 0 10Z" fill="#4169E1"/></marker>
+    <style>text{font-family:Inter,Segoe UI,Arial,sans-serif;fill:#17212B}.title{font-size:34px;font-weight:760}.subtitle{font-size:16px;fill:#58636D}.eyebrow{font-size:11px;font-weight:760;letter-spacing:1.35px}.h{font-size:16px;font-weight:720}.body{font-size:12px;fill:#58636D}.small{font-size:11px;font-weight:690}.inverse{fill:#F5F2EA}.mint{fill:#9AD8C2}.edge{fill:none;stroke:#17212B;stroke-width:2.2;marker-end:url(#a)}.feedback{fill:none;stroke:#4169E1;stroke-width:2.3;stroke-dasharray:7 7;marker-end:url(#ba)}</style>
+  </defs>
+  <rect width="1600" height="860" fill="#F5F2EA"/>
+  <text class="title" x="70" y="62">The Evil Eval: does LOOM cause the gain?</text>
+  <text class="subtitle" x="70" y="92">Primary comparison: the same capable Agent, with and without the framework—not LOOM 2 versus its weaker ancestor.</text>
+
+  <rect x="70" y="128" width="1460" height="92" rx="20" fill="#17212B"/>
+  <text class="eyebrow mint" x="98" y="158">FREEZE EVERYTHING EXCEPT THE TREATMENT</text>
+  <g font-family="ui-monospace,SFMono-Regular,Consolas,monospace" font-size="13">
+    <text class="inverse" x="98" y="190">same model</text><text class="inverse" x="264" y="190">same tools</text><text class="inverse" x="416" y="190">same workspace</text><text class="inverse" x="600" y="190">same hidden user facts</text><text class="inverse" x="846" y="190">same budget</text><text class="inverse" x="996" y="190">same reset schedule</text><text class="inverse" x="1240" y="190">≥ 3 repeats</text>
+  </g>
+
+  <!-- parallel lanes -->
+  <g>
+    <rect x="70" y="258" width="702" height="276" rx="22" fill="#FBFAF6" stroke="#D8D3C8"/>
+    <rect x="70" y="258" width="10" height="276" rx="5" fill="#C7C2B8"/>
+    <rect x="828" y="258" width="702" height="276" rx="22" fill="#FBFAF6" stroke="#D8D3C8"/>
+    <rect x="828" y="258" width="10" height="276" rx="5" fill="#4169E1"/>
+    <text class="eyebrow" x="104" y="292" fill="#58636D">A · BASELINE</text><text class="h" x="104" y="320">Normal Agent, no LOOM</text>
+    <text class="eyebrow" x="862" y="292" fill="#4169E1">B · TREATMENT</text><text class="h" x="862" y="320">Same Agent, LOOM available</text>
+    <g transform="translate(104 352)"><rect width="176" height="88" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/><text class="h" x="14" y="33">Shape the project</text><text class="body" x="14" y="55">questions · decisions</text><text class="body" x="14" y="72">plans · documents</text></g>
+    <g transform="translate(332 352)"><rect width="176" height="88" rx="14" fill="#F9E4DE" stroke="#E88773"/><text class="h" x="14" y="33">Force reset</text><text class="body" x="14" y="55">after shaping</text><text class="body" x="14" y="72">and mid-Task</text></g>
+    <g transform="translate(560 352)"><rect width="176" height="88" rx="14" fill="#FFFFFF" stroke="#C7C2B8"/><text class="h" x="14" y="33">Fresh Agent</text><text class="body" x="14" y="55">continue from disk</text><text class="body" x="14" y="72">build vertical slice</text></g>
+    <path class="edge" d="M280 396H332"/><path class="edge" d="M508 396H560"/>
+    <g transform="translate(862 352)"><rect width="176" height="88" rx="14" fill="#FFFFFF" stroke="#4169E1"/><text class="h" x="14" y="33">Shape with LOOM</text><text class="body" x="14" y="55">same brief and Agent</text><text class="body" x="14" y="72">treatment only</text></g>
+    <g transform="translate(1090 352)"><rect width="176" height="88" rx="14" fill="#F9E4DE" stroke="#E88773"/><text class="h" x="14" y="33">Force reset</text><text class="body" x="14" y="55">identical timing</text><text class="body" x="14" y="72">identical budget</text></g>
+    <g transform="translate(1318 352)"><rect width="176" height="88" rx="14" fill="#E8ECFA" stroke="#4169E1"/><text class="h" x="14" y="33">Fresh Agent</text><text class="body" x="14" y="55">use LOOM disk truth</text><text class="body" x="14" y="72">build vertical slice</text></g>
+    <path class="edge" d="M1038 396H1090"/><path class="edge" d="M1266 396H1318"/>
+    <text class="small" x="104" y="483">COLLECT</text><text class="body" x="104" y="505">questions · docs · code · tests · time · tokens · user burden · failure recovery</text>
+    <text class="small" x="862" y="483">COLLECT</text><text class="body" x="862" y="505">the same artifact classes, under the same stopping rule</text>
+  </g>
+
+  <!-- judging -->
+  <g>
+    <path class="edge" d="M421 534V580H590"/><path class="edge" d="M1179 534V580H1010"/>
+    <rect x="590" y="558" width="420" height="108" rx="20" fill="#FFFFFF" stroke="#E88773" stroke-width="1.5"/>
+    <text class="eyebrow" x="800" y="588" text-anchor="middle" fill="#A84D3C">BLIND PAIRWISE JUDGE</text>
+    <text class="h" x="800" y="617" text-anchor="middle">Anonymize → randomize → swap order</text>
+    <text class="body" x="800" y="642" text-anchor="middle">Preflight the judge packet; broken harness evidence cannot become product evidence.</text>
+  </g>
+  <g transform="translate(122 708)">
+    <rect width="278" height="84" rx="16" fill="#FFFFFF" stroke="#C7C2B8"/>
+    <text class="eyebrow" x="16" y="26" fill="#58636D">SCORE NET VALUE</text><text class="body" x="16" y="49">intent · question value · buildability</text><text class="body" x="16" y="67">continuity · burden · cost · ceremony</text>
+  </g>
+  <g transform="translate(522 698)"><path d="M114 0 228 52 114 104 0 52Z" fill="#FFFFFF" stroke="#4169E1" stroke-width="1.5"/><text class="h" x="114" y="48" text-anchor="middle">Reliable net gain?</text><text class="body" x="114" y="68" text-anchor="middle">across repeats</text></g>
+  <g transform="translate(872 708)"><rect width="250" height="84" rx="16" fill="#E3F3ED" stroke="#9AD8C2"/><text class="eyebrow" x="16" y="26" fill="#367D67">YES · ABLATE</text><text class="h" x="16" y="50">Find the causal mechanism</text><text class="body" x="16" y="69">keep only what creates the gain</text></g>
+  <g transform="translate(1234 708)"><rect width="250" height="84" rx="16" fill="#F9E4DE" stroke="#E88773"/><text class="eyebrow" x="16" y="26" fill="#A84D3C">NO · BE EVIL</text><text class="h" x="16" y="50">Simplify, revise, or delete</text><text class="body" x="16" y="69">ceremony gets no sympathy</text></g>
+  <path class="edge" d="M590 634H261V708"/><path class="edge" d="M400 750H522"/><path class="edge" d="M750 750H872"/><text class="small" x="792" y="738">YES</text><path class="edge" d="M636 802V826H1359V792"/><text class="small" x="664" y="820">NO</text>
+  <text class="body" x="70" y="842">A single pilot is directional evidence, not a statistical conclusion. Optional LOOM 1 runs are regression checks—not the primary baseline.</text>
+</svg>

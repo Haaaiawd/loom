@@ -1,0 +1,140 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://moonwake.local/contracts/recommendation.schema.json",
+  "title": "Moonwake role-sensitive recommendation set",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "role", "recentChanges", "candidates"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "role": { "$ref": "#/$defs/role" },
+    "recentChanges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/recentChange" }
+    },
+    "candidates": {
+      "type": "array",
+      "maxItems": 3,
+      "items": { "$ref": "#/$defs/candidate" }
+    },
+    "shortfall": { "$ref": "#/$defs/shortfall" }
+  },
+  "if": {
+    "properties": { "candidates": { "maxItems": 2 } }
+  },
+  "then": { "required": ["shortfall"] },
+  "else": { "not": { "required": ["shortfall"] } },
+  "$defs": {
+    "role": {
+      "enum": ["producer_designer", "programmer", "artist"]
+    },
+    "evidenceRef": {
+      "type": "string",
+      "pattern": "^(backlog|git_log):line:[1-9][0-9]*$"
+    },
+    "recentChange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidenceRef", "summary"],
+      "properties": {
+        "evidenceRef": {
+          "type": "string",
+          "pattern": "^git_log:line:[1-9][0-9]*$"
+        },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "text", "evidenceRefs"],
+      "properties": {
+        "classification": {
+          "enum": ["source_fact", "bounded_inference"]
+        },
+        "text": { "type": "string", "minLength": 1 },
+        "evidenceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/evidenceRef" }
+        }
+      }
+    },
+    "orderingReason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "explanation"],
+      "properties": {
+        "kind": {
+          "enum": ["role_actionability", "explicit_risk_or_blocker", "action_type", "recent_context"]
+        },
+        "explanation": { "type": "string", "minLength": 1 },
+        "evidenceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/evidenceRef" }
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "actionType",
+        "title",
+        "role",
+        "anchorEvidenceRef",
+        "evidenceRefs",
+        "reasons",
+        "unknowns",
+        "orderingReasons"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^candidate:[a-z0-9-]+$" },
+        "actionType": {
+          "enum": ["direct", "coordination", "clarification"]
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "role": { "$ref": "#/$defs/role" },
+        "anchorEvidenceRef": {
+          "type": "string",
+          "pattern": "^backlog:line:[1-9][0-9]*$"
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/evidenceRef" }
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/reason" }
+        },
+        "unknowns": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "orderingReasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/orderingReason" }
+        }
+      }
+    },
+    "shortfall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "missingCount", "explanation"],
+      "properties": {
+        "code": { "const": "insufficient_distinct_evidence" },
+        "missingCount": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "explanation": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

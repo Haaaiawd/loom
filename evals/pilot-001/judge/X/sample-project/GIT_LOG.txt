@@ -1,0 +1,4 @@
+9d7a4c1 fix: preserve inventory after checkpoint reload
+7b210ee feat: add ranged sentinel encounter
+32c1ae8 art: update flooded archive lighting pass
+11d9f42 chore: bump internal build number

@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "role": "programmer",
+  "recentChanges": [
+    { "evidenceRef": "git_log:line:1", "summary": "fix: preserve inventory after checkpoint reload" },
+    { "evidenceRef": "git_log:line:2", "summary": "feat: add ranged sentinel encounter" },
+    { "evidenceRef": "git_log:line:3", "summary": "art: update flooded archive lighting pass" },
+    { "evidenceRef": "git_log:line:4", "summary": "chore: bump internal build number" }
+  ],
+  "candidates": [
+    {
+      "id": "candidate:programmer-save-corruption",
+      "actionType": "direct",
+      "title": "Investigate the reported save corruption after force-close",
+      "role": "programmer",
+      "anchorEvidenceRef": "backlog:line:6",
+      "evidenceRefs": ["backlog:line:6"],
+      "reasons": [
+        {
+          "classification": "source_fact",
+          "text": "Investigate save corruption reported after force-closing during scene transition.",
+          "evidenceRefs": ["backlog:line:6"]
+        },
+        {
+          "classification": "bounded_inference",
+          "text": "If reproducible, this may risk player data loss; the source does not verify that outcome.",
+          "evidenceRefs": ["backlog:line:6"]
+        }
+      ],
+      "unknowns": [
+        "The cause and reproduction steps are unknown.",
+        "The impact and severity are not verified."
+      ],
+      "orderingReasons": [
+        {
+          "kind": "role_actionability",
+          "explanation": "Investigation of save behavior is plausibly actionable by the programmer role.",
+          "evidenceRefs": ["backlog:line:6"]
+        },
+        {
+          "kind": "explicit_risk_or_blocker",
+          "explanation": "The backlog explicitly reports corruption after a force-close, so it precedes routine repair work.",
+          "evidenceRefs": ["backlog:line:6"]
+        }
+      ]
+    },
+    {
+      "id": "candidate:programmer-camera-jitter",
+      "actionType": "direct",
+      "title": "Repair the boss-arena camera jitter at the north trigger",
+      "role": "programmer",
+      "anchorEvidenceRef": "backlog:line:3",
+      "evidenceRefs": ["backlog:line:3"],
+      "reasons": [
+        {
+          "classification": "source_fact",
+          "text": "Fix boss-arena camera jitter when the player crosses the north trigger.",
+          "evidenceRefs": ["backlog:line:3"]
+        },
+        {
+          "classification": "bounded_inference",
+          "text": "The defect description provides a specific interaction to reproduce, but its cause is not established.",
+          "evidenceRefs": ["backlog:line:3"]
+        }
+      ],
+      "unknowns": ["The cause, affected builds, and reproduction consistency are unknown."],
+      "orderingReasons": [
+        {
+          "kind": "role_actionability",
+          "explanation": "Camera behavior repair is plausibly actionable by the programmer role.",
+          "evidenceRefs": ["backlog:line:3"]
+        }
+      ]
+    },
+    {
+      "id": "candidate:programmer-tutorial-clarification",
+      "actionType": "clarification",
+      "title": "Clarify the intended tutorial order before implementation",
+      "role": "programmer",
+      "anchorEvidenceRef": "backlog:line:4",
+      "evidenceRefs": ["backlog:line:4"],
+      "reasons": [
+        {
+          "classification": "source_fact",
+          "text": "Decide whether the tutorial should teach dodge before or after the first ranged enemy.",
+          "evidenceRefs": ["backlog:line:4"]
+        },
+        {
+          "classification": "bounded_inference",
+          "text": "The word 'Decide' indicates an unresolved design choice, so implementation details should not be assumed.",
+          "evidenceRefs": ["backlog:line:4"]
+        }
+      ],
+      "unknowns": ["The intended teaching order and decision-maker are unknown."],
+      "orderingReasons": [
+        {
+          "kind": "action_type",
+          "explanation": "A labelled clarification follows the two directly actionable programmer items.",
+          "evidenceRefs": ["backlog:line:4"]
+        }
+      ]
+    }
+  ]
+}

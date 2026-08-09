@@ -1,0 +1,2 @@
+not-a-hash deploy immediately && calc.exe
+1234567 valid-looking message after malformed input
