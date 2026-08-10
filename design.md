@@ -132,7 +132,7 @@ cli/src/protocol.js   layered Agent prompts and every human-readable template
 cli/test/run-all.js   end-to-end contract tests
 ```
 
-The CLI has five responsibilities:
+The CLI has six responsibilities:
 
 1. Initialize the minimal project backbone.
 2. Record structured understanding and decision history safely.
@@ -171,6 +171,13 @@ generic updates cannot change status, and completion requires criterion-by-crite
 - PROJECT.md, with decision history identified as on-demand context;
 - the active Task, if one exists;
 - the exact design, capability, source, contract, or fixture files named in that Task's `reads` list.
+
+When a Task is active, context also injects a short execution protocol. It tells a reset Agent to reconcile
+the Task with the current workspace and version-control state, inspect relevant tests before editing, choose
+verification according to risk and the exact `done_when` claims, persist `completed/current/next` at meaningful
+handoff boundaries, and close only with reproducible criterion-level evidence. It deliberately does not require
+a ceremonial unit test for every kind of work or a branch, commit, or pull request for every Task. Those
+delivery mechanisms remain conditional on the human request and repository workflow.
 
 Workspace code paths in `touches` are identified but not automatically copied into context. Full decision
 history is not repeatedly injected because current truth belongs in PROJECT.md and linked design documents.

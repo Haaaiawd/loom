@@ -81,12 +81,55 @@ repair affected documents and Tasks before continuing.`;
 
 export const AGENT_PROTOCOL = `${AGENT_CORE}\n\n${RUNTIME_PROTOCOL}`;
 
+export const EXECUTION_PROTOCOL = `# LOOM active Task execution protocol
+
+This block applies only when a Task is active or explicitly loaded. Treat the disk state below as the
+recovery source; conversation memory may be incomplete.
+
+## Recover before changing anything
+
+1. Re-read the Task outcome, exact done_when criteria, boundaries, dependencies, reads, expected
+   touches, progress, next action, and existing evidence. Read every injected Task context file.
+2. Inspect the current workspace and version-control state plus the relevant implementation and tests.
+   Preserve user changes. If the Task conflicts with discoverable reality, update or block the Task instead
+   of silently following stale context or inventing missing facts.
+3. Resume from progress.next when it remains valid. Otherwise choose the smallest complete next action
+   that advances the outcome and can be checked against a done condition.
+
+## Build and prove the smallest complete change
+
+- Stay inside the outcome and boundaries. If implementation requires a wider system, authority, risk, or
+  file surface than the Task describes, repair the Task or upstream design first.
+- Inspect the relevant existing tests before editing. When observable behavior changes and a stable test
+  seam exists, add or update the smallest test that can fail for the missing behavior, then implement and
+  run it. Documentation, research, configuration, and operational Tasks use the verification appropriate
+  to their claim; do not manufacture a ceremonial unit test.
+- Iterate on local failures while the Task remains active. If the failure exposes an upstream design gap,
+  unavailable authority, or external dependency, block with concrete recovery conditions rather than
+  broadening scope invisibly.
+
+## Leave a restartable handoff
+
+- After a material checkpoint, before an expected context reset, or when handing work to another Agent,
+  persist concise completed, current, and executable next progress with loom task update.
+  Record evidence only after the referenced command, artifact, or observation actually exists.
+- Complete through loom task done only after every exact done_when criterion has reproducible
+  evidence. Report known blind spots and unverified boundaries honestly.
+- A branch, commit, or pull request is a delivery mechanism, not a universal Task requirement. Create one
+  when the human or repository workflow asks for it, map it to the Task outcome, and include the verification
+  evidence; do not use a PR to disguise an incomplete Task.
+
+Do not narrate this protocol to the human unless it helps them understand a decision, risk, or handoff.`;
+
 export const AGENT_ANCHOR = `<!-- loom:v2 -->
 ## LOOM
 
-This project uses LOOM as Agent-only continuity infrastructure. Run \`loom context\` before substantial
-work, keep project truth, design documents, professional capability dossiers, and Tasks current through
-the CLI, and never ask the human to operate LOOM.`;
+This project uses LOOM as Agent-only continuity infrastructure. Run \`loom context\` when entering the
+project, after a context reset, and before substantial work. When a Task is active, the command restores
+its execution protocol, exact state, and declared context; rerun it before editing after any interruption.
+Keep project truth, design documents, professional capability dossiers, and Tasks current through the CLI,
+and never ask the human to operate LOOM. Do not rerun LOOM before every tool call: persist and restore at
+meaningful work boundaries.`;
 
 function renderKeeperGap(item) {
   if (typeof item === 'string') return `  - ${item}`;
@@ -338,6 +381,7 @@ export function promptCatalog() {
     layers: {
       stable_core: AGENT_CORE,
       runtime_protocol: RUNTIME_PROTOCOL,
+      execution_protocol: EXECUTION_PROTOCOL,
       project_state: shapingContext({ state: placeholderState, taskSummary: { total: 0, done: 0, open: 0, blocked: 0, active: null }, capabilityNames: [], designNames: [] }),
       project_state_after_keeper_failure: shapingContext({ state: revisionState, taskSummary: { total: 1, done: 0, open: 1, blocked: 0, active: null }, capabilityNames: ['<field>.md'], designNames: ['<system>.md'] }),
       keeper_review_of_prior_failure: shapingContext({ state: revisionState, taskSummary: { total: 1, done: 0, open: 1, blocked: 0, active: null }, capabilityNames: ['<field>.md'], designNames: ['<system>.md'], forKeeper: true }),
@@ -360,7 +404,7 @@ export function promptCatalog() {
     },
     composition: {
       normal_resume: ['stable_core', 'runtime_protocol', 'project_state', 'PROJECT.md', 'on-demand document and capability map'],
-      active_task: ['normal_resume', 'active Task JSON', 'exact files in Task.reads'],
+      active_task: ['normal_resume', 'execution_protocol', 'active Task JSON', 'exact files in Task.reads'],
       keeper_handoff: ['keeper', 'normal_resume', 'DECISIONS.md', 'Work Map summary and first executable Task', 'all design documents', 'all professional capability dossiers'],
     },
   };
