@@ -91,6 +91,8 @@ loom init
 loom context
 ```
 
+当存在活跃 Task 时，`loom context` 还会恢复一段紧凑的执行协议：先把 Task 与当前工作区和版本控制状态校准，编辑前检查相关测试，根据风险和精确的 `done_when` 选择证据，在重要交接点写回 `completed/current/next`，最后只用可复现证据关闭 Task。它不会为了形式感强迫所有工作都写一个测试或开一个 PR。
+
 Agent 将 `.loom/PROJECT.md`、设计文档和能力卷宗作为人类可读的项目事实维护。结构化写入通过 JSON 文件完成，让长内容可以审计，也避免 shell 引号损坏数据：
 
 ```bash

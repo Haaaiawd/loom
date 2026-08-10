@@ -31,9 +31,9 @@ already exist in the registry.
 ## 3. Publish deliberately
 
 ```bash
-git tag v2.0.0
+git tag v2.0.1
 git push origin HEAD
-git push origin v2.0.0
+git push origin v2.0.1
 npm publish --access public
 ```
 
@@ -46,7 +46,7 @@ In a clean temporary directory:
 
 ```bash
 npm view @haaaiawd/loom version
-npx @haaaiawd/loom@2.0.0 --version
+npx @haaaiawd/loom@2.0.1 --version
 ```
 
 Then open the GitHub README and npm package page to confirm the SVG header, diagrams, links, and changelog

@@ -55,6 +55,7 @@ test('init creates one small, human-readable project skeleton', () => {
   assert(existsSync(join(root, '.loom', 'capabilities')), 'capability directory missing');
   assert(!existsSync(join(root, '.loom', 'v1')), 'v2 must not recreate version ceremony');
   assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('loom context'), 'Agent anchor missing');
+  assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('after a context reset'), 'Agent recovery trigger missing');
   assert(JSON.parse(run(root, ['init'])).reason === 'already_initialized', 'repeat init should be safe');
 });
 
@@ -67,8 +68,11 @@ test('context teaches adaptive question judgment without a fixed questionnaire',
   assert(context.includes('The human talks naturally to you'), 'invisible CLI boundary missing');
   assert(context.includes('one recognizable field'), 'professional field boundary missing');
   assert(context.includes('Do not compress a complex product into PROJECT.md'), 'document graph rule missing');
+  assert(!context.includes('# LOOM active Task execution protocol'), 'execution protocol inflated shaping context');
   const prompts = JSON.parse(run(root, ['prompts']));
   assert(prompts.layers.stable_core.includes('consequential'), 'stable prompt layer missing');
+  assert(prompts.layers.execution_protocol.includes('Recover before changing anything'), 'execution prompt layer missing');
+  assert(prompts.composition.active_task.includes('execution_protocol'), 'execution prompt is not composed into active Tasks');
   assert(Object.keys(prompts.templates.design_documents).length === 7, 'design prompt inventory incomplete');
   assert(prompts.evaluation.blind_judge.includes('anonymized runs'), 'eval prompt inventory incomplete');
   assert(!context.includes('Capability Graph'), 'legacy ceremony leaked into v2 context');
@@ -198,6 +202,10 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   assert(JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8')).project.status === 'building', 'Task start should enter building state');
   const context = run(root, ['context']);
   assert(context.includes('## Active Task'), 'active Task missing from context');
+  assert(context.includes('# LOOM active Task execution protocol'), 'active Task execution protocol missing');
+  assert(context.includes('Inspect the current workspace and version-control state'), 'workspace recovery rule missing');
+  assert(context.includes('do not manufacture a ceremonial unit test'), 'risk-based test rule missing');
+  assert(context.includes('A branch, commit, or pull request is a delivery mechanism'), 'PR boundary missing');
   assert(context.includes('Human-Agent Interaction'), 'relevant capability was not compiled');
   assert(context.includes('restartable checkpoint'), 'project-specific stance was not injected');
   assert(context.includes('forced-reset handoff'), 'workspace fixture was not compiled');
@@ -255,7 +263,7 @@ test('help and source surface stay minimal', () => {
   const help = run(root, ['--help']);
   for (const command of ['loom context', 'loom prompts', 'loom record', 'loom design add', 'loom capability add', 'loom task plan', 'loom keeper prompt', 'loom eval scaffold']) assert(help.includes(command), `${command} missing`);
   for (const legacy of ['Intent Map', 'Capability Graph', 'Atelier', 'Atlas', 'Weaver', 'Forge']) assert(!help.includes(legacy), `${legacy} leaked into minimal help`);
-  assert(run(root, ['--version']) === 'loom 2.0.0', 'version mismatch');
+  assert(run(root, ['--version']) === 'loom 2.0.1', 'version mismatch');
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });

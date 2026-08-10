@@ -109,6 +109,11 @@ loom init
 loom context
 ```
 
+When a Task is active, `loom context` also restores a compact execution protocol: reconcile the Task with
+the current workspace and version-control state, inspect relevant tests before editing, choose proof by risk
+and exact `done_when` claims, persist `completed/current/next` at meaningful handoffs, and close only with
+reproducible evidence. It does not impose a ceremonial test or pull request on work that does not need one.
+
 The Agent edits `.loom/PROJECT.md`, design documents, and capability dossiers as human-readable project truth. Structured
 writes use JSON files so long content remains auditable and shell quoting does not corrupt it:
 

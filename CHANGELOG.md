@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.0.1
+
+- Added an active-Task execution protocol that restores workspace-aware coding guidance, risk-based testing, restartable progress, criterion-level proof, and conditional commit/PR boundaries after context resets.
+- Strengthened the generated `AGENTS.md` anchor so Agents reload LOOM at project entry, after context loss, and before resumed editing without invoking it before every tool call.
+
 ## 2.0.0
 
 - Rebuilt LOOM as invisible Agent infrastructure around project understanding, a scalable design-document graph, separate professional-field dossiers, a broad Work Map, and one active Task.

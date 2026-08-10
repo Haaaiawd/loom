@@ -17,6 +17,7 @@ order as JSON, so documentation cannot quietly describe a different prompt from 
 | Stable core | `layers.stable_core` | Every `loom context` | Durable collaboration judgment: user ownership, evidence classes, question threshold, corrections, reversible delegation |
 | Runtime adaptation | `layers.runtime_protocol` | Every `loom context` | LOOM-specific disk model, document graph, capability boundaries, Work Map, and three production loops |
 | Project state | `layers.project_state` | Every `loom context` | Dynamic status, uncertainty, assumptions, document/capability inventory, Task counts, and Keeper feedback |
+| Execution protocol | `layers.execution_protocol` | Active Task or `--task` | Recovery, workspace inspection, risk-based testing, progress persistence, exact proof, and delivery boundaries |
 | Current task | `layers.current_task` | Active Task or `--task` | Exact Task JSON followed by the exact contents of every path in `reads` |
 
 This separation is deliberate. Project-specific expertise does not inflate the stable prompt; it lives in
@@ -25,8 +26,9 @@ claimed by prompt text.
 
 ## Workspace and document messages
 
-`workspace_anchor` is the short block added to `AGENTS.md`. It tells an entering Agent to run `loom context`
-and keeps CLI operation invisible to the human.
+`workspace_anchor` is the short block added to `AGENTS.md`. It tells an entering or reset Agent to run
+`loom context`, rerun it before editing after an interruption, persist state at meaningful boundaries rather
+than before every tool call, and keep CLI operation invisible to the human.
 
 `templates.project_index` creates `.loom/PROJECT.md` as a concise whole and document map. It explicitly
 prevents a large project's systems from being compressed into one file.
@@ -82,6 +84,11 @@ penalizes ceremony and runs an order swap.
 order. Keeper receives every design and capability document; a normal active Task receives only its declared
 reads. This difference is intentional: Keeper audits whole-project coverage, while delivery protects context
 focus.
+
+The active Task composition adds `execution_protocol` between the recovered project whole and the exact Task.
+It requires inspection of current workspace/version-control reality, risk-appropriate tests, restartable
+progress, and criterion-level proof. It does not force a unit test for non-code claims or a branch/PR for every
+Task; those are selected when the behavior, human request, or repository workflow makes them meaningful.
 
 ## CLI operational messages
 

@@ -13,6 +13,7 @@ import { createHash } from 'node:crypto';
 import {
   AGENT_PROTOCOL,
   AGENT_ANCHOR,
+  EXECUTION_PROTOCOL,
   CAPABILITY_TEMPLATE,
   DESIGN_KINDS,
   PROJECT_TEMPLATE,
@@ -539,6 +540,7 @@ export function compileContext(options = {}, root = findRoot()) {
     for (const name of designs) blocks.push(`## Design document: ${name}\n\n${getDesign(name, root)}`);
     for (const name of capabilities) blocks.push(`## Capability dossier: ${name}\n\n${getCapability(name, root)}`);
   } else if (task) {
+    blocks.push(EXECUTION_PROTOCOL);
     blocks.push(`## Active Task\n\n${JSON.stringify(task, null, 2)}`);
     for (const ref of task.reads) {
       const content = readContextDocument(paths, ref);

@@ -1,6 +1,6 @@
 {
   "name": "@haaaiawd/loom",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "LOOM — invisible project understanding and continuity infrastructure for AI agents",
   "type": "module",
   "bin": {
