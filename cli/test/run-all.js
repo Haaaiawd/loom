@@ -643,7 +643,7 @@ test('help and source surface stay minimal', () => {
   const help = run(root, ['--help']);
   for (const command of ['loom context', 'loom prompts', 'loom record', 'loom decision', 'loom design add', 'loom capability add', 'loom capability research', 'loom capability synthesize', 'loom capability confirm', 'loom deliverable add', 'loom deliverable coverage', 'loom task plan', 'loom keeper prompt', 'loom eval scaffold']) assert(help.includes(command), `${command} missing`);
   for (const legacy of ['Intent Map', 'Capability Graph', 'Atelier', 'Atlas', 'Weaver', 'Forge']) assert(!help.includes(legacy), `${legacy} leaked into minimal help`);
-  assert(run(root, ['--version']) === 'loom 2.1.0', 'version mismatch');
+  assert(run(root, ['--version']) === 'loom 2.1.1', 'version mismatch');
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });

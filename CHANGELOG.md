@@ -6,6 +6,10 @@
 - Added `--state-dir <outside-workspace-dir>` sidecars for isolated benchmark and sandbox runs. Sidecars preserve virtual `.loom/` Task references without mutating the scored workspace or its `AGENTS.md`.
 - Added equal human-channel controls and unattended condition prompts to Evil Eval scaffolding.
 
+## 2.1.1
+
+- Re-published 2.1.0 content with corrected CHANGELOG line endings.
+
 ## 2.1.0
 
 - Added a current-state and recommended-action header to `loom context` output. Agents entering a project or resuming after compression now see project status, active task, work-map counts, and a recommended next action before the full protocol. The recommendation is advisory, not a script.
