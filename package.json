@@ -1,7 +1,7 @@
 {
   "name": "@haaaiawd/loom",
   "version": "2.1.1",
-  "description": "LOOM — invisible project understanding and continuity infrastructure for AI agents",
+  "description": "LOOM — Spec-driven continuity, proof, and project understanding infrastructure for AI coding agents",
   "type": "module",
   "bin": {
     "loom": "cli/bin/loom.js"
@@ -33,11 +33,15 @@
   },
   "keywords": [
     "loom",
-    "agent",
+    "spec-driven",
+    "ai-agent",
+    "ai-coding",
     "continuity",
     "project-understanding",
-    "task-context",
-    "cli"
+    "agent-framework",
+    "context-management",
+    "task-tracking",
+    "llm"
   ],
   "license": "MIT",
   "repository": {

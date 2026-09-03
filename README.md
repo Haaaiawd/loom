@@ -12,9 +12,9 @@
 
 <p align="center"><strong>The human talks to the Agent. LOOM helps the Agent remember, understand, and continue.</strong></p>
 
-LOOM is invisible project-understanding and continuity infrastructure for AI Agents. It supports
-any work that can be materially advanced through code or command-line tools: software, operations,
-research workflows, office automation, data work, and highly personalized projects.
+LOOM is spec-driven continuity, proof, and project understanding infrastructure for AI coding agents.
+It supports any work that can be materially advanced through code or command-line tools: software,
+operations, research workflows, office automation, data work, and highly personalized projects.
 
 The human does not learn a framework or operate a CLI. They describe what they want, answer useful
 questions, disagree, delegate decisions, and watch the work become real. The Agent uses LOOM in the
