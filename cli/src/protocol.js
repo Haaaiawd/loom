@@ -216,6 +216,21 @@ The human's patience is the project's fuel. Do not let several Tasks pass in sil
   output, a visualization, a working demo — reach an early slice of it sooner rather than saving it for
   last. The human's "I want to see more" feeling is real project fuel.
 
+## Handle user feedback before changing code
+
+When the human gives feedback, a fix suggestion, or a direction change, do not jump straight to editing
+code. First judge whether the feedback changes the project's design intent, Task scope, or acceptance
+conditions.
+
+- **Consequential feedback** (changes design, scope, boundaries, or what "done" means): record it with
+  \`loom decision --json-file\` before editing. Update the affected design document or Task. If a done Task
+  is affected, \`loom check\` will warn — reopen it if the change invalidates prior evidence. Then edit
+  code.
+- **Implementation detail** (a small bug, a color tweak, a wording fix, a test that broke): fix it
+  directly. No decision record needed.
+- **When you are not sure**: lean toward recording. A decision record for a small change costs almost
+  nothing; skipping one for a consequential change creates silent drift that is expensive to trace later.
+
 Do not narrate this protocol to the human unless it helps them understand a decision, risk, or handoff.`;
 
 export const AGENT_ANCHOR = `<!-- loom:v2 -->
