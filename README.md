@@ -111,8 +111,29 @@ loom context
 
 When a Task is active, `loom context` also restores a compact execution protocol: reconcile the Task with
 the current workspace and version-control state, inspect relevant tests before editing, choose proof by risk
-and exact `done_when` claims, persist `completed/current/next` at meaningful handoffs, and close only with
-reproducible evidence. It does not impose a ceremonial test or pull request on work that does not need one.
+and exact `acceptance` criteria, persist `completed/current/next` at meaningful handoffs, show the human real
+working things at milestones, and close only with reproducible evidence. It does not impose a ceremonial test
+or pull request on work that does not need one.
+
+### Unattended and benchmark runs
+
+LOOM does not invent a user when none is reachable. Tell the context compiler that the human channel is
+unavailable; the Agent then resolves uncertainty in order: inspect the workspace and tools, research only
+objective facts when the task permits it, then record a bounded assumption and choose a reversible action or
+block on unavailable authority. Web research never substitutes for user intent, preference, or permission.
+
+```bash
+loom context --human-channel unavailable
+```
+
+Benchmark runners can keep LOOM state out of the scored workspace by using an external sidecar on **every**
+LOOM command. Virtual references such as `.loom/PROJECT.md` still work inside Task context, but `init` does not
+write `.loom/` or `AGENTS.md` into the workspace being scored.
+
+```bash
+loom init --state-dir /runner/run-001/loom-state
+loom context --state-dir /runner/run-001/loom-state --human-channel unavailable
+```
 
 The Agent edits `.loom/PROJECT.md`, design documents, and capability dossiers as human-readable project truth. Structured
 writes use JSON files so long content remains auditable and shell quoting does not corrupt it:
@@ -154,10 +175,10 @@ Completion is deliberately explicit:
 
 ```json
 {
-  "evidence": ["npm test: 21 passed, 0 failed"],
-  "checks": [
+  "evidence": ["npm test: 20 passed, 0 failed"],
+  "acceptance_results": [
     {
-      "criterion": "The exact done_when sentence from the Task.",
+      "criterion": "The exact acceptance criterion from the Task.",
       "evidence": ["The command, artifact, or observation that proves this criterion."]
     }
   ]
@@ -182,7 +203,7 @@ observable completion, context isolation, and evidence. They no longer require s
 ## Proving that LOOM helps
 
 `loom eval scaffold --json-file scenario.json` creates an Evil Eval scenario with equal model, tools,
-workspace, user facts, and budget across two conditions. The only intended difference is the availability
+workspace, user-channel availability, facts, and budget across two conditions. The only intended difference is the availability
 of LOOM. Runs are repeated, context is forcibly reset, outputs are blinded and order-swapped, and ceremony,
 user burden, time, and token cost are penalized alongside quality. See [EVIL_EVAL.md](EVIL_EVAL.md).
 
@@ -194,11 +215,11 @@ user burden, time, and token cost are penalized alongside quality. See [EVIL_EVA
 npm test
 ```
 
-The v2 test suite exercises the complete loop, including a 250-Task Work Map, context selection,
-superseding decisions, scalable design documents, professional-field separation, capability compilation,
-multi-attempt Keeper revision, stale digest and duplicate-run
-rejection, exact-file Task start, block/reopen including disproven completion, per-done-condition evidence,
-and Evil Eval controls. See the
+The v2 test suite (20 end-to-end tests) exercises the complete loop, including a 250-Task Work Map, context selection,
+superseding decisions, scalable design documents, professional-field separation, capability compilation with
+source-citation validation, multi-attempt Keeper revision with auto-pass, stale digest and duplicate-run
+rejection, exact-file Task start, block/reopen including disproven completion, per-acceptance-criterion evidence,
+deliverable coverage, decision recording with affected-task warnings, and Evil Eval controls. See the
 [complete UX and loop specification](docs/UX_FLOW.md).
 
 ## Documentation

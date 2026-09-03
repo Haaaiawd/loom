@@ -91,7 +91,22 @@ loom init
 loom context
 ```
 
-当存在活跃 Task 时，`loom context` 还会恢复一段紧凑的执行协议：先把 Task 与当前工作区和版本控制状态校准，编辑前检查相关测试，根据风险和精确的 `done_when` 选择证据，在重要交接点写回 `completed/current/next`，最后只用可复现证据关闭 Task。它不会为了形式感强迫所有工作都写一个测试或开一个 PR。
+当存在活跃 Task 时，`loom context` 还会恢复一段紧凑的执行协议：先把 Task 与当前工作区和版本控制状态校准，编辑前检查相关测试，根据风险和精确的 `acceptance` 条件选择证据，在重要交接点写回 `completed/current/next`，在里程碑向人类展示真实可运行的东西，最后只用可复现证据关闭 Task。它不会为了形式感强迫所有工作都写一个测试或开一个 PR。
+
+### 无人值守与 benchmark 运行
+
+当人类不可达时，LOOM 不会凭空编造一次用户对话。向上下文编译器说明人类通道不可用后，Agent 会依次检查工作区和工具、仅在任务许可时研究客观外部事实，然后记录有边界的假设并选择可逆方案；若需要不可逆、高风险或有实质成本的授权，则阻塞。网络搜索永远不能替代用户的意图、偏好或许可。
+
+```bash
+loom context --human-channel unavailable
+```
+
+Benchmark runner 可以通过外部 sidecar 将 LOOM 状态放在评分工作区之外；**每一条** LOOM 命令都要带同一个状态目录。Task 中的 `.loom/PROJECT.md` 等虚拟引用仍能使用，但 `init` 不会在被评分工作区写入 `.loom/` 或 `AGENTS.md`。
+
+```bash
+loom init --state-dir /runner/run-001/loom-state
+loom context --state-dir /runner/run-001/loom-state --human-channel unavailable
+```
 
 Agent 将 `.loom/PROJECT.md`、设计文档和能力卷宗作为人类可读的项目事实维护。结构化写入通过 JSON 文件完成，让长内容可以审计，也避免 shell 引号损坏数据：
 
@@ -131,10 +146,10 @@ loom task done TASK-001 --json-file evidence.json
 
 ```json
 {
-  "evidence": ["npm test: 21 passed, 0 failed"],
-  "checks": [
+  "evidence": ["npm test: 20 passed, 0 failed"],
+  "acceptance_results": [
     {
-      "criterion": "The exact done_when sentence from the Task.",
+      "criterion": "The exact acceptance criterion from the Task.",
       "evidence": ["The command, artifact, or observation that proves this criterion."]
     }
   ]
@@ -151,7 +166,7 @@ LOOM 2 用一个自适应理解环、可扩展的设计文档图、彼此独立�
 
 ## 证明 LOOM 真的有用
 
-`loom eval scaffold --json-file scenario.json` 会创建一个 Evil Eval 场景。在两个条件中，模型、工具、工作区、用户事实和预算完全相同；唯一预期差异是能否使用 LOOM。实验会重复运行、强制重置上下文、匿名并交换产物顺序，同时把仪式成本、用户负担、时间和 token 消耗与质量一起计分。详见 [EVIL_EVAL.md](EVIL_EVAL.md)。
+`loom eval scaffold --json-file scenario.json` 会创建一个 Evil Eval 场景。在两个条件中，模型、工具、工作区、人类通道可用性、用户事实和预算完全相同；唯一预期差异是能否使用 LOOM。实验会重复运行、强制重置上下文、匿名并交换产物顺序，同时把仪式成本、用户负担、时间和 token 消耗与质量一起计分。详见 [EVIL_EVAL.md](EVIL_EVAL.md)。
 
 ![LOOM Evil Eval](docs/loom-eval-loop.svg)
 
@@ -161,7 +176,7 @@ LOOM 2 用一个自适应理解环、可扩展的设计文档图、彼此独立�
 npm test
 ```
 
-v2 测试覆盖完整闭环，包括 250 个 Task 的 Work Map、上下文选择、决策替代历史、可扩展设计文档、专业领域分离、能力编译、多轮 Keeper 修订、陈旧 digest 与重复 run 拒绝、精确文件级 Task 启动、阻塞与重开（包括完成证据被推翻）、逐完成条件证据，以及 Evil Eval 的控制变量。详见[完整 UX 与闭环规范](docs/UX_FLOW.md)。
+v2 测试套件（20 个端到端测试）覆盖完整闭环，包括 250 个 Task 的 Work Map、上下文选择、决策替代历史、可扩展设计文档、专业领域分离、能力编译（含 source 引用校验）、多轮 Keeper 修订（含 auto-pass）、陈旧 digest 与重复 run 拒绝、精确文件级 Task 启动、阻塞与重开（包括完成证据被推翻）、逐 acceptance 条件证据、交付物覆盖、决策记录与受影响 Task 警告，以及 Evil Eval 的控制变量。详见[完整 UX 与闭环规范](docs/UX_FLOW.md)。
 
 ## 文档
 

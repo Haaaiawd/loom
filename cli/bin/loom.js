@@ -4,26 +4,35 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  addDeliverable,
   blockTask,
   checkProject,
+  checkDeliverableCoverage,
   compileContext,
   completeTask,
+  confirmCapability,
+  configureRuntime,
   createCapability,
   createDesign,
+  recordDecision,
   getCapability,
+  getCapabilityStatus,
   getDesign,
   getKeeperPrompt,
   getTask,
   importTasks,
   initProject,
   listCapabilities,
+  listDeliverables,
   listDesigns,
   loadProject,
   markReady,
   recordKeeper,
   recordUnderstanding,
   reopenTask,
+  researchCapability,
   scaffoldEval,
+  synthesizeCapability,
   skipKeeper,
   startTask,
   taskSummary,
@@ -63,19 +72,46 @@ function help() {
 
 The human talks naturally to the Agent. The Agent uses these commands silently.
 
+Typical flow (first pass):
+  1. loom init                          — create .loom/ skeleton
+  2. loom record                        — confirm facts, assumptions, open questions
+  3. loom design add                    — write design documents for consequential systems
+  4. loom capability add → research → synthesize → confirm
+                                        — build professional decision trees for fields that matter
+  5. loom deliverable add               — decompose the delivery surface
+  6. loom task plan                     — write Tasks with acceptance criteria covering deliverables
+  7. loom project ready                 — freeze a digest for Keeper review
+  8. loom keeper prompt → record        — fresh Agent verifies build-readiness (one-time)
+  9. loom task start → done             — execute one Task at a time, fill acceptance evidence
+  10. loom check                        — verify health, coverage, and drift
+
+When a new idea changes an existing decision:
+  loom decision --json-file <decision.json>   — record what changed and affected tasks
+  then update the design document directly; loom check warns which done tasks need reopening.
+
 Start and resume
   loom init
-  loom context [--task TASK-001] [--keeper]
+  loom context [--task TASK-001] [--keeper] [--human-channel available|unavailable]
   loom check
   loom prompts
 
 Preserve understanding
   loom record --json-file <update.json>
+  loom decision --json-file <decision.json>
   loom project ready
   loom design add <slug> --title <text> --kind <product|experience|system|contract|verification|operations|research>
   loom design list|get <slug>
   loom capability add <slug> --title <professional-field>
   loom capability list|get <slug>
+  loom capability research <slug> --field <text>      (creates research/_guide.md — add .md files there)
+  loom capability synthesize <slug>                   (builds decision tree from research, validates sources)
+  loom capability confirm <slug> --scenario <text>    (user confirms which expert scenario applies)
+  loom capability status <slug>
+
+Map the delivery surface
+  loom deliverable add <slug> --title <text> --kind <module|feature|behavior|interface|artifact|operational|verification|other>
+  loom deliverable list
+  loom deliverable coverage
 
 Maintain the work map
   loom task plan --json-file <tasks.json>
@@ -86,6 +122,10 @@ Maintain the work map
   loom task reopen <id> [--reason <reason>]
   loom task done <id> --json-file <evidence.json>
 
+Each Task should produce one verifiable unit of real work. Use acceptance[] with criterion,
+verify_by, and evidence fields. Task completion fills in each acceptance condition's evidence
+with the actual result (for acceptance tasks) or quotes each done_when criterion (for legacy tasks).
+
 One-time independent handoff
   loom keeper prompt
   loom keeper record --json-file <result.json>
@@ -94,11 +134,18 @@ One-time independent handoff
 Evaluate LOOM itself
   loom eval scaffold --json-file <scenario.json>
 
+Use \`--state-dir <outside-workspace-dir>\` on every command to keep LOOM state in an isolated sidecar
+(for example, a benchmark runner's per-run state directory). Sidecar initialization never edits AGENTS.md.
+
 Use JSON files for structured writes so long content and shell quoting remain auditable.
-Task completion JSON includes evidence plus one check for every exact done_when criterion.`;
+Task completion JSON includes evidence plus either acceptance_results[] (one per acceptance criterion,
+each with concrete evidence) or checks[] (one per done_when criterion, for legacy tasks).`;
 }
 
 try {
+  configureRuntime({ stateDir: option('--state-dir') });
+  const humanChannel = option('--human-channel');
+  if (humanChannel && !['available', 'unavailable'].includes(humanChannel)) throw new Error('--human-channel must be available or unavailable');
   switch (command) {
     case '--version':
     case '-v': {
@@ -117,13 +164,16 @@ try {
       break;
     case 'context':
     case 'resume':
-      output(compileContext({ taskId: option('--task'), keeper: argv.includes('--keeper') }));
+      output(compileContext({ taskId: option('--task'), keeper: argv.includes('--keeper'), humanChannel: humanChannel || 'available' }));
       break;
     case 'prompts':
       output(promptCatalog());
       break;
     case 'record':
       output(recordUnderstanding(jsonFile()));
+      break;
+    case 'decision':
+      output(recordDecision(jsonFile()));
       break;
     case 'check': {
       const result = checkProject();
@@ -159,7 +209,31 @@ try {
       else if (subcommand === 'get') {
         if (!rest[0]) throw new Error('Usage: loom capability get <slug>');
         output(getCapability(rest[0]));
-      } else throw new Error('Usage: loom capability add|list|get');
+      } else if (subcommand === 'research') {
+        if (!rest[0]) throw new Error('Usage: loom capability research <slug> --field <text>');
+        output(researchCapability(rest[0], { field: option('--field') }));
+      } else if (subcommand === 'synthesize') {
+        if (!rest[0]) throw new Error('Usage: loom capability synthesize <slug>');
+        output(synthesizeCapability(rest[0]));
+      } else if (subcommand === 'confirm') {
+        if (!rest[0]) throw new Error('Usage: loom capability confirm <slug> --scenario <text>');
+        output(confirmCapability(rest[0], { scenario: option('--scenario') }));
+      } else if (subcommand === 'status') {
+        if (!rest[0]) throw new Error('Usage: loom capability status <slug>');
+        output(getCapabilityStatus(rest[0]));
+      } else throw new Error('Usage: loom capability add|list|get|research|synthesize|confirm|status');
+      break;
+    }
+    case 'deliverable': {
+      if (subcommand === 'add') {
+        const slug = rest[0];
+        const title = option('--title');
+        const kind = option('--kind');
+        if (!slug) throw new Error('Usage: loom deliverable add <slug> --title <text> --kind <module|feature|behavior|interface|artifact|operational|verification|other>');
+        output(addDeliverable(slug, { title, kind, notes: option('--notes') }));
+      } else if (subcommand === 'list') output(listDeliverables());
+      else if (subcommand === 'coverage') output(checkDeliverableCoverage());
+      else throw new Error('Usage: loom deliverable add|list|coverage');
       break;
     }
     case 'task': {

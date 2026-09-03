@@ -139,7 +139,8 @@ The CLI has six responsibilities:
 3. Scaffold a scalable design-document graph and separate professional-field dossiers.
 4. Maintain a large Work Map and a single active Task.
 5. Compile only decision-relevant context after reset.
-6. Prepare one-time Keeper and controlled Evil Eval artifacts.
+6. Adapt clarification to whether a human response channel is actually available.
+7. Prepare one-time Keeper and controlled Evil Eval artifacts.
 
 It does not orchestrate models, browse the web, generate project documents, or pretend that a CLI command
 clears model memory. Those capabilities belong to the host Agent and its tools.
@@ -171,6 +172,20 @@ generic updates cannot change status, and completion requires criterion-by-crite
 - PROJECT.md, with decision history identified as on-demand context;
 - the active Task, if one exists;
 - the exact design, capability, source, contract, or fixture files named in that Task's `reads` list.
+
+### Environment adaptation and isolated state
+
+The host supplies human-channel availability at context time. With `available` (the default), the Agent may
+ask the human for consequential intent, preference, authority, or facts that only they hold. With
+`unavailable`, it must not fabricate a user exchange or replace an intent/authority question with web search.
+It first inspects discoverable workspace facts and permitted tools, researches only objective external facts when
+the task allows it, then records a bounded assumption and chooses a safe reversible action or blocks on
+unavailable authority.
+
+`--state-dir <outside-workspace-dir>` places LOOM's state tree in a per-run sidecar rather than the workspace.
+This is for benchmark or sandbox runners whose scored workspace must remain pristine. The sidecar remains
+semantically `.loom/` to LOOM documents and Task references, but initialization does not edit the workspace
+or add an AGENTS.md anchor. Every command in that run must receive the same state directory.
 
 When a Task is active, context also injects a short execution protocol. It tells a reset Agent to reconcile
 the Task with the current workspace and version-control state, inspect relevant tests before editing, choose

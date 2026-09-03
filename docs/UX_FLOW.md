@@ -59,6 +59,15 @@ details that do not affect the current whole, or framework questions whose only 
 After every answer round, the Agent re-evaluates the whole. If material uncertainty remains, it loops to another adaptive
 round. If only reversible local uncertainty remains, it continues.
 
+### When no human response channel exists
+
+Some unattended, sandboxed, or benchmark runs have no human to answer. The host invokes
+`loom context --human-channel unavailable`; this does not create a synthetic user. The Agent first inspects
+discoverable workspace facts and permitted tools, researches only objective external facts when the task permits it,
+and never treats web research as a substitute for user intent, preference, or authority. It records a bounded
+assumption and selects a safe reversible action, or blocks if the missing answer controls irreversible, high-risk,
+or materially costly work.
+
 ## 3. Build project-specific capability
 
 The Agent maps which established professional fields could change questions, design, implementation, risk, or verification.
@@ -164,8 +173,12 @@ human authority govern later changes.
 ## Primary evaluation question
 
 The causal baseline is a normal capable Agent with no LOOM—not LOOM v1. Both conditions receive the same raw brief, model,
-tools, workspace, user oracle, budget, and reset schedule. LOOM v1 may be added as a secondary regression condition, but it does
+tools, workspace, human-channel availability, user oracle when one exists, budget, and reset schedule. LOOM v1 may be added as a secondary regression condition, but it does
 not answer whether the framework itself creates value over no framework.
+
+For an unattended external benchmark, both conditions receive `human_channel: unavailable` and no fabricated user
+oracle. A fresh LOOM sidecar sits outside the scored workspace and is passed through `--state-dir` on every LOOM
+command, so framework state cannot alter task files or hidden-test behavior.
 
 The anonymization harness must preserve runnable relative layout, record a file/digest manifest, and rerun each condition's
 declared tests and smoke command before judging. Packet-construction failures are eval failures, never evidence against a run.

@@ -15,6 +15,7 @@ order as JSON, so documentation cannot quietly describe a different prompt from 
 | Layer | Message | Injected when | Purpose |
 |---|---|---|---|
 | Stable core | `layers.stable_core` | Every `loom context` | Durable collaboration judgment: user ownership, evidence classes, question threshold, corrections, reversible delegation |
+| Environment adaptation | `layers.environment_adaptation_available` or `layers.environment_adaptation_unavailable` | Every `loom context` | States whether a human can answer; routes uncertainty through inspection, permitted factual research, clarification, bounded assumption, or block |
 | Runtime adaptation | `layers.runtime_protocol` | Every `loom context` | LOOM-specific disk model, document graph, capability boundaries, Work Map, and three production loops |
 | Project state | `layers.project_state` | Every `loom context` | Dynamic status, uncertainty, assumptions, document/capability inventory, Task counts, and Keeper feedback |
 | Execution protocol | `layers.execution_protocol` | Active Task or `--task` | Recovery, workspace inspection, risk-based testing, progress persistence, exact proof, and delivery boundaries |
@@ -23,6 +24,11 @@ order as JSON, so documentation cannot quietly describe a different prompt from 
 This separation is deliberate. Project-specific expertise does not inflate the stable prompt; it lives in
 field dossiers. One-off Task instructions do not become global doctrine. Host permissions and tools are not
 claimed by prompt text.
+
+When the human channel is unavailable, the environment message explicitly forbids fabricated user interaction and
+forbids treating web research as a substitute for user intent, preference, or authority. It preserves factual
+research when the task and host actually permit it, then requires a reversible assumption or block for what cannot
+be learned.
 
 ## Workspace and document messages
 
@@ -73,6 +79,10 @@ LOOM. It does not weaken the baseline or prohibit normal planning.
 
 `evaluation.loom_condition` gives the same brief, model class, tools, workspace facts, and budget, adding only
 LOOM continuity infrastructure and no extra authority.
+
+`evaluation.unattended_baseline_condition` and `evaluation.unattended_loom_condition` are the same two
+conditions when no user response channel exists. The environment fact is equal in both arms; only the LOOM arm
+uses `loom context --human-channel unavailable`.
 
 `evaluation.blind_judge` scores anonymized output on intent fidelity, question value, whole coverage,
 professional depth, buildability, reset continuity, implementation evidence, human burden, and cost. It

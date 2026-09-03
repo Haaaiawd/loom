@@ -25,6 +25,7 @@ A scenario records:
 - the identical raw brief;
 - workspace setup and immutable snapshot;
 - hidden user facts and a deterministic answer script;
+- human-channel availability (`available` or `unavailable`), identical across conditions;
 - success criteria that judges can observe;
 - context-reset points;
 - equal token, time, and tool budgets;
@@ -43,6 +44,17 @@ decision.
 5. Give both conditions equal access to discoverable repository facts.
 6. Penalize unnecessary questions, ceremony, document volume, time, and token cost.
 7. Require an implementation attempt or operational transcript; documents alone cannot win.
+
+## Unattended external benchmarks
+
+An external benchmark such as a terminal-use suite may provide no human response channel. In that condition,
+set `human_channel` to `unavailable` for both arms. Neither arm may invent a user answer or treat web search as
+a substitute for user intent, preference, or authority. Both may inspect the workspace and use only the research
+tools the benchmark makes available; unresolved consequential choices require a bounded reversible assumption or
+a block.
+
+Run LOOM with `--state-dir` pointing outside the scored workspace. The sidecar must be fresh per run and passed
+to every LOOM command, so `.loom/` state cannot alter task files or hidden-test behavior.
 
 ## Measures
 
@@ -96,6 +108,7 @@ Create a scenario description:
   "title": "Ambiguous multidisciplinary build",
   "brief": "Build a calming recovery tool from this repository.",
   "hidden_user_facts": ["The user must retain manual control."],
+  "human_channel": "available",
   "success_criteria": ["A fresh Agent resumes correctly after a forced reset."],
   "context_reset_points": ["after-shaping", "mid-task"],
   "repetitions": 3
