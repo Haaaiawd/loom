@@ -1,0 +1,49 @@
+{
+  "schema_version": 2,
+  "deliverables": [
+    {
+      "id": "DLV-001",
+      "slug": "reflection-flow",
+      "title": "Three-minute reflection flow",
+      "kind": "feature",
+      "notes": "",
+      "covered_by": [
+        "TASK-001"
+      ],
+      "created_at": "2026-09-12T04:20:38.700Z"
+    },
+    {
+      "id": "DLV-002",
+      "slug": "local-storage",
+      "title": "Local persistence and clear",
+      "kind": "behavior",
+      "notes": "",
+      "covered_by": [
+        "TASK-002"
+      ],
+      "created_at": "2026-09-12T04:20:38.798Z"
+    },
+    {
+      "id": "DLV-003",
+      "slug": "launch-artifact",
+      "title": "Double-clickable offline HTML artifact",
+      "kind": "artifact",
+      "notes": "",
+      "covered_by": [
+        "TASK-001"
+      ],
+      "created_at": "2026-09-12T04:20:38.882Z"
+    },
+    {
+      "id": "DLV-004",
+      "slug": "verification-evidence",
+      "title": "Automated and visual verification evidence",
+      "kind": "verification",
+      "notes": "",
+      "covered_by": [
+        "TASK-002"
+      ],
+      "created_at": "2026-09-12T04:20:38.966Z"
+    }
+  ]
+}

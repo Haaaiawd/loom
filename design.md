@@ -78,6 +78,10 @@ Cross-field synthesis lives in the design document whose decision it changes. A 
 Acquisition can happen quietly. The Agent may briefly name the capability it is obtaining, but does not
 turn research logistics into user workflow.
 
+Scenario authority is explicit. `capability confirm --source human` records a confirmed scenario;
+`--source agent` records a provisional, reversible selection when the human is unavailable. Context and
+health checks preserve that distinction instead of allowing an Agent assumption to masquerade as user confirmation.
+
 ### Work Map and Task
 
 Planning uses progressive resolution. A broad initial Work Map protects whole-project coverage and may be
@@ -96,6 +100,8 @@ Task is the single execution contract:
   "depends_on": [],
   "reads": [".loom/PROJECT.md", ".loom/design/context-system.md", ".loom/capabilities/human-agent-interaction.md", "fixtures/reset-case.md"],
   "touches": ["cli/src/context.js"],
+  "implements": ".loom/design/context-system.md#Context selection",
+  "capability_hooks": [{ "node": "human-agent-interaction#C1", "at": "selecting reset context" }],
   "status": "active",
   "progress": {
     "completed": [],
@@ -111,12 +117,18 @@ criterion. A completed Task can be reopened with a reason when later evidence di
 human approval when the change is a reversible implementation refinement inside the agreed whole; outcome,
 authority, risk, or material cost changes return to the conversation.
 
+New Tasks must make design and capability applicability explicit: use `implements` and `capability_hooks`, or
+record a concrete `design_exemption` / `capability_exemption`. Task start rejects an unclassified active horizon.
+Completion verifies that every declared local `touches` path exists, and `loom check` detects later filesystem drift.
+
 ### One-time Keeper
 
 Keeper is not a recurring role. It is a single isolation test at the transition from shaping to material
 execution. A fresh Agent receives no prior conversation, runs `loom context --keeper`, explains the whole,
 selects a first Task, navigates its design documents and professional capabilities, and identifies concrete evidence. Every attempt binds a unique
-fresh-thread `run_id` to the digest frozen by `project ready`. It may return gaps; summary, evidence and exact gaps
+fresh-thread `run_id` to the digest frozen by `project ready`. A passing record also carries an explicit independent
+review attestation (`review.mode`, reviewer identity, and isolation evidence); known self-review cannot be recorded as
+passed. This is an auditable host assertion, not cryptographic identity proof. It may return gaps; summary, evidence and exact gaps
 are injected into the main Agent's next context. Revision must change project truth or Task definitions before a
 new digest and fresh Keeper run are allowed. Once passed, normal Task evidence replaces further Keeper ceremony.
 
@@ -160,8 +172,9 @@ build_ready → building ⇄ Task repair or block or reopen → complete
 `project ready` checks only structural prerequisites: PROJECT.md is no longer a template, at least one design
 document and a Work Map exist, and no high-impact open question remains. Keeper judges semantic build-readiness. Task start requires Keeper
 pass or an explicit recorded skip. An unchanged revision, duplicate Keeper run, wrong digest, or stale prepared
-state is rejected. Imported Tasks start open, `task start` rejects missing or directory-level context reads,
-generic updates cannot change status, and completion requires criterion-by-criterion evidence.
+state is rejected. Imported Tasks start open, `task start` rejects missing or directory-level context reads and
+unclassified design/capability applicability, generic updates cannot change status, and completion requires
+criterion-by-criterion evidence plus existence of every declared local output.
 
 ## Context selection
 
@@ -209,7 +222,8 @@ an automated semantic migration can be designed only after real v1 projects reve
 
 - External capability acquisition is represented but not automated yet; the host Agent performs research.
 - Markdown is intentionally human-editable. LOOM validates file existence and structured state, not prose truth.
-- Keeper independence depends on the host creating a fresh thread or window.
+- Keeper independence depends on the host creating a fresh thread or window. LOOM requires and records the
+  host's independent-review attestation but cannot cryptographically prove Agent identity.
 - Evil Eval scaffolding controls experiment design but does not itself launch model runs.
 - A one-time Keeper verifies build-readiness, not the eventual quality of every implementation Task.
 

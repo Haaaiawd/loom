@@ -18,13 +18,17 @@ function run(root, args, expected = 0) {
   if (result.status !== expected) {
     throw new Error(`Command failed (${result.status}, expected ${expected}): loom ${args.join(' ')}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   }
-  return expected === 0 ? result.stdout.trim() : result.stderr.trim();
+  return expected === 0 ? result.stdout.trim() : (result.stderr.trim() || result.stdout.trim());
 }
 
 function json(root, name, value) {
   const path = join(root, name);
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
   return path;
+}
+
+function independentReview(reviewerId) {
+  return { mode: 'independent', reviewer_id: reviewerId, evidence: 'Host opened a separate Agent without the shaping conversation.' };
 }
 
 function assert(condition, message) {
@@ -56,6 +60,7 @@ test('init creates one small, human-readable project skeleton', () => {
   assert(!existsSync(join(root, '.loom', 'v1')), 'v2 must not recreate version ceremony');
   assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('loom context'), 'Agent anchor missing');
   assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('after a context reset'), 'Agent recovery trigger missing');
+  assert(readFileSync(join(root, 'AGENTS.md'), 'utf8').includes('absolute path'), 'Agent anchor should explain source-checkout CLI recovery');
   assert(JSON.parse(run(root, ['init'])).reason === 'already_initialized', 'repeat init should be safe');
 });
 
@@ -187,9 +192,14 @@ test('capability shaping lifecycle: research, synthesize, confirm gates executio
   const synthesizeResult = JSON.parse(run(root, ['capability', 'synthesize', 'game-design']));
   assert(synthesizeResult.status === 'synthesized', 'synthesize should set status to synthesized');
   assert(synthesizeResult.nodes === 1, 'synthesize should count decision tree nodes');
-  assert(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'short'], 1).includes('at least 20 characters'), 'confirm should reject short scenarios');
-  const confirmResult = JSON.parse(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement without time pressure.']));
-  assert(confirmResult.status === 'confirmed', 'confirm should set status to confirmed');
+  assert(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'short', '--source', 'human'], 1).includes('at least 20 characters'), 'confirm should reject short scenarios');
+  assert(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement without time pressure.'], 1).includes('--source human|agent'), 'confirm should require explicit authority provenance');
+  const provisionalResult = JSON.parse(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement without time pressure.', '--source', 'agent']));
+  assert(provisionalResult.status === 'provisional', 'agent-selected scenario should remain provisional');
+  assert(JSON.parse(run(root, ['capability', 'status', 'game-design'])).source === 'agent', 'status should preserve scenario provenance');
+  assert(run(root, ['context', '--human-channel', 'unavailable']).includes('provisional'), 'context should surface provisional capability state');
+  const confirmResult = JSON.parse(run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement without time pressure.', '--source', 'human']));
+  assert(confirmResult.status === 'confirmed', 'human confirmation should upgrade provisional to confirmed');
   assert(JSON.parse(run(root, ['capability', 'status', 'game-design'])).status === 'confirmed', 'status command should report confirmed');
   const confirmedContent = run(root, ['capability', 'get', 'game-design']);
   assert(confirmedContent.includes('A calming recovery game for stressed professionals'), 'confirm should write scenario into capability.md');
@@ -281,11 +291,11 @@ test('capability hooks inject decision-tree nodes into active task context', () 
   const capPath = join(root, '.loom', 'capabilities', 'game-design', 'capability.md');
   writeFileSync(capPath, `# Game design\n\n## Field identity and boundary\nGame design for calming recovery tools.\n\n## Project scenario\nCalming recovery game.\n\n## Decision tree\n\n### C1: Choose core emotional direction\n- entry_when: starting a new game design\n- options:\n  - A: calming without challenge\n  - B: calming with gentle challenge\n- decide_by: target audience stress profile\n- source: expert narrative on designing calming games (see expert-narrative.md)\n- counterexample: a competitive game where calm is not the goal\n- output: design decision D-emotional-direction\n\n### C2: Choose loss condition design\n- entry_when: core direction is set and mechanics are being defined\n- options:\n  - A: no loss condition at all\n  - B: soft reset without penalty\n- decide_by: whether failure increases or decreases player calm\n- source: expert narrative on loss conditions in calming games (see expert.md)\n- counterexample: a skill-based game where loss drives learning\n- output: design decision D-loss-condition\n\n## Stance and rejected defaults\nWe refuse default game mechanics that create stress.\n\n## Failure signals\nPlayers report anxiety rather than calm.\n\n## Relationships without merger\nAdjacent to behavioral-psychology capability.\n`, 'utf8');
   run(root, ['capability', 'synthesize', 'game-design']);
-  run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement.']);
+  run(root, ['capability', 'confirm', 'game-design', '--scenario', 'A calming recovery game for stressed professionals needing gentle engagement.', '--source', 'human']);
   json(root, 'tasks.json', { tasks: [{ title: 'Implement game mechanics', outcome: 'Calming game loop with no-loss design', done_when: ['Game loop runs without time pressure'], boundaries: ['No stress mechanics'], reads: ['.loom/PROJECT.md', '.loom/design/game-mechanics.md'], touches: ['src/game.js'], implements: 'D-emotional-direction', capability_hooks: [{ node: 'game-design#C2', at: 'defining the loss condition', must_produce: 'design decision D-loss-condition' }] }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const readyResult = JSON.parse(run(root, ['project', 'ready']));
-  json(root, 'keeper-pass.json', { run_id: 'keeper-activation-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Build-ready.', evidence: ['PROJECT.md and game-design capability confirmed.'] });
+  json(root, 'keeper-pass.json', { run_id: 'keeper-activation-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Build-ready.', evidence: ['PROJECT.md and game-design capability confirmed.'], review: independentReview('fresh-activation-agent') });
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
   run(root, ['task', 'start', 'TASK-001']);
   const context = run(root, ['context']);
@@ -302,6 +312,36 @@ test('capability hooks inject decision-tree nodes into active task context', () 
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'bad-hooks.json']);
   const badCheck = JSON.parse(run(root, ['check']));
   assert(badCheck.warnings.join('\n').includes('missing capability node: game-design#C99'), 'check should warn when hooks reference non-existent nodes');
+});
+
+test('task integrity classification and declared outputs cannot stay false-green', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA small integrity fixture with explicit design and capability links.\n\n## People and reality\nA fresh Agent must not mistake missing links or files for completion.\n\n## Whole behavior\nThe Task declares what it implements, which capability applies, and which output must exist.\n\n## Boundaries\nTest only.\n\n## System shape\nOne design, one capability, one Task.\n\n## Completion and failure\nMissing classification or output is unhealthy.\n`, 'utf8');
+  run(root, ['design', 'add', 'integrity', '--title', 'Integrity fixture', '--kind', 'system']);
+  writeFileSync(join(root, '.loom', 'design', 'integrity.md'), '# Integrity fixture\n\n## Responsibility\nRequire honest links.\n', 'utf8');
+  run(root, ['capability', 'add', 'quality-assurance', '--title', 'Quality assurance']);
+  json(root, 'tasks.json', { tasks: [{ title: 'Produce output', outcome: 'A concrete output file exists with explicit applicability decisions', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['output.txt'] }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  const openCheck = JSON.parse(run(root, ['check']));
+  assert(openCheck.warnings.join('\n').includes('missing implements or design_exemption'), 'open Task should surface missing design applicability');
+  assert(openCheck.warnings.join('\n').includes('missing capability_hooks or capability_exemption'), 'open Task should surface missing capability applicability');
+  json(root, 'classify.json', { implements: '.loom/design/integrity.md#Responsibility', capability_exemption: 'Capability research is not required for this file-existence fixture.' });
+  run(root, ['task', 'update', 'TASK-001', '--json-file', 'classify.json']);
+  const statePath = join(root, '.loom', 'state.json');
+  const state = JSON.parse(readFileSync(statePath, 'utf8'));
+  state.keeper.status = 'skipped';
+  state.project.status = 'build_ready';
+  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  run(root, ['task', 'start', 'TASK-001']);
+  json(root, 'done.json', { evidence: ['Claimed output exists'], checks: [{ criterion: 'Output exists', evidence: ['Claimed output exists'] }] });
+  assert(run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json'], 1).includes('declared output does not exist'), 'completion should reject a missing touched file');
+  writeFileSync(join(root, 'output.txt'), 'done\n', 'utf8');
+  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  rmSync(join(root, 'output.txt'));
+  const brokenCheck = JSON.parse(run(root, ['check'], 1));
+  assert(brokenCheck.healthy === false, 'missing output after completion should make check unhealthy');
+  assert(brokenCheck.errors.join('\n').includes('declared output does not exist'), 'missing output should identify the broken Task promise');
 });
 
 test('deliverable coverage check finds uncovered delivery units', () => {
@@ -351,15 +391,17 @@ test('acceptance structure pairs criterion with verify_by and evidence, and comp
     ],
     boundaries: ['Does not modify done_when-based tasks'],
     reads: ['.loom/PROJECT.md', '.loom/design/test-system.md'],
-    touches: ['cli/src/store.js', 'cli/test/run-all.js'],
+    touches: ['result.txt'],
+    implements: '.loom/design/test-system.md#Responsibility',
   }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const readyResult = JSON.parse(run(root, ['project', 'ready']));
-  json(root, 'keeper-pass.json', { run_id: 'keeper-acceptance-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Ready.', evidence: ['PROJECT.md is complete.'] });
+  json(root, 'keeper-pass.json', { run_id: 'keeper-acceptance-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Ready.', evidence: ['PROJECT.md is complete.'], review: independentReview('fresh-acceptance-agent') });
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
   run(root, ['task', 'start', 'TASK-001']);
   const ctx = run(root, ['context']);
   assert(ctx.includes('acceptance'), 'context should show acceptance field');
+  writeFileSync(join(root, 'result.txt'), 'verified\n', 'utf8');
   assert(ctx.includes('verify_by'), 'context should show verify_by in acceptance');
   json(root, 'done.json', {
     evidence: ['npm test passed', 'manual verification complete'],
@@ -467,12 +509,13 @@ test('decision record traces changes and warns about affected done tasks', () =>
   writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA project that evolves mid-flight. New ideas change existing decisions, and those changes are traced in DECISIONS.md while affected tasks are flagged for review.\n\n## People and reality\nSolo developer iterating on a project whose design changes after implementation has started.\n\n## Whole behavior\nDecisions are recorded with affected files and tasks. Done tasks affected by a decision are flagged by loom check.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with LOOM state files and design documents.\n\n## Completion and failure\nDecisions traced, affected tasks reopened when needed. Failure is when a decision silently invalidates done work without warning.\n`, 'utf8');
   run(root, ['design', 'add', 'core-system', '--title', 'Core system', '--kind', 'system']);
   writeFileSync(join(root, '.loom', 'design', 'core-system.md'), `# Core system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nOriginal design.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Original task', outcome: 'Implement original design correctly', done_when: ['Original design implemented'], boundaries: ['No scope creep'], reads: ['.loom/PROJECT.md', '.loom/design/core-system.md'], touches: ['src/core.js'] }] });
+  json(root, 'tasks.json', { tasks: [{ title: 'Original task', outcome: 'Implement original design correctly', done_when: ['Original design implemented'], boundaries: ['No scope creep'], reads: ['.loom/PROJECT.md', '.loom/design/core-system.md'], touches: ['core.txt'], implements: '.loom/design/core-system.md#Responsibility' }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const readyResult = JSON.parse(run(root, ['project', 'ready']));
-  json(root, 'keeper-pass.json', { run_id: 'keeper-decision-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Ready.', evidence: ['All good.'] });
+  json(root, 'keeper-pass.json', { run_id: 'keeper-decision-001', prepared_digest: readyResult.digest, verdict: 'passed', summary: 'Ready.', evidence: ['All good.'], review: independentReview('fresh-decision-agent') });
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
   run(root, ['task', 'start', 'TASK-001']);
+  writeFileSync(join(root, 'core.txt'), 'implemented\n', 'utf8');
   json(root, 'done.json', { evidence: ['done'], checks: [{ criterion: 'Original design implemented', evidence: ['src/core.js exists'] }] });
   run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
   json(root, 'decision.json', { summary: 'Changed core system from sync to async architecture', changes: ['.loom/design/core-system.md', 'src/core.js'], affected_tasks: ['TASK-001'] });
@@ -532,9 +575,9 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   writeFileSync(join(root, '.loom', 'capabilities', 'human-agent-interaction', 'research', 'v1-runtime-observations.md'), `# LOOM v1 runtime observations\n\nIn the v1 runtime, injecting full project state after every reset caused context bloat that defeated\nthe purpose of external state. Users experienced question fatigue when the Agent asked without first\nchecking the workspace. The progressive-resolution approach—broad map on disk, detail only for the\nactive horizon—reduced context consumption while preserving coverage.\n`, 'utf8');
   run(root, ['capability', 'research', 'human-agent-interaction', '--field', 'Human-Agent collaboration and context engineering']);
   run(root, ['capability', 'synthesize', 'human-agent-interaction']);
-  run(root, ['capability', 'confirm', 'human-agent-interaction', '--scenario', 'Agent-driven project with natural human conversation and forced context resets.']);
+  run(root, ['capability', 'confirm', 'human-agent-interaction', '--scenario', 'Agent-driven project with natural human conversation and forced context resets.', '--source', 'human']);
   writeFileSync(join(root, 'INPUT.md'), '# Runtime fixture\n\nA forced-reset handoff must preserve the selected Task.\n', 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Implement resume context', outcome: 'A fresh Agent receives only decision-relevant context', done_when: ['Integration transcript proves context survives a reset'], boundaries: ['Do not expose CLI operation to the human'], reads: ['.loom/PROJECT.md', '.loom/design/resume-context.md', '.loom/capabilities/human-agent-interaction/capability.md', 'INPUT.md'], touches: ['cli/src/store.js', 'cli/test/run-all.js'] }] });
+  json(root, 'tasks.json', { tasks: [{ title: 'Implement resume context', outcome: 'A fresh Agent receives only decision-relevant context', done_when: ['Integration transcript proves context survives a reset'], boundaries: ['Do not expose CLI operation to the human'], reads: ['.loom/PROJECT.md', '.loom/design/resume-context.md', '.loom/capabilities/human-agent-interaction/capability.md', 'INPUT.md'], touches: ['output.txt'], implements: '.loom/design/resume-context.md#Responsibility', capability_hooks: [{ node: 'human-agent-interaction#C1', at: 'selecting reset context', must_produce: 'restartable context selection' }] }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   json(root, 'keeper-pass.json', { verdict: 'passed', summary: 'The project is build-ready.', evidence: ['PROJECT.md defines the whole and TASK-001 links the only required dossier.'] });
   assert(run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json'], 1).includes('before loom project ready'), 'Keeper must not bypass ready state');
@@ -560,13 +603,15 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   const keeperRevisionContext = run(root, ['context', '--keeper']);
   assert(keeperRevisionContext.includes('Prior Keeper feedback this prepared revision claims to close'), 'fresh Keeper did not receive prior gaps as an audit checklist');
   assert(keeperRevisionContext.includes('Do not repair it yourself'), 'Keeper feedback conflicted with independent review role');
-  json(root, 'keeper-duplicate.json', { run_id: 'keeper-run-001', prepared_digest: secondReady.digest, verdict: 'passed', summary: 'Duplicate run.', evidence: ['This must be rejected as non-independent.'] });
+  json(root, 'keeper-duplicate.json', { run_id: 'keeper-run-001', prepared_digest: secondReady.digest, verdict: 'passed', summary: 'Duplicate run.', evidence: ['This must be rejected as non-independent.'], review: independentReview('fresh-duplicate-agent') });
   assert(run(root, ['keeper', 'record', '--json-file', 'keeper-duplicate.json'], 1).includes('already used'), 'Keeper run_id must be unique');
   writeFileSync(capabilityPath, `${readFileSync(capabilityPath, 'utf8')}\nFresh evidence discovered after ready.\n`, 'utf8');
-  json(root, 'keeper-stale.json', { run_id: 'keeper-run-stale', prepared_digest: secondReady.digest, verdict: 'passed', summary: 'Stale run.', evidence: ['This result used a stale prepared project.'] });
+  json(root, 'keeper-stale.json', { run_id: 'keeper-run-stale', prepared_digest: secondReady.digest, verdict: 'passed', summary: 'Stale run.', evidence: ['This result used a stale prepared project.'], review: independentReview('fresh-stale-agent') });
   assert(run(root, ['keeper', 'record', '--json-file', 'keeper-stale.json'], 1).includes('changed after'), 'stale prepared state must be rejected');
   const thirdReady = JSON.parse(run(root, ['project', 'ready']));
-  json(root, 'keeper-pass.json', { run_id: 'keeper-run-002', prepared_digest: thirdReady.digest, verdict: 'passed', summary: 'The project is build-ready.', evidence: ['PROJECT.md defines the whole and TASK-001 links the only required dossier.'] });
+  json(root, 'keeper-self.json', { run_id: 'keeper-self-002', prepared_digest: thirdReady.digest, verdict: 'passed', summary: 'Self review cannot establish independence.', evidence: ['The shaping Agent reviewed its own work.'], review: { mode: 'self', reviewer_id: 'shaping-agent', evidence: 'Same Agent and inherited context.' } });
+  assert(run(root, ['keeper', 'record', '--json-file', 'keeper-self.json'], 1).includes('independent review'), 'self-review should not produce Keeper pass');
+  json(root, 'keeper-pass.json', { run_id: 'keeper-run-002', prepared_digest: thirdReady.digest, verdict: 'passed', summary: 'The project is build-ready.', evidence: ['PROJECT.md defines the whole and TASK-001 links the only required dossier.'], review: { mode: 'independent', reviewer_id: 'fresh-agent-002', evidence: 'Host opened a separate Agent with no shaping conversation.' } });
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
   const restartableTask = JSON.parse(run(root, ['task', 'get', 'TASK-001']));
   json(root, 'bad-task-reads.json', { reads: [...restartableTask.reads, '.loom/design'] });
@@ -585,6 +630,7 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   assert(context.includes('Human-Agent Interaction'), 'relevant capability was not compiled');
   assert(context.includes('restartable checkpoint'), 'project-specific stance was not injected');
   assert(context.includes('forced-reset handoff'), 'workspace fixture was not compiled');
+  writeFileSync(join(root, 'output.txt'), 'verified\n', 'utf8');
   json(root, 'bypass.json', { status: 'done' });
   assert(run(root, ['task', 'update', 'TASK-001', '--json-file', 'bypass.json'], 1).includes('cannot be updated'), 'generic update must not bypass done evidence');
   json(root, 'block.json', { reason: 'The declared context entry point does not exist yet.', recovery_conditions: ['Create and verify the entry point'], evidence: ['Read-only inspection found no entry point.'] });
@@ -643,7 +689,31 @@ test('help and source surface stay minimal', () => {
   const help = run(root, ['--help']);
   for (const command of ['loom context', 'loom prompts', 'loom record', 'loom decision', 'loom design add', 'loom capability add', 'loom capability research', 'loom capability synthesize', 'loom capability confirm', 'loom deliverable add', 'loom deliverable coverage', 'loom task plan', 'loom keeper prompt', 'loom eval scaffold']) assert(help.includes(command), `${command} missing`);
   for (const legacy of ['Intent Map', 'Capability Graph', 'Atelier', 'Atlas', 'Weaver', 'Forge']) assert(!help.includes(legacy), `${legacy} leaked into minimal help`);
-  assert(run(root, ['--version']) === 'loom 2.1.1', 'version mismatch');
+  const helpCases = [
+    [['record', '--help'], ['"confirmed"', '"assumptions"', '"unresolved"', '"decisions"']],
+    [['decision', '--help'], ['"summary"', '"changes"', '"affected_tasks"']],
+    [['task', 'plan', '--help'], ['"acceptance"', '"implements"', '"capability_hooks"']],
+    [['task', 'update', '--help'], ['"progress"', '"current"', '"next"']],
+    [['task', 'block', '--help'], ['"reason"', '"recovery_conditions"']],
+    [['task', 'done', '--help'], ['"evidence"', '"acceptance_results"']],
+    [['keeper', 'record', '--help'], ['"review"', '"mode"', '"reviewer_id"']],
+    [['eval', 'scaffold', '--help'], ['"brief"', '"human_channel"', '"repetitions"']],
+  ];
+  for (const [args, fields] of helpCases) {
+    const detail = run(root, args);
+    for (const field of fields) assert(detail.includes(field), `loom ${args.join(' ')} missing ${field}`);
+  }
+  assert(run(root, ['help', 'task-done']).includes('acceptance_results'), 'loom help <topic> should expose the same canonical payload');
+  run(root, ['init']);
+  json(root, 'bad-record.json', { confirmed: [{ nope: true }] });
+  const badRecord = run(root, ['record', '--json-file', 'bad-record.json'], 1);
+  assert(badRecord.includes('Confirmed fact requires text'), 'structured write error lost the concrete validation failure');
+  assert(badRecord.includes('loom record --help'), 'structured write error should point to command-local help');
+  const chineseReadme = readFileSync(resolve('README.zh-CN.md'), 'utf8');
+  assert(chineseReadme.includes('--source human'), 'Chinese README should teach capability authority provenance');
+  assert(chineseReadme.includes('review.mode: "independent"'), 'Chinese README should teach independent Keeper provenance');
+  assert(chineseReadme.includes('loom task done --help'), 'Chinese README should point structured writes to command-local help');
+  assert(run(root, ['--version']) === 'loom 2.1.2', 'version mismatch');
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });

@@ -70,6 +70,9 @@ systems. Different fields remain separate even when tightly coupled; their synth
 design document whose decision they jointly shape. A task technique such as triage, ranking, parsing,
 or caching is not allowed to masquerade as the project's entire capability surface.
 
+Capability scenario authority remains visible: `--source human` confirms a user-selected scenario;
+`--source agent` records a provisional selection when the human is unavailable.
+
 ### Work Map and Task
 
 The Work Map may be hundreds or thousands of lines. It is stored, searched, and revised on disk; it
@@ -83,6 +86,7 @@ Agent:
 - what proves completion;
 - what must not be damaged;
 - which project and capability documents matter;
+- which design decision and capability nodes apply, or why they do not;
 - what has happened, what is happening, and what comes next;
 - which evidence already exists and which exact done condition it proves.
 
@@ -145,6 +149,7 @@ loom design add local-analysis --title "Local analysis system" --kind system
 loom design add acceptance --title "Vertical-slice verification" --kind verification
 loom capability add ui-ux-design --title "UI/UX design"
 loom capability add behavioral-psychology --title "Behavioral psychology"
+loom capability confirm behavioral-psychology --scenario "<project-specific expert situation>" --source human
 loom task plan --json-file initial-work-map.json
 loom project ready
 ```
@@ -154,6 +159,10 @@ At the transition to material execution, open a fresh Agent thread and give it o
 ```text
 Run loom keeper prompt in this project and follow it. Decide whether you can responsibly start.
 ```
+
+Keeper pass JSON records `review.mode: "independent"`, a reviewer identity, and concrete isolation evidence.
+Known self-review cannot pass; if the host cannot isolate a fresh Agent, use `loom keeper skip` with the
+reason so reduced confidence stays visible.
 
 If Keeper returns `needs_revision` or `blocked`, those exact gaps reappear in `loom context`. The Agent
 repairs the relevant project, design, capability, or Task source, prepares a changed digest, and opens a
@@ -175,17 +184,19 @@ Completion is deliberately explicit:
 
 ```json
 {
-  "evidence": ["npm test: 20 passed, 0 failed"],
+  "evidence": ["npm test: 21 passed, 0 failed"],
   "acceptance_results": [
     {
       "criterion": "The exact acceptance criterion from the Task.",
-      "evidence": ["The command, artifact, or observation that proves this criterion."]
+      "evidence": "The command, artifact, or observation that proves this criterion."
     }
   ]
 }
 ```
 
-Run `loom --help` for the complete command surface. Run `loom check` for structural health. Run
+Run `loom --help` for the complete command surface. Structured-write commands expose canonical payloads
+through command-specific help such as `loom record --help` and `loom task done --help`. Run `loom check`
+for structural health. Run
 `loom prompts` to print every cognitive message LOOM can inject: the stable collaboration core,
 runtime protocol, dynamic state layer, all document templates, Keeper prompt, eval conditions, judge
 prompt, and their composition order. See the [prompt and message catalog](docs/PROMPT_CATALOG.md).
@@ -215,7 +226,7 @@ user burden, time, and token cost are penalized alongside quality. See [EVIL_EVA
 npm test
 ```
 
-The v2 test suite (20 end-to-end tests) exercises the complete loop, including a 250-Task Work Map, context selection,
+The v2 test suite exercises the complete loop, including a 250-Task Work Map, context selection,
 superseding decisions, scalable design documents, professional-field separation, capability compilation with
 source-citation validation, multi-attempt Keeper revision with auto-pass, stale digest and duplicate-run
 rejection, exact-file Task start, block/reopen including disproven completion, per-acceptance-criterion evidence,

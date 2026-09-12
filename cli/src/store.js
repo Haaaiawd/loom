@@ -197,6 +197,9 @@ function validateTasks(tasks) {
       }
     }
     if (task.implements !== undefined && typeof task.implements !== 'string') throw new Error(`${task.id} implements must be a string referencing a design decision`);
+    if (task.design_exemption !== undefined && (typeof task.design_exemption !== 'string' || (task.design_exemption && task.design_exemption.length < 10))) throw new Error(`${task.id} design_exemption must be a concrete reason`);
+    if (task.capability_exemption !== undefined && (typeof task.capability_exemption !== 'string' || (task.capability_exemption && task.capability_exemption.length < 10))) throw new Error(`${task.id} capability_exemption must be a concrete reason`);
+    if (task.integrity_version !== undefined && task.integrity_version !== 1) throw new Error(`${task.id} integrity_version is unsupported`);
     if (task.capability_hooks !== undefined) {
       if (!Array.isArray(task.capability_hooks)) throw new Error(`${task.id} capability_hooks must be an array`);
       for (const hook of task.capability_hooks) {
@@ -406,16 +409,19 @@ export function synthesizeCapability(slug, root = findRoot()) {
 
 export function confirmCapability(slug, options = {}, root = findRoot()) {
   if (!options.scenario || options.scenario.length < 20) throw new Error('Confirm requires --scenario <text> (at least 20 characters describing which expert situation this project most resembles)');
+  if (!['human', 'agent'].includes(options.source)) throw new Error('Capability confirmation requires explicit provenance: --source human|agent');
   const { paths } = loadProject(root);
   const dir = join(paths.capabilities, slug);
   if (!existsSync(dir)) throw new Error(`Capability not found: ${slug}`);
   const statusPath = join(dir, 'status.json');
   if (!existsSync(statusPath)) throw new Error(`Capability ${slug} is not a research-directory dossier`);
   const status = readJson(statusPath, 'status.json');
-  if (status.status !== 'synthesized') throw new Error(`Capability ${slug} must be synthesized before confirmation. Run loom capability synthesize ${slug} first.`);
+  if (!['synthesized', 'provisional'].includes(status.status)) throw new Error(`Capability ${slug} must be synthesized before confirmation. Run loom capability synthesize ${slug} first.`);
   status.scenario = options.scenario;
-  status.status = 'confirmed';
-  status.confirmed_at = now();
+  status.source = options.source;
+  status.status = options.source === 'human' ? 'confirmed' : 'provisional';
+  status.selected_at = now();
+  status.confirmed_at = options.source === 'human' ? now() : '';
   status.updated_at = now();
   atomicJson(statusPath, status);
   const capabilityPath = join(dir, 'capability.md');
@@ -429,7 +435,7 @@ export function confirmCapability(slug, options = {}, root = findRoot()) {
     const updated = content.replace(/## Project scenario\n[\s\S]*?\n## /, `${prefix}${blockquoteText}\n${options.scenario}\n${suffix}`);
     writeFileSync(capabilityPath, updated, 'utf8');
   }
-  return { slug, status: 'confirmed', scenario: options.scenario };
+  return { slug, status: status.status, scenario: options.scenario, source: options.source };
 }
 
 export function getCapabilityStatus(slug, root = findRoot()) {
@@ -535,7 +541,10 @@ export function importTasks(payload, root = findRoot()) {
       reads: raw.reads || ['.loom/PROJECT.md'],
       touches: raw.touches || [],
       implements: raw.implements || '',
+      design_exemption: raw.design_exemption || '',
       capability_hooks: raw.capability_hooks || [],
+      capability_exemption: raw.capability_exemption || '',
+      integrity_version: 1,
       covers: raw.covers || [],
       status: 'open',
       progress: raw.progress || { completed: [], current: '', next: '' },
@@ -573,11 +582,41 @@ function nextTask(tasks) {
   return tasks.find((task) => task.status === 'open' && task.depends_on.every((id) => done.has(id))) || null;
 }
 
+function taskIntegrityFindings(task, designs, capabilities) {
+  if (task.integrity_version !== 1) return [];
+  const findings = [];
+  if (designs.length && !task.implements?.trim() && !task.design_exemption?.trim()) findings.push('is missing implements or design_exemption');
+  if (capabilities.length && !(task.capability_hooks || []).length && !task.capability_exemption?.trim()) findings.push('is missing capability_hooks or capability_exemption');
+  return findings;
+}
+
+function assertTaskIntegrityClassification(task, root) {
+  const findings = taskIntegrityFindings(task, listDesigns(root), listCapabilities(root));
+  if (findings.length) throw new Error(`${task.id} has unresolved integrity classification:\n- ${findings.join('\n- ')}\nAdd the relevant link or a concrete exemption before execution.`);
+}
+
+function declaredArtifactPath(paths, ref) {
+  const normalized = ref.replaceAll('\\', '/');
+  if (isAbsolute(normalized) || normalized.startsWith('/') || normalized.includes('..')) throw new Error(`Unsafe declared artifact path: ${ref}`);
+  const fromLoom = normalized === '.loom' || normalized.startsWith('.loom/');
+  const base = fromLoom ? paths.loom : paths.root;
+  const relativeRef = fromLoom ? normalized.slice('.loom'.length).replace(/^\//, '') : normalized;
+  const absolute = resolve(base, relativeRef);
+  const prefix = `${base}${process.platform === 'win32' ? '\\' : '/'}`;
+  if (!absolute.startsWith(prefix) && absolute !== base) throw new Error(`Unsafe declared artifact path: ${ref}`);
+  return absolute;
+}
+
+function missingTaskOutputs(task, paths) {
+  if (task.integrity_version !== 1) return [];
+  return task.touches.filter((ref) => !existsSync(declaredArtifactPath(paths, ref)));
+}
+
 export function updateTask(id, patch, root = findRoot()) {
   const { paths, taskStore } = loadProject(root);
   const task = taskStore.tasks.find((item) => item.id === id);
   if (!task) throw new Error(`Task not found: ${id}`);
-  const allowed = ['title', 'outcome', 'acceptance', 'done_when', 'boundaries', 'depends_on', 'reads', 'touches', 'implements', 'capability_hooks', 'covers', 'progress', 'evidence'];
+  const allowed = ['title', 'outcome', 'acceptance', 'done_when', 'boundaries', 'depends_on', 'reads', 'touches', 'implements', 'design_exemption', 'capability_hooks', 'capability_exemption', 'covers', 'progress', 'evidence'];
   for (const key of Object.keys(patch)) if (!allowed.includes(key)) throw new Error(`Task field cannot be updated: ${key}`);
   Object.assign(task, patch, { updated_at: now() });
   validateTasks(taskStore.tasks);
@@ -634,6 +673,7 @@ export function startTask(id, root = findRoot()) {
   if (taskStore.tasks.some((task) => task.status === 'active')) throw new Error('Another Task is already active');
   const task = taskStore.tasks.find((item) => item.id === id);
   if (!task || task.status !== 'open') throw new Error(`${id} is not open`);
+  assertTaskIntegrityClassification(task, root);
   const done = new Set(taskStore.tasks.filter((item) => item.status === 'done').map((item) => item.id));
   const missing = task.depends_on.filter((dep) => !done.has(dep));
   if (missing.length) throw new Error(`${id} has incomplete dependencies: ${missing.join(', ')}`);
@@ -654,6 +694,9 @@ export function completeTask(id, payload, root = findRoot()) {
   if (!task) throw new Error(`Task not found: ${id}`);
   if (task.status !== 'active') throw new Error(`${id} is not active`);
   if (!Array.isArray(payload.evidence) || !payload.evidence.length) throw new Error('Completing a Task requires concrete evidence');
+  assertTaskIntegrityClassification(task, root);
+  const missingOutputs = missingTaskOutputs(task, paths);
+  if (missingOutputs.length) throw new Error(`${id} declared output does not exist:\n- ${missingOutputs.join('\n- ')}`);
   const hasAcceptance = Array.isArray(task.acceptance) && task.acceptance.length > 0;
   if (hasAcceptance) {
     if (!Array.isArray(payload.acceptance_results)) throw new Error('Completing a Task with acceptance[] requires acceptance_results[]');
@@ -762,6 +805,10 @@ export function recordKeeper(payload, root = findRoot()) {
   if (state.project.status !== 'ready_for_keeper') throw new Error('Keeper result cannot be recorded before loom project ready');
   if (!['passed', 'needs_revision', 'blocked'].includes(payload.verdict)) throw new Error('Keeper verdict must be passed, needs_revision, or blocked');
   if (!payload.summary || !Array.isArray(payload.evidence) || !payload.evidence.length) throw new Error('Keeper result requires summary and evidence');
+  if (payload.verdict === 'passed') {
+    if (!payload.review || payload.review.mode !== 'independent') throw new Error('Keeper pass requires an independent review; use review.mode="independent" from a fresh Agent, or loom keeper skip with a concrete reason');
+    if (!payload.review.reviewer_id || payload.review.reviewer_id.length < 6 || !payload.review.evidence || payload.review.evidence.length < 10) throw new Error('Independent Keeper review requires reviewer_id and concrete review evidence');
+  }
   if (payload.evidence.some((item) => typeof item !== 'string' || !item.trim())) throw new Error('Keeper evidence entries must be non-empty strings');
   if (payload.gaps !== undefined && !Array.isArray(payload.gaps)) throw new Error('Keeper gaps must be an array');
   for (const gap of payload.gaps || []) {
@@ -784,7 +831,7 @@ export function recordKeeper(payload, root = findRoot()) {
   if (!payload.prepared_digest || payload.prepared_digest !== state.keeper.prepared_digest) throw new Error('Keeper result prepared_digest does not match the current ready state');
   const currentDigest = projectDigest(paths, taskStore.tasks);
   if (currentDigest !== state.keeper.prepared_digest) throw new Error('Project truth changed after loom project ready; prepare a new Keeper attempt');
-  const attempt = { run_id: payload.run_id, prepared_digest: payload.prepared_digest, verdict: payload.verdict, summary: payload.summary, evidence: payload.evidence, gaps: payload.gaps || [], can_auto_pass: canAutoPass, at: now() };
+  const attempt = { run_id: payload.run_id, prepared_digest: payload.prepared_digest, verdict: payload.verdict, summary: payload.summary, evidence: payload.evidence, gaps: payload.gaps || [], review: payload.review || { mode: 'unverified', reviewer_id: '', evidence: '' }, can_auto_pass: canAutoPass, at: now() };
   state.keeper.attempts.push(attempt);
   state.keeper.status = payload.verdict;
   if (payload.verdict === 'passed') state.project.status = 'build_ready';
@@ -834,8 +881,12 @@ export function compileContext(options = {}, root = findRoot()) {
         : state.project.status === 'shaping'
           ? 'Project is still shaping. Confirm the intended result, identify open questions, and build the Work Map before starting material work.'
           : 'No executable Task. Create or update Tasks so the Work Map matches the project goal.';
-  const statusBlock = `## Current LOOM state and recommended action\n\n- Project status: ${state.project.status}\n- Active task: ${summary.active || 'none'}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n- Design documents: ${designs.length}\n- Capability dossiers: ${capabilities.length}\n- Keeper status: ${state.keeper.status}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.loom/DECISIONS.md\` or the active Task evidence.`;
-  const blocks = [statusBlock, agentProtocol({ humanChannel: options.humanChannel || 'available' }), shapingContext({ state, taskSummary: summary, capabilityNames: capabilities, designNames: designs, forKeeper: Boolean(options.keeper) })];
+  const capabilityStates = capabilities.map((name) => {
+    const statusPath = join(paths.capabilities, name, 'status.json');
+    return existsSync(statusPath) ? `${name} (${readJson(statusPath, 'status.json').status || 'unknown'})` : `${name} (legacy)`;
+  });
+  const statusBlock = `## Current LOOM state and recommended action\n\n- Project status: ${state.project.status}\n- Active task: ${summary.active || 'none'}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n- Design documents: ${designs.length}\n- Capability dossiers: ${capabilityStates.length ? capabilityStates.join(', ') : 'none'}\n- Keeper status: ${state.keeper.status}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.loom/DECISIONS.md\` or the active Task evidence.`;
+  const blocks = [statusBlock, agentProtocol({ humanChannel: options.humanChannel || 'available' }), shapingContext({ state, taskSummary: summary, capabilityNames: capabilityStates, designNames: designs, forKeeper: Boolean(options.keeper) })];
   blocks.push(`## Project whole (${normalizeRef(paths, paths.project)})\n\n${readFileSync(paths.project, 'utf8')}`);
   if (existsSync(paths.structure)) blocks.push(`## Project structure (${normalizeRef(paths, paths.structure)})\n\n${readFileSync(paths.structure, 'utf8')}`);
   if (options.keeper) {
@@ -891,6 +942,8 @@ function readContextDocument(paths, ref) {
 
 export function checkProject(root = findRoot()) {
   const { paths, state, taskStore } = loadProject(root);
+  const designs = listDesigns(root);
+  const capabilities = listCapabilities(root);
   const errors = [];
   const warnings = [];
   for (const task of taskStore.tasks) {
@@ -901,6 +954,15 @@ export function checkProject(root = findRoot()) {
       for (const hook of task.capability_hooks) {
         const nodeContent = extractCapabilityNode(paths, hook.node);
         if (nodeContent === null) warnings.push(`${task.id} references missing capability node: ${hook.node}`);
+      }
+    }
+    if (task.integrity_version === 1) {
+      const classificationFindings = taskIntegrityFindings(task, designs, capabilities);
+      const target = ['active', 'done'].includes(task.status) ? errors : warnings;
+      target.push(...classificationFindings.map((finding) => `${task.id} ${finding}`));
+      if (task.status === 'done') {
+        const missingOutputs = missingTaskOutputs(task, paths);
+        errors.push(...missingOutputs.map((output) => `${task.id} declared output does not exist: ${output}`));
       }
     }
     const hasAcceptance = Array.isArray(task.acceptance) && task.acceptance.length > 0;
@@ -919,14 +981,14 @@ export function checkProject(root = findRoot()) {
     const task = taskStore.tasks.find((item) => item.id === taskId);
     if (task && task.status === 'done') warnings.push(`${taskId} is done but was marked affected by a decision; consider reopening if the change invalidates prior work`);
   }
-  if (!listCapabilities(root).length) warnings.push('No capability dossier exists; acceptable only when specialist judgment would not change the work');
-  if (!listDesigns(root).length) warnings.push('No design document exists; PROJECT.md should remain a concise map of the whole');
+  if (!capabilities.length) warnings.push('No capability dossier exists; acceptable only when specialist judgment would not change the work');
+  if (!designs.length) warnings.push('No design document exists; PROJECT.md should remain a concise map of the whole');
   if (!existsSync(paths.structure)) warnings.push('No STRUCTURE.md exists; declare where files go so the Agent does not guess');
   else if (readFileSync(paths.structure, 'utf8').includes('Where implementation files go. Example:')) warnings.push('STRUCTURE.md still contains template instructions; customize it for this project');
-  for (const name of listDesigns(root)) {
+  for (const name of designs) {
     if (readFileSync(join(paths.design, name), 'utf8').includes('Describe the project-specific decision, mechanism, boundary, or evidence owned by this section.')) warnings.push(`Design document still contains template instructions: ${name}`);
   }
-  for (const name of listCapabilities(root)) {
+  for (const name of capabilities) {
     const content = readFileSync(capabilityPath(paths, name), 'utf8');
     if (capabilityTemplateResidue(content)) warnings.push(`Capability dossier still contains template instructions: ${name}`);
     if (content.includes('### C') && !content.includes('source:')) warnings.push(`Capability dossier has decision tree nodes without source citations: ${name}`);
@@ -936,6 +998,8 @@ export function checkProject(root = findRoot()) {
       if (capStatus.status && capStatus.status !== 'confirmed') warnings.push(`Capability ${name} is ${capStatus.status}, not confirmed; tasks referencing it proceed provisionally`);
     }
   }
+  const latestKeeper = state.keeper.attempts.at(-1);
+  if (state.keeper.status === 'passed' && latestKeeper && latestKeeper.review?.mode !== 'independent') warnings.push('Keeper pass has no independently attested review provenance; prepare a fresh review before relying on it');
   const coverage = checkDeliverableCoverage(root);
   if (coverage.uncovered > 0) warnings.push(`Uncovered deliverables: ${coverage.uncovered_items.map((item) => item.slug).join(', ')}`);
   return { healthy: errors.length === 0, errors, warnings, summary: taskSummary(taskStore.tasks), deliverable_coverage: { total: coverage.total, covered: coverage.covered, uncovered: coverage.uncovered } };

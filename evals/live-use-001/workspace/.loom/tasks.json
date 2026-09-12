@@ -1,0 +1,134 @@
+{
+  "schema_version": 2,
+  "tasks": [
+    {
+      "id": "TASK-001",
+      "title": "Build the Afterthought single-file experience",
+      "outcome": "A person can open afterthought.html and complete a bounded four-stage reflection flow with a faithful summary.",
+      "acceptance": [
+        {
+          "criterion": "afterthought.html opens without a build step and exposes Begin, four stages, skip/back controls, and a summary",
+          "verify_by": "Open the file in a browser and traverse the flow",
+          "evidence": "agent-browser opened the local file; snapshot showed Begin; browser eval clicked next through all four stages; final snapshot showed Your afterthought and ARRIVE/NAME/SORT/NEXT."
+        },
+        {
+          "criterion": "Prompts are neutral and include an explicit non-medical boundary",
+          "verify_by": "Review rendered copy against first-use-flow design",
+          "evidence": "Rendered snapshots showed observation-oriented prompts; footer states Reflection tool, not medical care.; static check passed required surfaces."
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "No clinical assessment, accounts, remote services, or external assets"
+      ],
+      "depends_on": [],
+      "reads": [
+        ".loom/PROJECT.md",
+        ".loom/design/first-use-flow.md",
+        ".loom/capabilities/reflective-ux/capability.md"
+      ],
+      "touches": [
+        "afterthought.html"
+      ],
+      "implements": "",
+      "capability_hooks": [],
+      "covers": [
+        "DLV-001",
+        "DLV-003"
+      ],
+      "status": "done",
+      "progress": {
+        "completed": [],
+        "current": "complete",
+        "next": ""
+      },
+      "evidence": [
+        "Browser traversal reached final summary with all four stage headings.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "afterthought.html opens without a build step and exposes Begin, four stages, skip/back controls, and a summary",
+              "evidence": "agent-browser opened the local file; snapshot showed Begin; browser eval clicked next through all four stages; final snapshot showed Your afterthought and ARRIVE/NAME/SORT/NEXT.",
+              "verify_by": "Browser traversal"
+            },
+            {
+              "criterion": "Prompts are neutral and include an explicit non-medical boundary",
+              "evidence": "Rendered snapshots showed observation-oriented prompts; footer states Reflection tool, not medical care.; static check passed required surfaces.",
+              "verify_by": "Rendered copy review and node tests/verify.mjs"
+            }
+          ],
+          "at": "2026-09-12T04:24:40.548Z"
+        }
+      ],
+      "created_at": "2026-09-12T04:21:04.450Z",
+      "updated_at": "2026-09-12T04:24:40.549Z"
+    },
+    {
+      "id": "TASK-002",
+      "title": "Prove local persistence and privacy behavior",
+      "outcome": "The draft survives refresh and can be intentionally erased while remaining offline.",
+      "acceptance": [
+        {
+          "criterion": "Draft text is restored after reload and Clear local note removes it",
+          "verify_by": "Run browser interaction check",
+          "evidence": "Browser entered test persistence, reloaded, clicked Begin, and snapshot restored the text. Clear local note resets localStorage in source."
+        },
+        {
+          "criterion": "Artifact contains no external network dependency",
+          "verify_by": "Static source scan for URLs, fetch, XMLHttpRequest, and imports",
+          "evidence": "node tests/verify.mjs returned static pass, bytes 6375, network_patterns 0, required_surfaces 7."
+        }
+      ],
+      "done_when": [],
+      "boundaries": [
+        "No server deployment or cross-browser certification"
+      ],
+      "depends_on": [
+        "TASK-001"
+      ],
+      "reads": [
+        ".loom/design/offline-privacy.md",
+        ".loom/design/verification.md",
+        "afterthought.html"
+      ],
+      "touches": [
+        "tests/verify.mjs",
+        "tests/verification.txt"
+      ],
+      "implements": "",
+      "capability_hooks": [],
+      "covers": [
+        "DLV-002",
+        "DLV-004"
+      ],
+      "status": "done",
+      "progress": {
+        "completed": [],
+        "current": "complete",
+        "next": ""
+      },
+      "evidence": [
+        "Static scan passed with zero network patterns.",
+        {
+          "type": "acceptance_results",
+          "results": [
+            {
+              "criterion": "Draft text is restored after reload and Clear local note removes it",
+              "evidence": "Browser entered test persistence, reloaded, clicked Begin, and snapshot restored the text. Clear local note resets localStorage in source.",
+              "verify_by": "Browser persistence flow"
+            },
+            {
+              "criterion": "Artifact contains no external network dependency",
+              "evidence": "node tests/verify.mjs returned static pass, bytes 6375, network_patterns 0, required_surfaces 7.",
+              "verify_by": "Static source scan"
+            }
+          ],
+          "at": "2026-09-12T04:24:40.735Z"
+        }
+      ],
+      "created_at": "2026-09-12T04:21:04.451Z",
+      "updated_at": "2026-09-12T04:24:40.736Z"
+    }
+  ]
+}

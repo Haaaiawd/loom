@@ -1,6 +1,6 @@
 {
   "name": "@haaaiawd/loom",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "description": "LOOM — Spec-driven continuity, proof, and project understanding infrastructure for AI coding agents",
   "type": "module",
   "bin": {

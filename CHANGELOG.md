@@ -2,9 +2,16 @@
 
 ## Unreleased
 
+## 2.1.2
+
 - Added environment-aware clarification through `loom context --human-channel available|unavailable`. Unattended Agents inspect first, research only permitted objective facts, and then use bounded assumptions or blocks rather than fabricating users or substituting web search for intent.
 - Added `--state-dir <outside-workspace-dir>` sidecars for isolated benchmark and sandbox runs. Sidecars preserve virtual `.loom/` Task references without mutating the scored workspace or its `AGENTS.md`.
 - Added equal human-channel controls and unattended condition prompts to Evil Eval scaffolding.
+- Added explicit capability authority provenance: human selections become confirmed, while Agent selections remain visibly provisional until human confirmation.
+- Required independent Keeper review provenance for a passing handoff; known self-review can no longer be recorded as an independent pass.
+- Added Task integrity enforcement for design links, capability hooks or explicit exemptions, plus declared output existence checks before completion.
+- Added command-specific canonical JSON help and recovery pointers for every structured-write command.
+- Updated generated Agent guidance and both public READMEs so installed and source-checkout invocation paths are unambiguous.
 
 ## 2.1.1
 

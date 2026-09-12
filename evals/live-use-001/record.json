@@ -1,0 +1,20 @@
+{
+  "confirmed": [
+    "The product is an offline single-page web experience named Afterthought.",
+    "The primary situation is a person leaving a high-pressure meeting and needing a three-minute reflection.",
+    "User data must remain on the local device; the product must not diagnose, treat, or decide for the user.",
+    "The final artifact must open by double-clicking a file."
+  ],
+  "assumptions": [
+    {"text":"A dependency-free HTML file with inline CSS and JavaScript is the safest meaning of offline and double-clickable.","source":"agent"},
+    {"text":"The app may use localStorage for optional persistence, with an explicit clear action and no network requests.","source":"agent"},
+    {"text":"Human response channel is unavailable, so copy, visual style, and interaction details are reversible agent decisions.","source":"environment"}
+  ],
+  "unresolved": [
+    {"question":"Whether the user prefers a different visual tone or exact reflection prompts.","impact":"low"}
+  ],
+  "decisions": [
+    {"title":"Local-only single file","decision":"Deliver one self-contained afterthought.html with no external assets, fonts, libraries, or network calls.","rationale":"This directly supports double-click launch and protects privacy under offline use.","supersedes":[]},
+    {"title":"Prompt, do not judge","decision":"Use neutral questions and user-authored labels; avoid mental-health claims, scoring, diagnosis, or recommendations presented as truth.","rationale":"The brief explicitly rejects a therapy product and substitution of the product's judgment for the user's.","supersedes":[]}
+  ]
+}

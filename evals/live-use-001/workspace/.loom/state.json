@@ -1,0 +1,95 @@
+{
+  "schema_version": 2,
+  "project": {
+    "name": "workspace",
+    "status": "complete",
+    "created_at": "2026-09-12T04:16:50.988Z",
+    "updated_at": "2026-09-12T04:24:40.738Z"
+  },
+  "understanding": {
+    "confirmed": [
+      {
+        "id": "F-001",
+        "text": "The product is an offline single-page web experience named Afterthought.",
+        "source": "conversation",
+        "at": "2026-09-12T04:18:06.208Z"
+      },
+      {
+        "id": "F-002",
+        "text": "The primary situation is a person leaving a high-pressure meeting and needing a three-minute reflection.",
+        "source": "conversation",
+        "at": "2026-09-12T04:18:06.209Z"
+      },
+      {
+        "id": "F-003",
+        "text": "User data must remain on the local device; the product must not diagnose, treat, or decide for the user.",
+        "source": "conversation",
+        "at": "2026-09-12T04:18:06.209Z"
+      },
+      {
+        "id": "F-004",
+        "text": "The final artifact must open by double-clicking a file.",
+        "source": "conversation",
+        "at": "2026-09-12T04:18:06.209Z"
+      }
+    ],
+    "assumptions": [
+      {
+        "id": "A-001",
+        "text": "A dependency-free HTML file with inline CSS and JavaScript is the safest meaning of offline and double-clickable.",
+        "status": "active",
+        "source": "agent",
+        "at": "2026-09-12T04:18:06.209Z"
+      },
+      {
+        "id": "A-002",
+        "text": "The app may use localStorage for optional persistence, with an explicit clear action and no network requests.",
+        "status": "active",
+        "source": "agent",
+        "at": "2026-09-12T04:18:06.209Z"
+      },
+      {
+        "id": "A-003",
+        "text": "Human response channel is unavailable, so copy, visual style, and interaction details are reversible agent decisions.",
+        "status": "active",
+        "source": "environment",
+        "at": "2026-09-12T04:18:06.209Z"
+      }
+    ],
+    "unresolved": [
+      {
+        "id": "Q-001",
+        "question": "Whether the user prefers a different visual tone or exact reflection prompts.",
+        "impact": "low",
+        "status": "open",
+        "at": "2026-09-12T04:18:06.209Z"
+      }
+    ]
+  },
+  "keeper": {
+    "status": "passed",
+    "attempts": [
+      {
+        "run_id": "keeper-live-use-001",
+        "prepared_digest": "96ca8115111cf9c4bdeeb3964acc0ebf1777d8e24cc75faaa48f4511339d4323",
+        "verdict": "passed",
+        "summary": "The handoff chain is intact: a fresh Agent can identify the local artifact, read the experience/privacy/verification decisions, execute the first task, and recognize browser and static proof.",
+        "evidence": [
+          ".loom/PROJECT.md maps intent and boundaries",
+          ".loom/design/first-use-flow.md, offline-privacy.md, and verification.md own decision surfaces",
+          ".loom/capabilities/reflective-ux/capability.md has three source-cited, counterexample-backed nodes",
+          ".loom/tasks.json contains two acceptance-based tasks with reads, touches, dependencies, and deliverable coverage"
+        ],
+        "gaps": [],
+        "can_auto_pass": false,
+        "at": "2026-09-12T04:22:24.408Z"
+      }
+    ],
+    "prepared_digest": "96ca8115111cf9c4bdeeb3964acc0ebf1777d8e24cc75faaa48f4511339d4323",
+    "prepared_attempt": 1
+  },
+  "decision_ids": [
+    "D-001",
+    "D-002"
+  ]
+}

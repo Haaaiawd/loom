@@ -76,9 +76,11 @@ a counterexample, and an output. Nodes without sources are not accepted; branche
 counterexamples are fixed steps in disguise.
 
 Build dossiers in four steps: research (collect expert narratives, case studies, and methodology
-sources), synthesize (construct the project-specific decision tree from research), confirm (the user
-confirms which expert scenario this project most resembles — the Agent must not decide this alone),
-and confirmed. \`loom capability research\` creates a \`_guide.md\` in the research directory explaining
+sources), synthesize (construct the project-specific decision tree from research), select the scenario,
+and confirm its authority. Use \`loom capability confirm <slug> --scenario <text> --source human\` when
+the user confirms which expert situation applies. Use \`--source agent\` only for a reversible provisional
+selection when the human is unavailable; it remains visibly provisional until a human confirms it.
+\`loom capability research\` creates a \`_guide.md\` in the research directory explaining
 what to write — create one .md file per source, citing where the knowledge came from. \`loom capability
 synthesize\` reads those files and validates that every decision tree node has a source citation and a
 counterexample. A dossier that has not been confirmed should not be referenced by Tasks, but the
@@ -112,6 +114,10 @@ Each Task records:
   depend on it.
 - **touches**: every file, document, or artifact the Task is expected to produce or modify. Must be
   specific paths. A Task that touches nothing is not a Task.
+- **implements**: the design decision this Task realizes. If no design applies, use a concrete
+  \`design_exemption\` instead of leaving the relationship implicit.
+- **capability_hooks**: the professional decision-tree nodes activated by this Task. If no dossier
+  applies, use a concrete \`capability_exemption\`; an empty array alone is not a decision.
 - **depends_on**: other Tasks that must be done first. Empty is valid only when this Task has no
   prerequisites.
 - **covers**: which delivery units this Task advances. Use this to check that the delivery surface is
@@ -241,7 +247,9 @@ project, after a context reset, before substantial work, and when the human give
 change. When a Task is active, the command restores its execution protocol, exact state, and declared
 context; rerun it before editing after any interruption. Keep project truth, design documents, professional
 capability dossiers, and Tasks current through the CLI, and never ask the human to operate LOOM. Do not
-rerun LOOM before every tool call: persist and restore at meaningful work boundaries.`;
+rerun LOOM before every tool call: persist and restore at meaningful work boundaries. The installed
+\`loom\` command is the stable project-local invocation. If it is not on PATH in a source checkout, use
+the absolute path to that checkout's \`cli/bin/loom.js\`; do not guess a relative path from this project.`;
 
 function renderKeeperGap(item) {
   if (typeof item === 'string') return `  - ${item}`;
@@ -358,6 +366,11 @@ after the gaps are fixed without requiring another Keeper round:
   "run_id": "<unique-id>",
   "prepared_digest": "<digest-above>",
   "verdict": "passed | needs_revision | blocked",
+  "review": {
+    "mode": "independent | self",
+    "reviewer_id": "<fresh Agent or current Agent identity>",
+    "evidence": "<how the host isolated this review from shaping context>"
+  },
   "summary": "<concise handoff judgment>",
   "gaps": [
     {
@@ -371,8 +384,12 @@ after the gaps are fixed without requiring another Keeper round:
 }
 \`\`\`
 
-Record the result with \`loom keeper record --json-file <result.json>\`. Use \`passed\` only when you
-could responsibly begin the first Task. Otherwise use \`needs_revision\` with concrete gaps and the
+Record the result with \`loom keeper record --json-file <result.json>\`. Use \`passed\` only when you are
+a genuinely fresh Agent, could responsibly begin the first Task, and can record \`review.mode\` as
+\`independent\` with concrete isolation evidence.
+If you shaped this project, do not review your own work as independent; ask the host for a fresh Agent,
+or use \`loom keeper skip --reason <concrete limitation>\` when isolation is unavailable. Otherwise use
+\`needs_revision\` with concrete gaps and the
 observable evidence that would close each one, or \`blocked\` when progress requires unavailable
 authority or external state. A failed attempt returns the project to shaping; revision requires a
 changed digest. When all gaps are minor and 3 or fewer, fixing them and running \`loom project ready\`
@@ -410,7 +427,8 @@ decision surface it owns. Complex subsystems should have their own files under \
 
 Link each separate field dossier under \`.loom/capabilities/<field>/capability.md\` and state which
 design decisions it changes. Do not merge distinct fields into one dossier. Capabilities are shaped in
-four steps: \`loom capability research\` → \`synthesize\` → \`confirm\` (user confirms the scenario).
+four steps: \`loom capability research\` → \`synthesize\` → \`confirm --source human\` (user-confirmed)
+or \`confirm --source agent\` (explicitly provisional when the human is unavailable).
 
 ## Project structure
 
@@ -536,9 +554,9 @@ Name the established field, what expertise it contributes, and what belongs to a
 
 ## Project scenario
 
-> This section records the user-confirmed project scenario: which expert situation this project most
-> closely resembles. The Agent must not fill this alone; it requires user confirmation via
-> \`loom capability confirm <slug> --scenario <text>\`.
+> This section records which expert situation the project most closely resembles. Use
+> \`loom capability confirm <slug> --scenario <text> --source human\` for user confirmation. When the
+> human is unavailable, use \`--source agent\`; LOOM records the selection as provisional.
 
 State the project scenario that determines which branches of the decision tree are active.
 

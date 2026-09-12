@@ -105,7 +105,8 @@ Preserve understanding
   loom capability list|get <slug>
   loom capability research <slug> --field <text>      (creates research/_guide.md — add .md files there)
   loom capability synthesize <slug>                   (builds decision tree from research, validates sources)
-  loom capability confirm <slug> --scenario <text>    (user confirms which expert scenario applies)
+  loom capability confirm <slug> --scenario <text> --source human|agent
+                                        — human confirms, or Agent records a provisional selection
   loom capability status <slug>
 
 Map the delivery surface
@@ -137,9 +138,66 @@ Evaluate LOOM itself
 Use \`--state-dir <outside-workspace-dir>\` on every command to keep LOOM state in an isolated sidecar
 (for example, a benchmark runner's per-run state directory). Sidecar initialization never edits AGENTS.md.
 
+Use \`loom <command> --help\` or \`loom help <topic>\` for canonical JSON payloads. Topics:
+  record, decision, task-plan, task-update, task-block, task-done, keeper-record, eval-scaffold
+
 Use JSON files for structured writes so long content and shell quoting remain auditable.
 Task completion JSON includes evidence plus either acceptance_results[] (one per acceptance criterion,
 each with concrete evidence) or checks[] (one per done_when criterion, for legacy tasks).`;
+}
+
+const STRUCTURED_HELP = {
+  record: {
+    usage: 'loom record --json-file <update.json>',
+    example: {
+      confirmed: ['A fact confirmed by the human or workspace.'],
+      assumptions: [{ text: 'A bounded, reversible Agent assumption.', source: 'agent' }],
+      unresolved: [{ question: 'A consequential question still open?', impact: 'high' }],
+      decisions: [{ title: 'Decision title', decision: 'Current decision.', rationale: 'Why it follows.', supersedes: [], affects: ['.loom/PROJECT.md'] }],
+    },
+  },
+  decision: {
+    usage: 'loom decision --json-file <decision.json>',
+    example: { summary: 'What changed and why.', changes: ['.loom/design/system.md', 'src/system.js'], affected_tasks: ['TASK-001'] },
+  },
+  'task-plan': {
+    usage: 'loom task plan --json-file <tasks.json>',
+    example: { tasks: [{ title: 'Create one verifiable result', outcome: 'A concrete artifact behaves as specified.', acceptance: [{ criterion: 'Observable condition', verify_by: 'Exact command or review method', evidence: '' }], boundaries: ['Does not change unrelated behavior'], depends_on: [], reads: ['.loom/PROJECT.md', '.loom/design/system.md'], touches: ['src/result.js'], implements: '.loom/design/system.md#Decision', capability_hooks: [{ node: 'field#C1', at: 'decision point', must_produce: 'project-specific choice' }], covers: ['DLV-001'] }] },
+  },
+  'task-update': {
+    usage: 'loom task update <id> --json-file <patch.json>',
+    example: { progress: { completed: ['Finished checkpoint'], current: 'Verifying behavior', next: 'Run the named acceptance check' } },
+  },
+  'task-block': {
+    usage: 'loom task block <id> --json-file <block.json>',
+    example: { reason: 'A concrete dependency or authority is unavailable.', recovery_conditions: ['Observable condition that permits resuming'], evidence: ['Inspection or command output showing the block'] },
+  },
+  'task-done': {
+    usage: 'loom task done <id> --json-file <evidence.json>',
+    example: { evidence: ['Overall reproducible verification result'], acceptance_results: [{ criterion: 'Exact acceptance criterion from the Task', evidence: 'Concrete command, artifact, or observation' }] },
+  },
+  'keeper-record': {
+    usage: 'loom keeper record --json-file <result.json>',
+    example: { run_id: 'fresh-agent-run-001', prepared_digest: '<digest from loom project ready>', verdict: 'passed', review: { mode: 'independent', reviewer_id: 'fresh-agent-001', evidence: 'Host opened a separate Agent without the shaping conversation.' }, summary: 'Build-readiness judgment.', gaps: [], evidence: ['Files and observations supporting the verdict'] },
+  },
+  'eval-scaffold': {
+    usage: 'loom eval scaffold --json-file <scenario.json>',
+    example: { id: 'EVAL-001', title: 'Ambiguous real project', brief: 'Identical brief for both conditions.', hidden_user_facts: ['Fact revealed by the same answer script'], human_channel: 'unavailable', success_criteria: ['Observable result'], context_reset_points: ['after-shaping', 'mid-task'], repetitions: 3 },
+  },
+};
+
+function structuredHelp(topic) {
+  const entry = STRUCTURED_HELP[topic];
+  if (!entry) throw new Error(`Unknown help topic: ${topic}. Available topics: ${Object.keys(STRUCTURED_HELP).join(', ')}`);
+  return `${entry.usage}\n\nCanonical JSON payload:\n${JSON.stringify(entry.example, null, 2)}`;
+}
+
+function activeStructuredHelpTopic() {
+  if (command === 'record' || command === 'decision') return command;
+  if (command === 'task' && ['plan', 'update', 'block', 'done'].includes(subcommand)) return `task-${subcommand}`;
+  if (command === 'keeper' && subcommand === 'record') return 'keeper-record';
+  if (command === 'eval' && subcommand === 'scaffold') return 'eval-scaffold';
+  return '';
 }
 
 try {
@@ -159,6 +217,9 @@ try {
     case undefined:
       output(help());
       break;
+    case 'help':
+      output(subcommand ? structuredHelp(subcommand) : help());
+      break;
     case 'init':
       output(initProject());
       break;
@@ -170,10 +231,10 @@ try {
       output(promptCatalog());
       break;
     case 'record':
-      output(recordUnderstanding(jsonFile()));
+      output(subcommand === '--help' ? structuredHelp('record') : recordUnderstanding(jsonFile()));
       break;
     case 'decision':
-      output(recordDecision(jsonFile()));
+      output(subcommand === '--help' ? structuredHelp('decision') : recordDecision(jsonFile()));
       break;
     case 'check': {
       const result = checkProject();
@@ -217,7 +278,7 @@ try {
         output(synthesizeCapability(rest[0]));
       } else if (subcommand === 'confirm') {
         if (!rest[0]) throw new Error('Usage: loom capability confirm <slug> --scenario <text>');
-        output(confirmCapability(rest[0], { scenario: option('--scenario') }));
+        output(confirmCapability(rest[0], { scenario: option('--scenario'), source: option('--source') }));
       } else if (subcommand === 'status') {
         if (!rest[0]) throw new Error('Usage: loom capability status <slug>');
         output(getCapabilityStatus(rest[0]));
@@ -237,7 +298,8 @@ try {
       break;
     }
     case 'task': {
-      if (subcommand === 'plan') output(importTasks(jsonFile()));
+      if (argv.includes('--help') && ['plan', 'update', 'block', 'done'].includes(subcommand)) output(structuredHelp(`task-${subcommand}`));
+      else if (subcommand === 'plan') output(importTasks(jsonFile()));
       else if (subcommand === 'status') output(taskSummary(loadProject().taskStore.tasks));
       else if (subcommand === 'next') output(getTask());
       else if (subcommand === 'get') {
@@ -262,19 +324,25 @@ try {
       break;
     }
     case 'keeper': {
-      if (subcommand === 'prompt') output(getKeeperPrompt());
+      if (argv.includes('--help') && subcommand === 'record') output(structuredHelp('keeper-record'));
+      else if (subcommand === 'prompt') output(getKeeperPrompt());
       else if (subcommand === 'record') output(recordKeeper(jsonFile()));
       else if (subcommand === 'skip') output(skipKeeper(option('--reason')));
       else throw new Error('Usage: loom keeper prompt|record|skip');
       break;
     }
     case 'eval':
-      if (subcommand !== 'scaffold') throw new Error('Usage: loom eval scaffold --json-file <scenario.json>');
-      output(scaffoldEval(jsonFile()));
+      if (argv.includes('--help') && subcommand === 'scaffold') output(structuredHelp('eval-scaffold'));
+      else {
+        if (subcommand !== 'scaffold') throw new Error('Usage: loom eval scaffold --json-file <scenario.json>');
+        output(scaffoldEval(jsonFile()));
+      }
       break;
     default:
       throw new Error(`Unknown command: ${command}\n\n${help()}`);
   }
 } catch (error) {
-  fail(error.message);
+  const topic = activeStructuredHelpTopic();
+  const pointer = topic && !argv.includes('--help') ? `\nRun ${STRUCTURED_HELP[topic].usage.replace(/ --json-file .+$/, ' --help').replace(/ <id>/, '')} for a canonical payload.` : '';
+  fail(`${error.message}${pointer}`);
 }

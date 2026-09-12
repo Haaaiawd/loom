@@ -117,6 +117,7 @@ loom design add local-analysis --title "Local analysis system" --kind system
 loom design add acceptance --title "Vertical-slice verification" --kind verification
 loom capability add ui-ux-design --title "UI/UX design"
 loom capability add behavioral-psychology --title "Behavioral psychology"
+loom capability confirm behavioral-psychology --scenario "<项目特定的专家情境>" --source human
 loom task plan --json-file initial-work-map.json
 loom project ready
 ```
@@ -126,6 +127,8 @@ loom project ready
 ```text
 Run loom keeper prompt in this project and follow it. Decide whether you can responsibly start.
 ```
+
+Keeper 通过记录必须包含 `review.mode: "independent"`、审查者标识和具体的隔离证据。已知的自我审查不能通过；如果宿主无法隔离出全新的 Agent，应使用 `loom keeper skip` 并写明原因，让置信度降低这件事保持可见。
 
 如果 Keeper 返回 `needs_revision` 或 `blocked`，这些具体缺口会重新出现在 `loom context` 中。Agent 修复对应的项目、设计、能力或 Task 源文件，生成发生变化的新 digest，再打开另一个全新的 Keeper。若宿主不支持子代理，用户可以新开一个窗口并使用同一句提示词。
 
@@ -146,17 +149,17 @@ loom task done TASK-001 --json-file evidence.json
 
 ```json
 {
-  "evidence": ["npm test: 20 passed, 0 failed"],
+  "evidence": ["npm test: 21 passed, 0 failed"],
   "acceptance_results": [
     {
       "criterion": "The exact acceptance criterion from the Task.",
-      "evidence": ["The command, artifact, or observation that proves this criterion."]
+      "evidence": "The command, artifact, or observation that proves this criterion."
     }
   ]
 }
 ```
 
-运行 `loom --help` 查看全部命令，运行 `loom check` 检查结构健康度。`loom prompts` 会打印 LOOM 可能注入的全部认知消息：稳定协作核心、运行时协议、动态状态层、所有文档模板、Keeper 提示词、Eval 条件、裁判提示词，以及它们的组合顺序。详见[提示词与消息目录](docs/PROMPT_CATALOG.md)。
+运行 `loom --help` 查看全部命令。所有结构化写入命令都通过命令级帮助给出可直接使用的标准 JSON，例如 `loom record --help` 和 `loom task done --help`；校验失败也会保留具体错误，并指向对应帮助。运行 `loom check` 检查结构健康度。`loom prompts` 会打印 LOOM 可能注入的全部认知消息：稳定协作核心、运行时协议、动态状态层、所有文档模板、Keeper 提示词、Eval 条件、裁判提示词，以及它们的组合顺序。详见[提示词与消息目录](docs/PROMPT_CATALOG.md)。
 
 ## LOOM 刻意删除了什么
 
@@ -176,7 +179,7 @@ LOOM 2 用一个自适应理解环、可扩展的设计文档图、彼此独立�
 npm test
 ```
 
-v2 测试套件（20 个端到端测试）覆盖完整闭环，包括 250 个 Task 的 Work Map、上下文选择、决策替代历史、可扩展设计文档、专业领域分离、能力编译（含 source 引用校验）、多轮 Keeper 修订（含 auto-pass）、陈旧 digest 与重复 run 拒绝、精确文件级 Task 启动、阻塞与重开（包括完成证据被推翻）、逐 acceptance 条件证据、交付物覆盖、决策记录与受影响 Task 警告，以及 Evil Eval 的控制变量。详见[完整 UX 与闭环规范](docs/UX_FLOW.md)。
+v2 测试套件（21 个端到端测试）覆盖完整闭环，包括 250 个 Task 的 Work Map、上下文选择、决策替代历史、可扩展设计文档、专业领域分离、能力编译（含 source 引用校验和人类/Agent 权限来源）、Task 设计与能力关联、声明产物存在性、多轮 Keeper 修订（含独立审查来源与 auto-pass）、陈旧 digest 与重复 run 拒绝、精确文件级 Task 启动、阻塞与重开（包括完成证据被推翻）、逐 acceptance 条件证据、交付物覆盖、决策记录与受影响 Task 警告，以及 Evil Eval 的控制变量。详见[完整 UX 与闭环规范](docs/UX_FLOW.md)。
 
 ## 文档
 
