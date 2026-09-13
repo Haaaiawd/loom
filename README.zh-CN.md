@@ -179,7 +179,7 @@ LOOM 2 用一个自适应理解环、可扩展的设计文档图、彼此独立�
 npm test
 ```
 
-v2 测试套件（27 个端到端测试）覆盖完整闭环，包括 250 个 Task 的 Work Map、上下文选择、决策替代历史、可扩展设计文档、专业领域分离、能力编译（含 source 引用校验和人类/Agent 权限来源）、Task 设计与能力关联（含 implements/capability_hooks 引用存在性校验）、声明产物存在性、多轮 Keeper 修订（含独立审查来源与跨轮 finding 的累计关闭）、陈旧 digest 与重复 run 拒绝、精确文件级 Task 启动、阻塞与重开（包括完成证据被推翻）、逐 acceptance 条件证据、交付物覆盖（区分已规划与已交付）、决策记录与受影响 Task 警告的重验关闭，以及 Evil Eval 的控制变量。详见[完整 UX 与闭环规范](docs/UX_FLOW.md)。
+v2 测试套件（28 个端到端测试）覆盖完整闭环，包括 250 个 Task 的 Work Map、上下文选择、决策替代历史、可扩展设计文档、专业领域分离、能力编译（含 source 引用校验和人类/Agent 权限来源）、Task 设计与能力关联（含 implements/capability_hooks 引用存在性校验）、声明产物存在性、多轮 Keeper 修订（含独立审查来源与跨轮 finding 的累计关闭）、陈旧 digest 与重复 run 拒绝、精确文件级 Task 启动、阻塞与重开（包括完成证据被推翻）、逐 acceptance 条件证据、交付物覆盖（区分已规划与已交付）、决策记录与受影响 Task 警告的重验关闭，以及 Evil Eval 的控制变量。详见[完整 UX 与闭环规范](docs/UX_FLOW.md)。
 
 ## 文档
 

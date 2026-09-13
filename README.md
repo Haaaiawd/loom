@@ -183,7 +183,7 @@ Completion is deliberately explicit:
 
 ```json
 {
-  "evidence": ["npm test: 27 passed, 0 failed"],
+  "evidence": ["npm test: 28 passed, 0 failed"],
   "acceptance_results": [
     {
       "criterion": "The exact acceptance criterion from the Task.",

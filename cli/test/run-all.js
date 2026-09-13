@@ -798,6 +798,31 @@ test('task start requires an attested Keeper pass or a recorded skip', () => {
   assert(healthy.healthy === true, 'a recorded skip is a legitimate build state');
 });
 
+test('planning new Tasks on a complete project returns it to building', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A mid-flight extension fixture proving new work can be planned after completion.'), 'utf8');
+  run(root, ['design', 'add', 'extend', '--title', 'Extension fixture', '--kind', 'system']);
+  writeFileSync(join(root, '.loom', 'design', 'extend.md'), '# Extension fixture\n\n## Responsibility\nAccept new systems mid-flight.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'First unit', outcome: 'A verified output file exists on disk', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/extend.md#Responsibility' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  run(root, ['project', 'ready']);
+  run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
+  run(root, ['task', 'start', 'TASK-001']);
+  writeFileSync(join(root, 'out.txt'), 'v1\n', 'utf8');
+  json(root, 'done.json', { evidence: ['out.txt exists'], checks: [{ criterion: 'Output exists', evidence: ['out.txt on disk'] }] });
+  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  assert(JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8')).project.status === 'complete', 'project should be complete after the last Task');
+  run(root, ['capability', 'add', 'new-domain', '--title', 'New professional domain']);
+  json(root, 'tasks2.json', { tasks: [{ title: 'Second unit', outcome: 'A second verified output file exists on disk', done_when: ['Second output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out2.txt'], implements: '.loom/design/extend.md#Responsibility', capability_exemption: 'New dossier is still researching; this Task does not consume its nodes yet.' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks2.json']);
+  assert(JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8')).project.status === 'building', 'planning work on a complete project must return it to building');
+  const ctx = run(root, ['context']);
+  assert(ctx.includes('new-domain (researching)'), 'context must surface the new dossier status');
+  assert(!ctx.includes('All Tasks are done'), 'context must not claim completion while new Tasks are open');
+  run(root, ['task', 'start', 'TASK-002']);
+});
+
 test('a Keeper pass must close findings still open across all earlier attempts', () => {
   const root = workspace();
   run(root, ['init']);

@@ -557,6 +557,12 @@ export function importTasks(payload, root = findRoot()) {
   }
   validateTasks(taskStore.tasks);
   atomicJson(paths.tasks, taskStore);
+  const { state } = loadProject(root);
+  if (state.project.status === 'complete') {
+    state.project.status = 'building';
+    state.project.updated_at = now();
+    atomicJson(paths.state, state);
+  }
   return taskSummary(taskStore.tasks);
 }
 

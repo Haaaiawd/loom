@@ -11,6 +11,7 @@
 - Decision-affected done Tasks warn only until re-verified: reopening and re-completing the Task after the decision clears the warning.
 - Deliverable coverage now distinguishes planned from delivered: units covered only by open or blocked Tasks no longer count as delivered.
 - `loom record --help` documents `resolved` and `retire_assumptions` so Agents can close questions and assumptions they opened.
+- Planning new Tasks on a completed project returns status to `building`; `loom context` no longer claims "all done" while new Tasks are open.
 
 ## 2.1.2
 
