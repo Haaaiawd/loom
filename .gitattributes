@@ -1,0 +1,10 @@
+* text=auto eol=lf
+
+# Windows script files require CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary assets
+*.png binary
+*.ico binary
