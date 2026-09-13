@@ -488,7 +488,9 @@ export function checkDeliverableCoverage(root = findRoot()) {
     if (current !== newVal) { dlv.covered_by = sorted; changed = true; }
   }
   if (changed) atomicJson(paths.deliverables, deliverableStore);
-  return { total: deliverableStore.deliverables.length, covered: covered.length, uncovered: uncovered.length, uncovered_items: uncovered, covered_items: covered };
+  const taskById = new Map(taskStore.tasks.map((task) => [task.id, task]));
+  const delivered = covered.filter((item) => item.tasks.some((id) => taskById.get(id)?.status === 'done'));
+  return { total: deliverableStore.deliverables.length, covered: covered.length, delivered: delivered.length, uncovered: uncovered.length, uncovered_items: uncovered, covered_items: covered };
 }
 
 function capabilityPath(paths, name) {
@@ -582,17 +584,53 @@ function nextTask(tasks) {
   return tasks.find((task) => task.status === 'open' && task.depends_on.every((id) => done.has(id))) || null;
 }
 
-function taskIntegrityFindings(task, designs, capabilities) {
+function sectionHeadingExists(content, anchor) {
+  const needle = anchor.toLowerCase();
+  return content.split(/\r?\n/).some((line) => /^#{1,6}\s/.test(line) && line.replace(/^#{1,6}\s*/, '').toLowerCase().includes(needle));
+}
+
+function taskIntegrityFindings(task, designs, capabilities, paths) {
   if (task.integrity_version !== 1) return [];
   const findings = [];
   if (designs.length && !task.implements?.trim() && !task.design_exemption?.trim()) findings.push('is missing implements or design_exemption');
   if (capabilities.length && !(task.capability_hooks || []).length && !task.capability_exemption?.trim()) findings.push('is missing capability_hooks or capability_exemption');
+  if (!paths) return findings;
+  if (task.implements?.trim()) {
+    const raw = task.implements.trim();
+    const [ref, anchor] = raw.split('#');
+    let target = null;
+    try {
+      target = declaredArtifactPath(paths, ref);
+    } catch {
+      findings.push(`implements uses an unsafe path: ${raw}`);
+    }
+    if (target && existsSync(target)) {
+      if (anchor?.trim() && !sectionHeadingExists(readFileSync(target, 'utf8'), anchor.trim())) findings.push(`implements references a missing design section: ${anchor.trim()}`);
+    } else if (target && (ref.includes('/') || ref.includes('\\') || ref.includes('.'))) {
+      findings.push(`implements references a missing design document: ${ref}`);
+    } else if (target) {
+      const corpus = [paths.decisions, ...designs.map((name) => join(paths.design, name)), ...capabilities.map((name) => capabilityPath(paths, name))]
+        .filter((path) => existsSync(path))
+        .map((path) => readFileSync(path, 'utf8'))
+        .join('\n');
+      if (!corpus.includes(raw)) findings.push(`implements references a decision not found in project truth: ${raw}`);
+    }
+  }
+  for (const hook of task.capability_hooks || []) {
+    const [slug, node] = (hook.node || '').split('#');
+    if (!capabilities.includes(slug)) {
+      findings.push(`capability_hooks references a missing dossier: ${slug}`);
+      continue;
+    }
+    if (node && !sectionHeadingExists(readFileSync(capabilityPath(paths, slug), 'utf8'), node)) findings.push(`capability_hooks references a missing capability node: ${hook.node}`);
+  }
   return findings;
 }
 
 function assertTaskIntegrityClassification(task, root) {
-  const findings = taskIntegrityFindings(task, listDesigns(root), listCapabilities(root));
-  if (findings.length) throw new Error(`${task.id} has unresolved integrity classification:\n- ${findings.join('\n- ')}\nAdd the relevant link or a concrete exemption before execution.`);
+  const { paths } = loadProject(root);
+  const findings = taskIntegrityFindings(task, listDesigns(root), listCapabilities(root), paths);
+  if (findings.length) throw new Error(`${task.id} has unresolved integrity classification:\n- ${findings.join('\n- ')}\nRepair the reference or add a concrete exemption before execution.`);
 }
 
 function declaredArtifactPath(paths, ref) {
@@ -616,6 +654,7 @@ export function updateTask(id, patch, root = findRoot()) {
   const { paths, taskStore } = loadProject(root);
   const task = taskStore.tasks.find((item) => item.id === id);
   if (!task) throw new Error(`Task not found: ${id}`);
+  if (task.status === 'done') throw new Error(`${id} is done; reopen it first (loom task reopen ${id} --reason <why the completion is being revisited>) before changing its record`);
   const allowed = ['title', 'outcome', 'acceptance', 'done_when', 'boundaries', 'depends_on', 'reads', 'touches', 'implements', 'design_exemption', 'capability_hooks', 'capability_exemption', 'covers', 'progress', 'evidence'];
   for (const key of Object.keys(patch)) if (!allowed.includes(key)) throw new Error(`Task field cannot be updated: ${key}`);
   Object.assign(task, patch, { updated_at: now() });
@@ -647,12 +686,15 @@ export function reopenTask(id, options = {}, root = findRoot()) {
   if (taskStore.tasks.some((task) => task.status === 'active')) throw new Error('Another Task is already active');
   const task = taskStore.tasks.find((item) => item.id === id);
   if (!task || !['blocked', 'done'].includes(task.status)) throw new Error(`${id} is neither blocked nor done`);
-  if (task.status === 'done' && (!options.reason || options.reason.length < 10)) throw new Error('Reopening a done Task requires a concrete --reason');
+  if (!options.reason || options.reason.length < 10) throw new Error(`Reopening ${id} requires a concrete --reason — for blocked Tasks state how the recovery conditions were met, for done Tasks why the completion is disproved`);
   const priorStatus = task.status;
   task.status = 'open';
   if (priorStatus === 'done') {
     task.evidence.push({ type: 'completion_reopened', reason: options.reason, at: now() });
     task.progress = { ...task.progress, current: `completion reopened: ${options.reason}`, next: 'Re-run the Task and close every done condition with evidence.' };
+  } else {
+    task.evidence.push({ type: 'block_reopened', reason: options.reason, at: now() });
+    task.progress = { ...task.progress, current: `block reopened: ${options.reason}`, next: 'Address the recorded recovery conditions and re-verify before completing.' };
   }
   task.reopened_at = now();
   task.updated_at = now();
@@ -669,6 +711,9 @@ export function reopenTask(id, options = {}, root = findRoot()) {
 
 export function startTask(id, root = findRoot()) {
   const { paths, state, taskStore } = loadProject(root);
+  const latestKeeper = state.keeper.attempts.at(-1);
+  const attestedPass = state.keeper.status === 'passed' && latestKeeper?.review?.mode === 'independent';
+  if (state.keeper.status === 'passed' && !attestedPass) throw new Error('The recorded Keeper pass has no independent review provenance. Obtain a fresh Keeper review (see loom review --help) or record an explicit skip: loom keeper skip --reason <limitation>.');
   if (!['passed', 'skipped'].includes(state.keeper.status)) throw new Error('The one-time Keeper handoff has not passed. Run loom keeper prompt.');
   if (taskStore.tasks.some((task) => task.status === 'active')) throw new Error('Another Task is already active');
   const task = taskStore.tasks.find((item) => item.id === id);
@@ -732,6 +777,7 @@ export function completeTask(id, payload, root = findRoot()) {
     task.evidence = [...task.evidence, ...payload.evidence, { type: 'done_when_checks', checks: payload.checks, at: now() }];
   }
   task.progress = { ...task.progress, current: 'complete', next: '' };
+  task.completed_at = now();
   task.updated_at = now();
   validateTasks(taskStore.tasks);
   atomicJson(paths.tasks, taskStore);
@@ -757,6 +803,11 @@ export function markReady(root = findRoot()) {
   const unfinishedCapabilities = capabilities.filter((name) => capabilityTemplateResidue(readFileSync(capabilityPath(paths, name), 'utf8')));
   if (unfinishedCapabilities.length) errors.push(`Capability dossiers still contain template instructions: ${unfinishedCapabilities.join(', ')}`);
   if (!taskStore.tasks.length) errors.push('The initial work map is empty');
+  const integrityErrors = [];
+  for (const task of taskStore.tasks) {
+    for (const finding of taskIntegrityFindings(task, designs, capabilities, paths)) integrityErrors.push(`${task.id} ${finding}`);
+  }
+  if (integrityErrors.length) errors.push(`Task integrity classification is unresolved:\n  - ${integrityErrors.join('\n  - ')}`);
   if (highOpen.length) errors.push(`High-impact questions remain open: ${highOpen.map((item) => item.id).join(', ')}`);
   const digest = projectDigest(paths, taskStore.tasks);
   const latestKeeper = state.keeper.attempts.at(-1);
@@ -764,14 +815,8 @@ export function markReady(root = findRoot()) {
     errors.push('Keeper requested revision, but project truth and Task definitions have not changed');
   }
   if (errors.length) throw new Error(`Project is not ready for Keeper:\n- ${errors.join('\n- ')}`);
-  if (latestKeeper?.can_auto_pass && latestKeeper.prepared_digest !== digest) {
-    state.keeper.status = 'passed';
-    state.project.status = 'build_ready';
-    state.project.updated_at = now();
-    state.keeper.auto_passed = true;
-    atomicJson(paths.state, state);
-    return { ready_for_keeper: false, auto_passed: true, next: 'Keeper minor gaps fixed; auto-passed without a new Keeper round' };
-  }
+  // A changed digest proves a change, not that review findings were resolved.
+  delete state.keeper.auto_passed;
   state.project.status = 'ready_for_keeper';
   state.project.updated_at = now();
   state.keeper.prepared_digest = digest;
@@ -806,6 +851,7 @@ export function recordKeeper(payload, root = findRoot()) {
   if (!['passed', 'needs_revision', 'blocked'].includes(payload.verdict)) throw new Error('Keeper verdict must be passed, needs_revision, or blocked');
   if (!payload.summary || !Array.isArray(payload.evidence) || !payload.evidence.length) throw new Error('Keeper result requires summary and evidence');
   if (payload.verdict === 'passed') {
+    if (payload.gaps?.length) throw new Error('Keeper pass cannot contain unresolved gaps');
     if (!payload.review || payload.review.mode !== 'independent') throw new Error('Keeper pass requires an independent review; use review.mode="independent" from a fresh Agent, or loom keeper skip with a concrete reason');
     if (!payload.review.reviewer_id || payload.review.reviewer_id.length < 6 || !payload.review.evidence || payload.review.evidence.length < 10) throw new Error('Independent Keeper review requires reviewer_id and concrete review evidence');
   }
@@ -816,23 +862,31 @@ export function recordKeeper(payload, root = findRoot()) {
     if (gap && typeof gap === 'object' && typeof gap.gap === 'string' && gap.gap.trim()) continue;
     throw new Error('Each Keeper gap must be a non-empty string or an object with a gap field');
   }
-  const blockingGaps = (payload.gaps || []).filter((gap) => {
-    if (typeof gap === 'string') return true;
-    if (typeof gap === 'object' && gap.severity !== 'minor') return true;
-    return false;
-  });
-  const minorGaps = (payload.gaps || []).filter((gap) => {
-    if (typeof gap === 'object' && gap.severity === 'minor') return true;
-    return false;
-  });
-  const canAutoPass = payload.verdict === 'needs_revision' && blockingGaps.length === 0 && minorGaps.length > 0 && minorGaps.length <= 3;
+
   if (!payload.run_id || payload.run_id.length < 6) throw new Error('Keeper result requires a unique fresh-thread run_id');
   if (state.keeper.attempts.some((attempt) => attempt.run_id === payload.run_id)) throw new Error(`Keeper run_id was already used: ${payload.run_id}`);
   if (!payload.prepared_digest || payload.prepared_digest !== state.keeper.prepared_digest) throw new Error('Keeper result prepared_digest does not match the current ready state');
   const currentDigest = projectDigest(paths, taskStore.tasks);
   if (currentDigest !== state.keeper.prepared_digest) throw new Error('Project truth changed after loom project ready; prepare a new Keeper attempt');
-  const attempt = { run_id: payload.run_id, prepared_digest: payload.prepared_digest, verdict: payload.verdict, summary: payload.summary, evidence: payload.evidence, gaps: payload.gaps || [], review: payload.review || { mode: 'unverified', reviewer_id: '', evidence: '' }, can_auto_pass: canAutoPass, at: now() };
+  if (payload.verdict === 'passed') {
+    const openFindings = new Map();
+    for (const attempt of state.keeper.attempts) {
+      for (const closure of attempt.closure_results || []) openFindings.delete(closure.gap);
+      for (const finding of attempt.gaps || []) {
+        const gap = typeof finding === 'string' ? finding : finding?.gap;
+        if (gap) openFindings.set(gap, true);
+      }
+    }
+    for (const gap of openFindings.keys()) {
+      const closure = payload.closure_results?.find((item) => item.gap === gap);
+      if (!closure || typeof closure.evidence !== 'string' || !closure.evidence.trim()) {
+        throw new Error(`Keeper pass requires closure_results evidence for: ${gap}`);
+      }
+    }
+  }
+  const attempt = { run_id: payload.run_id, prepared_digest: payload.prepared_digest, verdict: payload.verdict, summary: payload.summary, evidence: payload.evidence, gaps: payload.gaps || [], review: payload.review || { mode: 'unverified', reviewer_id: '', evidence: '' }, can_auto_pass: false, at: now() };
   state.keeper.attempts.push(attempt);
+  attempt.closure_results = payload.closure_results || [];
   state.keeper.status = payload.verdict;
   if (payload.verdict === 'passed') state.project.status = 'build_ready';
   else state.project.status = 'shaping';
@@ -872,7 +926,15 @@ export function compileContext(options = {}, root = findRoot()) {
   const summary = taskSummary(taskStore.tasks);
   const task = options.taskId ? getTask(options.taskId, root) : taskStore.tasks.find((item) => item.status === 'active');
   const next = nextTask(taskStore.tasks);
-  const recommendation = task
+  const blockedTasks = taskStore.tasks.filter((item) => item.status === 'blocked');
+  const blockedLine = blockedTasks.length
+    ? `- Blocked: ${blockedTasks.map((item) => `${item.id} — ${item.block?.reason || 'no reason recorded'} (recover: ${(item.block?.recovery_conditions || []).join('; ') || 'not recorded'})`).join(' | ')}\n`
+    : '';
+  const recommendation = state.project.status === 'ready_for_keeper'
+    ? 'Keeper handoff pending. The host must open a fresh Agent without inherited conversation, provide the workspace and CLI paths, and ask it to run `loom keeper prompt`. Wait for `loom keeper record`, then resume `loom context`. See `loom review --help` for the complete handoff.'
+    : ['needs_revision', 'blocked'].includes(state.keeper.status)
+      ? 'Resolve the Keeper findings in the source documents and Tasks, run `loom project ready`, and obtain a fresh independent review. A changed digest does not prove findings are closed. See `loom review --help`.'
+    : task
     ? `You have an active Task: ${task.id}. Read the Active Task, its reads, and the Capability decision points below. Then take the smallest action that advances the outcome inside the boundaries. Update progress or mark done only with concrete evidence.`
     : next
       ? `No active Task. The next executable Task is ${next.id}. Start it with \`loom task start ${next.id}\` if the project is build_ready, or run \`loom project ready\` if not. If the next Task is wrong, repair the Work Map first.`
@@ -880,13 +942,18 @@ export function compileContext(options = {}, root = findRoot()) {
         ? 'All Tasks are done. Run \`loom check\` to verify health. If new work arises, record the decision and update the Work Map.'
         : state.project.status === 'shaping'
           ? 'Project is still shaping. Confirm the intended result, identify open questions, and build the Work Map before starting material work.'
-          : 'No executable Task. Create or update Tasks so the Work Map matches the project goal.';
+          : blockedTasks.length
+            ? 'No executable Task. Review the blocked Tasks listed above; reopen one when its recovery conditions are met with `loom task reopen <id> --reason <how they were met>`, or extend the Work Map.'
+            : 'No executable Task. Create or update Tasks so the Work Map matches the project goal.';
   const capabilityStates = capabilities.map((name) => {
     const statusPath = join(paths.capabilities, name, 'status.json');
     return existsSync(statusPath) ? `${name} (${readJson(statusPath, 'status.json').status || 'unknown'})` : `${name} (legacy)`;
   });
-  const statusBlock = `## Current LOOM state and recommended action\n\n- Project status: ${state.project.status}\n- Active task: ${summary.active || 'none'}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n- Design documents: ${designs.length}\n- Capability dossiers: ${capabilityStates.length ? capabilityStates.join(', ') : 'none'}\n- Keeper status: ${state.keeper.status}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.loom/DECISIONS.md\` or the active Task evidence.`;
+  const statusBlock = `## Current LOOM state and recommended action\n\n- Project status: ${state.project.status}\n- Active task: ${summary.active || 'none'}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n${blockedLine}- Design documents: ${designs.length}\n- Capability dossiers: ${capabilityStates.length ? capabilityStates.join(', ') : 'none'}\n- Keeper status: ${state.keeper.status}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.loom/DECISIONS.md\` or the active Task evidence.`;
   const blocks = [statusBlock, agentProtocol({ humanChannel: options.humanChannel || 'available' }), shapingContext({ state, taskSummary: summary, capabilityNames: capabilityStates, designNames: designs, forKeeper: Boolean(options.keeper) })];
+  if (state.keeper.status === 'passed' && state.keeper.attempts.at(-1)?.review?.mode !== 'independent') {
+    blocks.splice(1, 0, 'WARNING: The recorded Keeper pass has no independent review provenance. It is a legacy/unverified pass, not verified readiness. Prepare a fresh handoff before relying on it; see `loom review --help`.');
+  }
   blocks.push(`## Project whole (${normalizeRef(paths, paths.project)})\n\n${readFileSync(paths.project, 'utf8')}`);
   if (existsSync(paths.structure)) blocks.push(`## Project structure (${normalizeRef(paths, paths.structure)})\n\n${readFileSync(paths.structure, 'utf8')}`);
   if (options.keeper) {
@@ -957,7 +1024,7 @@ export function checkProject(root = findRoot()) {
       }
     }
     if (task.integrity_version === 1) {
-      const classificationFindings = taskIntegrityFindings(task, designs, capabilities);
+      const classificationFindings = taskIntegrityFindings(task, designs, capabilities, paths);
       const target = ['active', 'done'].includes(task.status) ? errors : warnings;
       target.push(...classificationFindings.map((finding) => `${task.id} ${finding}`));
       if (task.status === 'done') {
@@ -972,14 +1039,17 @@ export function checkProject(root = findRoot()) {
   if (state.project.status === 'build_ready' && !['passed', 'skipped'].includes(state.keeper.status)) errors.push('Project is build_ready without Keeper pass or explicit skip');
   if (state.understanding.unresolved.some((item) => item.status === 'open' && item.impact === 'high')) warnings.push('High-impact uncertainty remains open');
   const decisionsContent = readFileSync(paths.decisions, 'utf8');
-  const affectedMatches = [...decisionsContent.matchAll(/Affected tasks: (.+)/g)];
-  const allAffected = new Set();
-  for (const match of affectedMatches) {
-    for (const taskId of match[1].split(',').map((s) => s.trim()).filter(Boolean)) allAffected.add(taskId);
-  }
-  for (const taskId of allAffected) {
-    const task = taskStore.tasks.find((item) => item.id === taskId);
-    if (task && task.status === 'done') warnings.push(`${taskId} is done but was marked affected by a decision; consider reopening if the change invalidates prior work`);
+  for (const block of decisionsContent.split(/\n(?=## )/)) {
+    const affectedMatch = block.match(/- Affected tasks: (.+)/);
+    if (!affectedMatch) continue;
+    const decisionAt = block.match(/- At: (\S+)/)?.[1] || '';
+    for (const taskId of affectedMatch[1].split(',').map((s) => s.trim()).filter(Boolean)) {
+      const task = taskStore.tasks.find((item) => item.id === taskId);
+      if (!task || task.status !== 'done') continue;
+      const completedAt = task.completed_at || task.updated_at || '';
+      if (decisionAt && completedAt && completedAt > decisionAt) continue;
+      warnings.push(`${taskId} is done but was marked affected by a decision; reopen and re-complete it to close this warning (loom task reopen ${taskId} --reason <how the decision was reviewed>)`);
+    }
   }
   if (!capabilities.length) warnings.push('No capability dossier exists; acceptable only when specialist judgment would not change the work');
   if (!designs.length) warnings.push('No design document exists; PROJECT.md should remain a concise map of the whole');
@@ -999,10 +1069,11 @@ export function checkProject(root = findRoot()) {
     }
   }
   const latestKeeper = state.keeper.attempts.at(-1);
-  if (state.keeper.status === 'passed' && latestKeeper && latestKeeper.review?.mode !== 'independent') warnings.push('Keeper pass has no independently attested review provenance; prepare a fresh review before relying on it');
+  if (state.keeper.status === 'passed' && latestKeeper && latestKeeper.review?.mode !== 'independent') errors.push('Keeper pass has no independently attested review provenance; obtain a fresh review (loom review --help) or record loom keeper skip --reason <limitation>');
   const coverage = checkDeliverableCoverage(root);
   if (coverage.uncovered > 0) warnings.push(`Uncovered deliverables: ${coverage.uncovered_items.map((item) => item.slug).join(', ')}`);
-  return { healthy: errors.length === 0, errors, warnings, summary: taskSummary(taskStore.tasks), deliverable_coverage: { total: coverage.total, covered: coverage.covered, uncovered: coverage.uncovered } };
+  if (coverage.covered > coverage.delivered) warnings.push(`${coverage.covered - coverage.delivered} deliverable(s) are covered only by Tasks not yet done`);
+  return { healthy: errors.length === 0, errors, warnings, summary: taskSummary(taskStore.tasks), deliverable_coverage: { total: coverage.total, planned: coverage.covered, delivered: coverage.delivered, uncovered: coverage.uncovered } };
 }
 
 export function scaffoldEval(payload, root = findRoot()) {

@@ -112,6 +112,11 @@ name the first concrete action, and reproduce completion evidence.
 
 ### Passed
 
+A pass requires independent review provenance (`review.mode: "independent"`, reviewer identity, evidence) and
+`closure_results` covering every finding still open across all earlier attempts. A changed digest alone never
+closes a finding. When no separate Agent is available, the maintainer records an explicit
+`loom keeper skip --reason` instead of simulating a pass.
+
 State becomes `build_ready`. Keeper leaves the normal workflow permanently; Task evidence now carries delivery quality.
 
 ### Needs revision or blocked
@@ -132,9 +137,8 @@ The Agent selects `loom task next`, starts it, and runs `loom context`. Context 
 exact design, capability, source, contract, and fixture files in `reads`—not the full Work Map or history.
 
 - A local failure keeps the Task active. Update progress and evidence, repair, and test again.
-- A missing permission, dependency, or upper-level contradiction uses `task block` with a reason and recovery conditions.
-- After the condition is repaired, use `task reopen`, then start it again. A prior `done` may also be
-  reopened with a concrete reason when its evidence is disproven.
+- A missing permission, dependency, or upper-level contradiction uses `task block` with a reason and recovery conditions. `loom context` surfaces each blocked Task with its reason and recovery conditions until it is resolved.
+- After the condition is repaired, use `task reopen --reason` describing how the recovery conditions were met, then start it again. A prior `done` may also be reopened with a concrete reason when its evidence is disproven; a done Task cannot be silently rewritten by `task update`.
 - `task done` requires a check quoting every exact `done_when` criterion and mapping it to concrete evidence.
 - Generic update cannot modify status, and imported Tasks must begin open.
 

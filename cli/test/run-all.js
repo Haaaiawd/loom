@@ -310,8 +310,8 @@ test('capability hooks inject decision-tree nodes into active task context', () 
   assert(!checkResult.warnings.join('\n').includes('missing capability node'), 'check should not warn when hooks reference valid nodes');
   json(root, 'bad-hooks.json', { capability_hooks: [{ node: 'game-design#C99' }] });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'bad-hooks.json']);
-  const badCheck = JSON.parse(run(root, ['check']));
-  assert(badCheck.warnings.join('\n').includes('missing capability node: game-design#C99'), 'check should warn when hooks reference non-existent nodes');
+  const badCheck = JSON.parse(run(root, ['check'], 1));
+  assert(badCheck.errors.join('\n').includes('missing capability node: game-design#C99'), 'check should error when an active Task hooks a non-existent node');
 });
 
 test('task integrity classification and declared outputs cannot stay false-green', () => {
@@ -447,13 +447,13 @@ test('STRUCTURE.md is injected into context and check warns when it is missing o
   assert(checkMissing.warnings.join('\n').includes('No STRUCTURE.md exists'), 'check should warn when STRUCTURE.md is missing');
 });
 
-test('Keeper auto-passes when all gaps are minor and 3 or fewer', () => {
+test('Keeper minor gaps require fresh verification even after changes', () => {
   const root = workspace();
   run(root, ['init']);
   writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper auto-pass with minor gaps only. The system should auto-pass when all gaps are minor and 3 or fewer, without requiring a new Keeper round.\n\n## People and reality\nSolo developer testing the Keeper auto-pass mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns minor gaps, developer fixes them, auto-pass without new Keeper round.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with LOOM state files.\n\n## Completion and failure\nAuto-pass works when gaps are minor and few. Failure is when auto-pass triggers incorrectly.\n`, 'utf8');
   run(root, ['design', 'add', 'test-system', '--title', 'Test system', '--kind', 'system']);
   writeFileSync(join(root, '.loom', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTest auto-pass.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Test task', outcome: 'Verify auto-pass works correctly', done_when: ['Auto-pass triggers'], boundaries: ['No real implementation'], reads: ['.loom/PROJECT.md'], touches: ['output.txt'] }] });
+  json(root, 'tasks.json', { tasks: [{ title: 'Test task', outcome: 'Verify auto-pass works correctly', done_when: ['Auto-pass triggers'], boundaries: ['No real implementation'], reads: ['.loom/PROJECT.md'], touches: ['output.txt'], implements: '.loom/design/test-system.md#Responsibility' }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const ready1 = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'keeper-minor.json', {
@@ -471,8 +471,9 @@ test('Keeper auto-passes when all gaps are minor and 3 or fewer', () => {
   writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper auto-pass with minor gaps only, now with detailed completion criteria. The system should auto-pass when all gaps are minor and 3 or fewer, without requiring a new Keeper round.\n\n## People and reality\nSolo developer testing the Keeper auto-pass mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns minor gaps, developer fixes them, auto-pass without new Keeper round.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with LOOM state files.\n\n## Completion and failure\nAuto-pass works when gaps are minor and few. Completion means the auto-pass triggered correctly. Failure is when auto-pass triggers incorrectly or blocking gaps slip through.\n`, 'utf8');
   writeFileSync(join(root, '.loom', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTest auto-pass.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
   const ready2 = JSON.parse(run(root, ['project', 'ready']));
-  assert(ready2.auto_passed === true, 'should auto-pass when minor gaps are fixed and digest changed');
-  assert(ready2.ready_for_keeper === false, 'should not require a new Keeper round');
+  assert(!ready2.auto_passed, 'unattested minor review must never auto-pass');
+  assert(ready2.ready_for_keeper === true, 'minor gaps require a new Keeper round');
+  assert(run(root, ['context']).includes('Keeper handoff pending'), 'ready state must recommend the host handoff');
   const checkResult = JSON.parse(run(root, ['check']));
   assert(checkResult.healthy === true, 'project should be healthy after auto-pass');
 });
@@ -483,7 +484,7 @@ test('Keeper does NOT auto-pass when gaps include blocking severity', () => {
   writeFileSync(join(root, '.loom', 'PROJECT.md'), `# Project Whole\n\n## Intended result\nA test project for Keeper blocking gap. The system must handle blocking gaps correctly by requiring a new Keeper round when any blocking gap exists.\n\n## People and reality\nSolo developer testing the Keeper blocking gap mechanism in an isolated workspace.\n\n## Whole behavior\nKeeper returns a blocking gap, must require new Keeper round. Auto-pass must not trigger.\n\n## Boundaries\nNo external dependencies. No real implementation. Test only.\n\n## System shape\nCLI-based test harness with LOOM state files.\n\n## Completion and failure\nBlocking gaps prevent auto-pass. Failure is when auto-pass triggers despite a blocking gap.\n`, 'utf8');
   run(root, ['design', 'add', 'test-system', '--title', 'Test system', '--kind', 'system']);
   writeFileSync(join(root, '.loom', 'design', 'test-system.md'), `# Test system\n\n- Kind: system\n- Status: ready\n\n## Responsibility\nTest blocking gap.\n\n## Boundary\nTest only.\n\n## Interface\nCLI.\n\n## Verification\nRun tests.\n`, 'utf8');
-  json(root, 'tasks.json', { tasks: [{ title: 'Test task', outcome: 'Verify blocking gap prevents auto-pass', done_when: ['Auto-pass does not trigger'], boundaries: ['No real implementation'], reads: ['.loom/PROJECT.md'], touches: ['output.txt'] }] });
+  json(root, 'tasks.json', { tasks: [{ title: 'Test task', outcome: 'Verify blocking gap prevents auto-pass', done_when: ['Auto-pass does not trigger'], boundaries: ['No real implementation'], reads: ['.loom/PROJECT.md'], touches: ['output.txt'], implements: '.loom/design/test-system.md#Responsibility' }] });
   run(root, ['task', 'plan', '--json-file', 'tasks.json']);
   const ready1 = JSON.parse(run(root, ['project', 'ready']));
   json(root, 'keeper-blocking.json', {
@@ -612,6 +613,10 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   json(root, 'keeper-self.json', { run_id: 'keeper-self-002', prepared_digest: thirdReady.digest, verdict: 'passed', summary: 'Self review cannot establish independence.', evidence: ['The shaping Agent reviewed its own work.'], review: { mode: 'self', reviewer_id: 'shaping-agent', evidence: 'Same Agent and inherited context.' } });
   assert(run(root, ['keeper', 'record', '--json-file', 'keeper-self.json'], 1).includes('independent review'), 'self-review should not produce Keeper pass');
   json(root, 'keeper-pass.json', { run_id: 'keeper-run-002', prepared_digest: thirdReady.digest, verdict: 'passed', summary: 'The project is build-ready.', evidence: ['PROJECT.md defines the whole and TASK-001 links the only required dossier.'], review: { mode: 'independent', reviewer_id: 'fresh-agent-002', evidence: 'Host opened a separate Agent with no shaping conversation.' } });
+  assert(run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json'], 1).includes('closure_results'), 'revised pass must prove every prior gap closed');
+  const revisedPass = JSON.parse(readFileSync(join(root, 'keeper-pass.json'), 'utf8'));
+  revisedPass.closure_results = [{ gap: 'Name the CLI entry point.', evidence: 'PROJECT.md now names cli/src/store.js and the CLI integration test.' }];
+  json(root, 'keeper-pass.json', revisedPass);
   run(root, ['keeper', 'record', '--json-file', 'keeper-pass.json']);
   const restartableTask = JSON.parse(run(root, ['task', 'get', 'TASK-001']));
   json(root, 'bad-task-reads.json', { reads: [...restartableTask.reads, '.loom/design'] });
@@ -636,7 +641,8 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   json(root, 'block.json', { reason: 'The declared context entry point does not exist yet.', recovery_conditions: ['Create and verify the entry point'], evidence: ['Read-only inspection found no entry point.'] });
   run(root, ['task', 'block', 'TASK-001', '--json-file', 'block.json']);
   assert(JSON.parse(run(root, ['task', 'get', 'TASK-001'])).status === 'blocked', 'Task did not block');
-  run(root, ['task', 'reopen', 'TASK-001']);
+  assert(run(root, ['task', 'reopen', 'TASK-001'], 1).includes('concrete --reason'), 'blocked Task reopened without stating how recovery conditions were met');
+  run(root, ['task', 'reopen', 'TASK-001', '--reason', 'The entry point was created and verified, meeting the recovery condition.']);
   run(root, ['task', 'start', 'TASK-001']);
   json(root, 'progress.json', { progress: { completed: ['Context selector implemented'], current: 'Testing forced reset', next: 'Run integration transcript' } });
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'progress.json']);
@@ -686,11 +692,14 @@ test('Evil Eval scaffold controls information, budget, resets, repetition, and j
 
 test('help and source surface stay minimal', () => {
   const root = workspace();
+  for (const args of [['keeper','--help'], ['keeper','prompt','--help'], ['review','--help'], ['help','keeper']]) {
+    assert(run(root,args).includes('Stage review:'), 'review discovery must work before init');
+  }
   const help = run(root, ['--help']);
   for (const command of ['loom context', 'loom prompts', 'loom record', 'loom decision', 'loom design add', 'loom capability add', 'loom capability research', 'loom capability synthesize', 'loom capability confirm', 'loom deliverable add', 'loom deliverable coverage', 'loom task plan', 'loom keeper prompt', 'loom eval scaffold']) assert(help.includes(command), `${command} missing`);
   for (const legacy of ['Intent Map', 'Capability Graph', 'Atelier', 'Atlas', 'Weaver', 'Forge']) assert(!help.includes(legacy), `${legacy} leaked into minimal help`);
   const helpCases = [
-    [['record', '--help'], ['"confirmed"', '"assumptions"', '"unresolved"', '"decisions"']],
+    [['record', '--help'], ['"confirmed"', '"assumptions"', '"unresolved"', '"resolved"', '"retire_assumptions"', '"decisions"']],
     [['decision', '--help'], ['"summary"', '"changes"', '"affected_tasks"']],
     [['task', 'plan', '--help'], ['"acceptance"', '"implements"', '"capability_hooks"']],
     [['task', 'update', '--help'], ['"progress"', '"current"', '"next"']],
@@ -713,7 +722,147 @@ test('help and source surface stay minimal', () => {
   assert(chineseReadme.includes('--source human'), 'Chinese README should teach capability authority provenance');
   assert(chineseReadme.includes('review.mode: "independent"'), 'Chinese README should teach independent Keeper provenance');
   assert(chineseReadme.includes('loom task done --help'), 'Chinese README should point structured writes to command-local help');
-  assert(run(root, ['--version']) === 'loom 2.1.2', 'version mismatch');
+  assert(run(root, ['--version']) === 'loom 2.1.3', 'version mismatch');
+});
+
+const PROJ = (text) => `# Project Whole\n\n## Intended result\n${text}\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate LOOM. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`;
+
+test('blocked Tasks surface their reason and recovery path in context', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A blocked-state visibility fixture proving a post-reset Agent sees why work stopped and how to resume it.'), 'utf8');
+  run(root, ['design', 'add', 'blocking', '--title', 'Blocking fixture', '--kind', 'system']);
+  writeFileSync(join(root, '.loom', 'design', 'blocking.md'), '# Blocking fixture\n\n## Responsibility\nSurface blocked work with its recovery path.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Blocked work', outcome: 'A blocked Task is visible with its recovery path in context', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/blocking.md#Responsibility' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  run(root, ['project', 'ready']);
+  run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
+  run(root, ['task', 'start', 'TASK-001']);
+  json(root, 'block.json', { reason: 'The upstream API contract is not published yet.', recovery_conditions: ['The contract file exists at contracts/api.md'], evidence: ['contracts/api.md does not exist'] });
+  run(root, ['task', 'block', 'TASK-001', '--json-file', 'block.json']);
+  const ctx = run(root, ['context']);
+  assert(ctx.includes('TASK-001 — The upstream API contract is not published yet.'), 'context must name the blocked Task and its reason');
+  assert(ctx.includes('The contract file exists at contracts/api.md'), 'context must show recovery conditions');
+  assert(ctx.includes('loom task reopen <id> --reason'), 'context must recommend the reopen path when nothing is executable');
+});
+
+test('decision-affected warnings close after re-completion and done Tasks resist silent rewrites', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A decision lifecycle fixture proving affected-Task warnings open and close with evidence rather than persisting forever.'), 'utf8');
+  run(root, ['design', 'add', 'evolving', '--title', 'Evolving fixture', '--kind', 'system']);
+  writeFileSync(join(root, '.loom', 'design', 'evolving.md'), '# Evolving fixture\n\n## Responsibility\nChange after implementation.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Build output', outcome: 'A verified output file exists', done_when: ['Output verified'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/evolving.md#Responsibility' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  run(root, ['project', 'ready']);
+  run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
+  run(root, ['task', 'start', 'TASK-001']);
+  writeFileSync(join(root, 'out.txt'), 'v1\n', 'utf8');
+  json(root, 'done.json', { evidence: ['out.txt verified'], checks: [{ criterion: 'Output verified', evidence: ['out.txt exists with expected content'] }] });
+  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  json(root, 'patch.json', { outcome: 'Silently rewritten outcome that must be rejected' });
+  assert(run(root, ['task', 'update', 'TASK-001', '--json-file', 'patch.json'], 1).includes('reopen it first'), 'done Task must not accept silent rewrites');
+  json(root, 'decision.json', { summary: 'The output format changed after completion', changes: ['.loom/design/evolving.md'], affected_tasks: ['TASK-001'] });
+  run(root, ['decision', '--json-file', 'decision.json']);
+  const warned = JSON.parse(run(root, ['check']));
+  assert(warned.warnings.join('\n').includes('TASK-001 is done but was marked affected'), 'done-before-decision Task must warn');
+  run(root, ['task', 'reopen', 'TASK-001', '--reason', 'Reviewed against the format decision; re-verifying output.']);
+  run(root, ['task', 'start', 'TASK-001']);
+  writeFileSync(join(root, 'out.txt'), 'v2\n', 'utf8');
+  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  const cleared = JSON.parse(run(root, ['check']));
+  assert(!cleared.warnings.join('\n').includes('TASK-001 is done but was marked affected'), 're-completion after the decision must close the warning');
+});
+
+test('task start requires an attested Keeper pass or a recorded skip', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A Keeper attestation fixture proving an unverified pass cannot silently gate execution.'), 'utf8');
+  run(root, ['design', 'add', 'attestation', '--title', 'Attestation fixture', '--kind', 'system']);
+  writeFileSync(join(root, '.loom', 'design', 'attestation.md'), '# Attestation fixture\n\n## Responsibility\nRequire attested readiness.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Attested work', outcome: 'Execution only follows an attested pass or recorded skip', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/attestation.md#Responsibility' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  const statePath = join(root, '.loom', 'state.json');
+  const state = JSON.parse(readFileSync(statePath, 'utf8'));
+  state.keeper.status = 'passed';
+  state.keeper.attempts = [{ run_id: 'legacy-pass-001', verdict: 'passed', summary: 'Recorded before provenance rules.', evidence: ['Legacy pass'], gaps: [], at: new Date().toISOString() }];
+  state.project.status = 'build_ready';
+  writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`, 'utf8');
+  assert(run(root, ['task', 'start', 'TASK-001'], 1).includes('independent review provenance'), 'unattested pass must not gate execution');
+  const unhealthy = JSON.parse(run(root, ['check'], 1));
+  assert(unhealthy.errors.join('\n').includes('independently attested'), 'check must report an unattested pass as an error');
+  run(root, ['project', 'ready']);
+  run(root, ['keeper', 'skip', '--reason', 'Only one Agent exists in this fixture.']);
+  run(root, ['task', 'start', 'TASK-001']);
+  const healthy = JSON.parse(run(root, ['check']));
+  assert(healthy.healthy === true, 'a recorded skip is a legitimate build state');
+});
+
+test('a Keeper pass must close findings still open across all earlier attempts', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.'), 'utf8');
+  run(root, ['design', 'add', 'ledger', '--title', 'Ledger fixture', '--kind', 'system']);
+  writeFileSync(join(root, '.loom', 'design', 'ledger.md'), '# Ledger fixture\n\n## Responsibility\nTrack every open finding.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Ledger work', outcome: 'Findings persist until closed with evidence', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/ledger.md#Responsibility' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  const ready1 = JSON.parse(run(root, ['project', 'ready']));
+  json(root, 'k1.json', { run_id: 'keeper-ledger-001', prepared_digest: ready1.digest, verdict: 'needs_revision', summary: 'One finding.', evidence: ['Read the whole.'], gaps: ['Gap A: name the CLI entry point'] });
+  run(root, ['keeper', 'record', '--json-file', 'k1.json']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), `${PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.')} \nRevised after round one.\n`, 'utf8');
+  const ready2 = JSON.parse(run(root, ['project', 'ready']));
+  json(root, 'k2.json', { run_id: 'keeper-ledger-002', prepared_digest: ready2.digest, verdict: 'needs_revision', summary: 'A different finding.', evidence: ['Read the whole again.'], gaps: ['Gap B: document the test command'] });
+  run(root, ['keeper', 'record', '--json-file', 'k2.json']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), `${PROJ('A cumulative findings fixture proving earlier gaps cannot vanish when a later round reports different ones.')} \nRevised after round two.\n`, 'utf8');
+  const ready3 = JSON.parse(run(root, ['project', 'ready']));
+  json(root, 'k3.json', { run_id: 'keeper-ledger-003', prepared_digest: ready3.digest, verdict: 'passed', summary: 'Looks ready.', evidence: ['Reviewed.'], review: independentReview('fresh-ledger-agent'), closure_results: [{ gap: 'Gap B: document the test command', evidence: 'README now names npm test' }] });
+  const rejected = run(root, ['keeper', 'record', '--json-file', 'k3.json'], 1);
+  assert(rejected.includes('Gap A: name the CLI entry point'), 'a pass must still close findings from earlier attempts');
+  json(root, 'k3.json', { run_id: 'keeper-ledger-003', prepared_digest: ready3.digest, verdict: 'passed', summary: 'Looks ready.', evidence: ['Reviewed.'], review: independentReview('fresh-ledger-agent'), closure_results: [{ gap: 'Gap A: name the CLI entry point', evidence: 'PROJECT.md names cli/bin/loom.js' }, { gap: 'Gap B: document the test command', evidence: 'README now names npm test' }] });
+  run(root, ['keeper', 'record', '--json-file', 'k3.json']);
+});
+
+test('fake design and capability references are rejected at ready, start, and done', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A reference-truth fixture proving Tasks cannot cite design sections or capability nodes that do not exist.'), 'utf8');
+  run(root, ['design', 'add', 'real', '--title', 'Real fixture', '--kind', 'system']);
+  writeFileSync(join(root, '.loom', 'design', 'real.md'), '# Real fixture\n\n## Responsibility\nExist as a reference target.\n', 'utf8');
+  json(root, 'tasks.json', { tasks: [{ title: 'Linked work', outcome: 'Only resolvable references pass the gates', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/ghost.md#Nope' }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  assert(run(root, ['project', 'ready'], 1).includes('missing design document'), 'ready must reject a missing design file');
+  json(root, 'fix1.json', { implements: 'D-invented-decision' });
+  run(root, ['task', 'update', 'TASK-001', '--json-file', 'fix1.json']);
+  assert(run(root, ['project', 'ready'], 1).includes('not found in project truth'), 'ready must reject a decision name absent from project truth');
+  json(root, 'fix2.json', { implements: '.loom/design/real.md#No such section' });
+  run(root, ['task', 'update', 'TASK-001', '--json-file', 'fix2.json']);
+  assert(run(root, ['project', 'ready'], 1).includes('missing design section'), 'ready must reject a missing design section');
+  json(root, 'fix3.json', { implements: '.loom/design/real.md#Responsibility', capability_hooks: [{ node: 'ghost-cap#C1' }] });
+  run(root, ['task', 'update', 'TASK-001', '--json-file', 'fix3.json']);
+  assert(run(root, ['project', 'ready'], 1).includes('missing dossier'), 'ready must reject a missing capability dossier');
+});
+
+test('deliverable coverage separates planned from delivered', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A coverage fixture proving planned coverage is not delivered coverage.'), 'utf8');
+  run(root, ['design', 'add', 'delivery', '--title', 'Delivery fixture', '--kind', 'system']);
+  writeFileSync(join(root, '.loom', 'design', 'delivery.md'), '# Delivery fixture\n\n## Responsibility\nDeliver one unit.\n', 'utf8');
+  run(root, ['deliverable', 'add', 'real-output', '--title', 'Real output', '--kind', 'feature']);
+  json(root, 'tasks.json', { tasks: [{ title: 'Produce it', outcome: 'The deliverable exists as a verified file', done_when: ['File exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/delivery.md#Responsibility', covers: ['DLV-001'] }] });
+  run(root, ['task', 'plan', '--json-file', 'tasks.json']);
+  const planned = JSON.parse(run(root, ['check']));
+  assert(planned.deliverable_coverage.planned === 1 && planned.deliverable_coverage.delivered === 0, 'planned coverage must not count as delivered');
+  assert(planned.warnings.join('\n').includes('covered only by Tasks not yet done'), 'check must warn when coverage is only planned');
+  run(root, ['project', 'ready']);
+  run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']);
+  run(root, ['task', 'start', 'TASK-001']);
+  writeFileSync(join(root, 'out.txt'), 'done\n', 'utf8');
+  json(root, 'done.json', { evidence: ['out.txt exists'], checks: [{ criterion: 'File exists', evidence: ['out.txt on disk'] }] });
+  run(root, ['task', 'done', 'TASK-001', '--json-file', 'done.json']);
+  const delivered = JSON.parse(run(root, ['check']));
+  assert(delivered.deliverable_coverage.delivered === 1, 'completed covering Task must count as delivered');
+  assert(!delivered.warnings.join('\n').includes('covered only by Tasks not yet done'), 'delivered coverage must clear the warning');
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });

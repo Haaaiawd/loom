@@ -139,9 +139,11 @@ answers and decisions -> update design and capability maps -> repeat while mater
 
 Keeper loop: prepare a frozen digest -> fresh Keeper attempts to start from disk -> on
 \`needs_revision\` or \`blocked\`, absorb every concrete gap into project truth, design docs, capability
-dossiers, or Tasks -> prepare a changed digest. When all gaps are minor and 3 or fewer, fixing them
-and running \`loom project ready\` auto-passes without a new Keeper round; otherwise another fresh
-Keeper is required. Keeper does not reappear for every Task.
+dossiers, or Tasks -> prepare a changed digest -> fresh independent verification of closure.
+Minor gaps also require verification; a changed digest alone never grants a pass.
+Use \`loom review --help\` for the state-independent handoff and stage-review guide.
+The host launches the fresh Agent and waits for its recorded verdict before resuming context.
+Keeper does not reappear for every Task.
 
 Delivery loop: select an executable Task -> load exactly referenced context -> implement and verify ->
 fill in each acceptance condition's evidence with the actual result -> complete, block with recovery
@@ -215,6 +217,9 @@ The human's patience is the project's fuel. Do not let several Tasks pass in sil
 - **Every few Tasks or at a natural milestone**: do a staged review. Run the project's own tests, inspect
   code quality against the design intent, and tell the human what passed and what surprised you. Catch
   drift while it is cheap to fix.
+  Use a review Task with explicit acceptance and evidence. Turn findings into repair Tasks,
+  block the review with closure conditions, then reopen and reverify it after repairs.
+  See \`loom review --help\`; closing a repair Task does not close the review automatically.
 - **Before declaring a batch done**: run \`loom check\` and the project's own tests together. Both must
   pass. If tests fail or coverage drops, fix before moving on — do not let partial work accumulate behind
   a green-looking summary.
@@ -358,8 +363,7 @@ include both run_id and prepared_digest in the result.
 Use this result shape. Keep \`gaps\` empty on pass; otherwise prefer structured gaps so the next Agent
 receives the reason and closure evidence without interpretation loss. Mark each gap with severity
 \`blocking\` (a fresh Agent cannot start without this being fixed) or \`minor\` (an improvement that
-does not block the first Task). When all gaps are minor and there are 3 or fewer, LOOM will auto-pass
-after the gaps are fixed without requiring another Keeper round:
+does not block the first Task). Every revision requires fresh verification before a pass:
 
 \`\`\`json
 {
@@ -392,8 +396,10 @@ or use \`loom keeper skip --reason <concrete limitation>\` when isolation is una
 \`needs_revision\` with concrete gaps and the
 observable evidence that would close each one, or \`blocked\` when progress requires unavailable
 authority or external state. A failed attempt returns the project to shaping; revision requires a
-changed digest. When all gaps are minor and 3 or fewer, fixing them and running \`loom project ready\`
-will auto-pass without a new Keeper round; otherwise another fresh Keeper is required.`;
+changed digest and another fresh Keeper, including for minor gaps. Verify each prior finding
+against its requested closure evidence before issuing a pass. For a revised pass, include
+\`closure_results: [{ "gap": "<exact prior gap text>", "evidence": "<observed closure proof>" }]\`
+covering every prior gap. These records are retained with the review.`;
 }
 
 export const PROJECT_TEMPLATE = `# Project Whole and Document Map
@@ -479,8 +485,8 @@ growing, not just LOOM state changing.
 ## Keeper handoff
 
 Before material execution, run \`loom project ready\` to freeze a digest, then ask a fresh Agent to
-run \`loom keeper prompt\` and \`loom keeper record\`. If the Keeper returns only minor gaps (3 or fewer),
-fixing them and running \`loom project ready\` again auto-passes without another Keeper round.
+run \`loom keeper prompt\` and \`loom keeper record\`. Repair findings and prepare again;
+a fresh Keeper must verify closure, including minor gaps. See \`loom review --help\`.
 `;
 
 export const STRUCTURE_TEMPLATE = `# Project structure

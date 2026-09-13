@@ -175,8 +175,7 @@ loom task start TASK-001
 loom context
 loom task update TASK-001 --json-file progress.json
 loom task block TASK-001 --json-file block.json
-loom task reopen TASK-001
-loom task reopen TASK-001 --reason "Prior completion evidence was disproven"
+loom task reopen TASK-001 --reason "How the recovery conditions were met, or why the completion was disproven"
 loom task done TASK-001 --json-file evidence.json
 ```
 
@@ -184,7 +183,7 @@ Completion is deliberately explicit:
 
 ```json
 {
-  "evidence": ["npm test: 21 passed, 0 failed"],
+  "evidence": ["npm test: 27 passed, 0 failed"],
   "acceptance_results": [
     {
       "criterion": "The exact acceptance criterion from the Task.",
@@ -228,7 +227,7 @@ npm test
 
 The v2 test suite exercises the complete loop, including a 250-Task Work Map, context selection,
 superseding decisions, scalable design documents, professional-field separation, capability compilation with
-source-citation validation, multi-attempt Keeper revision with auto-pass, stale digest and duplicate-run
+source-citation validation, multi-attempt Keeper revision with explicit closure evidence, stale digest and duplicate-run
 rejection, exact-file Task start, block/reopen including disproven completion, per-acceptance-criterion evidence,
 deliverable coverage, decision recording with affected-task warnings, and Evil Eval controls. See the
 [complete UX and loop specification](docs/UX_FLOW.md).

@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## 2.1.3
+
+- Removed Keeper auto-pass: every still-open finding must be closed with evidence in a later independently attested pass. A changed project digest proves a change, not that findings were resolved.
+- `loom task start` now requires an independently attested Keeper pass (`review.mode: "independent"`) or a recorded `loom keeper skip`; `loom check` reports an unattested legacy pass as an error instead of a quiet warning.
+- Keeper findings are cumulative across attempts: a passing record must carry `closure_results` for every gap still open from earlier rounds.
+- Task references are verified, not just non-empty: `implements` must resolve to an existing design file and section (or a decision name present in project truth), and `capability_hooks` must resolve to an existing dossier and node. `loom project ready` runs this integrity check.
+- `loom context` lists each blocked Task with its reason and recovery conditions, and recommends `loom task reopen <id> --reason` when nothing is executable.
+- Done Tasks resist silent rewrites: `loom task update` on a done Task is rejected with a reopen pointer, and reopening a blocked Task requires a concrete reason describing how the recovery conditions were met.
+- Decision-affected done Tasks warn only until re-verified: reopening and re-completing the Task after the decision clears the warning.
+- Deliverable coverage now distinguishes planned from delivered: units covered only by open or blocked Tasks no longer count as delivered.
+- `loom record --help` documents `resolved` and `retire_assumptions` so Agents can close questions and assumptions they opened.
 
 ## 2.1.2
 
@@ -28,7 +38,7 @@
 - Added `.loom/STRUCTURE.md` as a fifth project-truth layer declaring where source code, tests, docs, assets, and configuration files live. `loom check` warns when it is missing or still templated.
 - Added `loom decision --json-file` for recording consequential superseding decisions with affected files and tasks. `loom check` warns when a done Task is marked affected by a later decision.
 - Added `acceptance[]` as the primary Task completion structure, pairing `criterion`, `verify_by`, and `evidence`. Legacy `done_when[]` remains supported.
-- Added Keeper auto-pass: when all Keeper gaps are minor and 3 or fewer, fixing them and running `loom project ready` auto-passes without another Keeper round.
+- Added Keeper auto-pass: when all Keeper gaps are minor and 3 or fewer, fixing them and running `loom project ready` auto-passes without another Keeper round. (removed in 2.1.3)
 - Added deliverable coverage tracking through `loom deliverable add` and Task `covers` field. `loom check` reports uncovered delivery units.
 - Added `loom capability research → synthesize → confirm` lifecycle with status tracking per dossier.
 - Updated help text with a typical first-pass flow and capability lifecycle sequence.

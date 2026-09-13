@@ -128,6 +128,8 @@ verify_by, and evidence fields. Task completion fills in each acceptance conditi
 with the actual result (for acceptance tasks) or quotes each done_when criterion (for legacy tasks).
 
 One-time independent handoff
+  loom review [--help]                 — Keeper handoff and stage-review guide
+  loom keeper --help                  — read-only guide in any project state
   loom keeper prompt
   loom keeper record --json-file <result.json>
   loom keeper skip --reason <reason>
@@ -153,6 +155,8 @@ const STRUCTURED_HELP = {
       confirmed: ['A fact confirmed by the human or workspace.'],
       assumptions: [{ text: 'A bounded, reversible Agent assumption.', source: 'agent' }],
       unresolved: [{ question: 'A consequential question still open?', impact: 'high' }],
+      resolved: [{ id: 'Q-001', status: 'resolved' }],
+      retire_assumptions: ['A-001'],
       decisions: [{ title: 'Decision title', decision: 'Current decision.', rationale: 'Why it follows.', supersedes: [], affects: ['.loom/PROJECT.md'] }],
     },
   },
@@ -187,9 +191,39 @@ const STRUCTURED_HELP = {
 };
 
 function structuredHelp(topic) {
+  if (['keeper', 'review', 'keeper-prompt'].includes(topic)) return reviewHelp();
+  if (topic === 'keeper-record') return `${STRUCTURED_HELP[topic].usage}\n\nCanonical JSON payload:\n${JSON.stringify(STRUCTURED_HELP[topic].example, null, 2)}\n\nFor a revised pass, add closure_results: [{"gap":"<exact prior gap text>","evidence":"<observed closure proof>"}] for every prior gap. Minor gaps require fresh verification too.`;
   const entry = STRUCTURED_HELP[topic];
   if (!entry) throw new Error(`Unknown help topic: ${topic}. Available topics: ${Object.keys(STRUCTURED_HELP).join(', ')}`);
   return `${entry.usage}\n\nCanonical JSON payload:\n${JSON.stringify(entry.example, null, 2)}`;
+}
+
+function reviewHelp() {
+  return `LOOM review guide
+
+Keeper is the first build-readiness handoff. Stage reviews use ordinary Tasks.
+This guide is read-only and available before initialization or project readiness.
+
+Keeper handoff:
+1. The shaping Agent runs loom project ready after preparing project truth.
+2. The host opens a fresh Agent without inherited conversation. Give it the workspace
+   path, the CLI location (absolute path in source checkouts), and this instruction:
+   Run loom keeper prompt, then loom context --keeper, and inspect the referenced files.
+3. The fresh Agent records its verdict with loom keeper record --json-file <result.json>.
+   See loom keeper record --help for the payload and independent review provenance.
+4. The parent waits for the result, then runs loom context. On needs_revision or blocked,
+   repair the named sources, prepare again, and obtain a fresh review, including minor gaps.
+5. On passed, resume with loom task next and loom task start <id>.
+If isolation is unavailable, explicitly record loom keeper skip --reason <limitation>.
+The CLI prints instructions and records state; it does not launch Agents itself.
+
+Stage review:
+Use loom task plan --help to create a review Task naming the implementation, design,
+and verification artifacts in reads. Record each finding as a repair Task with concrete
+acceptance criteria and evidence. Block the review Task with loom task block until repairs
+are ready; reopen it and re-run verification before loom task done. A completed repair
+alone is not a completed review. No findings: close the review Task with inspection evidence.
+Do not rerun first-time Keeper just to review every implementation Task.`;
 }
 
 function activeStructuredHelpTopic() {
@@ -323,8 +357,13 @@ try {
       } else throw new Error('Usage: loom task plan|status|next|get|start|update|block|reopen|done');
       break;
     }
+    case 'review':
+      if (subcommand && subcommand !== '--help') throw new Error('Usage: loom review [--help]');
+      output(reviewHelp());
+      break;
     case 'keeper': {
       if (argv.includes('--help') && subcommand === 'record') output(structuredHelp('keeper-record'));
+      else if (!subcommand || argv.includes('--help')) output(reviewHelp());
       else if (subcommand === 'prompt') output(getKeeperPrompt());
       else if (subcommand === 'record') output(recordKeeper(jsonFile()));
       else if (subcommand === 'skip') output(skipKeeper(option('--reason')));

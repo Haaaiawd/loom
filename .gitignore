@@ -26,3 +26,8 @@ test/.tmp-loom-test/
 
 # Local scratch space (never part of the framework release)
 tmp/
+
+# Local benchmark probes (not part of the framework release)
+.terminal-bench-probe/
+.tua-bench-probe/
+evals/terminal_bench/
