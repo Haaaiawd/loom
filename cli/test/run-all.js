@@ -723,7 +723,7 @@ test('help and source surface stay minimal', () => {
   assert(chineseReadme.includes('--source human'), 'Chinese README should teach capability authority provenance');
   assert(chineseReadme.includes('review.mode: "independent"'), 'Chinese README should teach independent Keeper provenance');
   assert(chineseReadme.includes('loom task done --help'), 'Chinese README should point structured writes to command-local help');
-  assert(run(root, ['--version']) === 'loom 2.1.3', 'version mismatch');
+  assert(run(root, ['--version']) === 'loom 2.2.0', 'version mismatch');
 });
 
 const PROJ = (text) => `# Project Whole\n\n## Intended result\n${text}\n\n## People and reality\nA human collaborates naturally while the Agent silently preserves state.\n\n## Whole behavior\nThe Agent clarifies, records, builds a work map, resumes one Task, and proves it done.\n\n## Boundaries\nThe human never has to operate LOOM. Irreversible work needs authority.\n\n## System shape\nHuman-readable project truth plus structured Task state compiled by a CLI.\n\n## Completion and failure\nA fresh Agent can start without chat memory; document volume alone is failure.\n`;

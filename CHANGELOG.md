@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.2.0
+
+- Shaping-path guidance: `loom --help` now states what each shaping step buys and what skipping costs, and names conceptual help topics.
+- `loom help <concept>` (`shaping`, `design`, `capability`, `task`, `deliverable`) gives each artifact a short purpose-plus-pointer; bare subcommands like `loom capability` and `loom design --help` land on the same pointers instead of a usage error.
+- Shaping commands return an additive `next` field chaining the lifecycle: init → record → capability add/research/synthesize/confirm → design add → deliverable → task plan → project ready; `loom task start` points back at `loom context`.
+- `loom context` during shaping names the actual unfinished frontier — template PROJECT.md, missing or templated design documents, capability lifecycle states, open high-impact questions, empty Work Map — instead of a generic keep-shaping sentence.
+- Capabilities now precede design in every guided path: dossier decision trees produce the design decisions, so design documents are written informed by confirmed dossiers.
+- `loom init` output lists the `AGENTS.md` anchor it installs (omitted correctly in sidecar mode).
+
 ## 2.1.3
 
 - Removed Keeper auto-pass: every still-open finding must be closed with evidence in a later independently attested pass. A changed project digest proves a change, not that findings were resolved.
