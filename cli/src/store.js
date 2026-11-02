@@ -117,11 +117,12 @@ export function initProject(root = process.cwd()) {
   writeFileSync(paths.project, PROJECT_TEMPLATE, 'utf8');
   writeFileSync(paths.structure, STRUCTURE_TEMPLATE, 'utf8');
   writeFileSync(paths.decisions, '# Decision History\n\nCurrent truth belongs in PROJECT.md and linked design documents. This file preserves consequential superseding decisions.\n', 'utf8');
-  if (paths.loom === join(paths.root, '.loom')) installAgentAnchor(paths.root);
+  const anchored = paths.loom === join(paths.root, '.loom');
+  if (anchored) installAgentAnchor(paths.root);
   return {
     initialized: true,
     root: paths.root,
-    files: ['.loom/PROJECT.md', '.loom/STRUCTURE.md', '.loom/DECISIONS.md', '.loom/state.json', '.loom/tasks.json', '.loom/deliverables.json', '.loom/design/', '.loom/capabilities/'],
+    files: ['.loom/PROJECT.md', '.loom/STRUCTURE.md', '.loom/DECISIONS.md', '.loom/state.json', '.loom/tasks.json', '.loom/deliverables.json', '.loom/design/', '.loom/capabilities/', ...(anchored ? ['AGENTS.md'] : [])],
     next: 'Replace the template text in .loom/PROJECT.md and .loom/STRUCTURE.md with this project\u2019s truth, then shape the whole: loom record \u2192 loom capability add \u2192 loom design add \u2192 loom deliverable add \u2192 loom task plan. Run `loom help shaping` for what each layer buys you.',
   };
 }

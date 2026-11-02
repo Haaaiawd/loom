@@ -55,6 +55,7 @@ test('init creates one small, human-readable project skeleton', () => {
   for (const file of ['.loom/PROJECT.md', '.loom/STRUCTURE.md', '.loom/DECISIONS.md', '.loom/state.json', '.loom/tasks.json', '.loom/deliverables.json']) {
     assert(existsSync(join(root, file)), `${file} missing`);
   }
+  assert(result.files.includes('AGENTS.md'), 'init file list must include the AGENTS.md anchor it creates');
   assert(existsSync(join(root, '.loom', 'design')), 'design directory missing');
   assert(existsSync(join(root, '.loom', 'capabilities')), 'capability directory missing');
   assert(!existsSync(join(root, '.loom', 'v1')), 'v2 must not recreate version ceremony');
