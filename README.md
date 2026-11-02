@@ -194,7 +194,10 @@ Completion is deliberately explicit:
 ```
 
 Run `loom --help` for the complete command surface. Structured-write commands expose canonical payloads
-through command-specific help such as `loom record --help` and `loom task done --help`. Run `loom check`
+through command-specific help such as `loom record --help` and `loom task done --help`. Conceptual
+guidance — why each shaping artifact exists, its lifecycle, and its quality bar — is available through
+`loom help <concept>` (`shaping`, `design`, `capability`, `task`, `deliverable`); shaping command
+outputs also carry a `next` hint, and `loom context` names the unfinished shaping frontier. Run `loom check`
 for structural health. Run
 `loom prompts` to print every cognitive message LOOM can inject: the stable collaboration core,
 runtime protocol, dynamic state layer, all document templates, Keeper prompt, eval conditions, judge

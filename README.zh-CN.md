@@ -159,7 +159,7 @@ loom task done TASK-001 --json-file evidence.json
 }
 ```
 
-运行 `loom --help` 查看全部命令。所有结构化写入命令都通过命令级帮助给出可直接使用的标准 JSON，例如 `loom record --help` 和 `loom task done --help`；校验失败也会保留具体错误，并指向对应帮助。运行 `loom check` 检查结构健康度。`loom prompts` 会打印 LOOM 可能注入的全部认知消息：稳定协作核心、运行时协议、动态状态层、所有文档模板、Keeper 提示词、Eval 条件、裁判提示词，以及它们的组合顺序。详见[提示词与消息目录](docs/PROMPT_CATALOG.md)。
+运行 `loom --help` 查看全部命令。所有结构化写入命令都通过命令级帮助给出可直接使用的标准 JSON，例如 `loom record --help` 和 `loom task done --help`；校验失败也会保留具体错误，并指向对应帮助。概念性引导——每个塑形层为什么存在、生命周期与质量标准——通过 `loom help <concept>`（`shaping`、`design`、`capability`、`task`、`deliverable`）提供；塑形命令输出还带 `next` 下一步提示，`loom context` 会指明当前未完成的塑形前沿。运行 `loom check` 检查结构健康度。`loom prompts` 会打印 LOOM 可能注入的全部认知消息：稳定协作核心、运行时协议、动态状态层、所有文档模板、Keeper 提示词、Eval 条件、裁判提示词，以及它们的组合顺序。详见[提示词与消息目录](docs/PROMPT_CATALOG.md)。
 
 ## LOOM 刻意删除了什么
 

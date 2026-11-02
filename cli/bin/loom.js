@@ -75,15 +75,21 @@ The human talks naturally to the Agent. The Agent uses these commands silently.
 Typical flow (first pass):
   1. loom init                          — create .loom/ skeleton
   2. loom record                        — confirm facts, assumptions, open questions
-  3. loom design add                    — write design documents for consequential systems
+  3. loom design add                    — one document per consequential decision surface;
+                                        skipping this makes PROJECT.md an unresumable monolith
   4. loom capability add → research → synthesize → confirm
-                                        — build professional decision trees for fields that matter
+                                        — compile researched expert decision trees for the
+                                        fields whose judgment changes this work; skipping this
+                                        produces generic output
   5. loom deliverable add               — decompose the delivery surface
   6. loom task plan                     — write Tasks with acceptance criteria covering deliverables
   7. loom project ready                 — freeze a digest for Keeper review
   8. loom keeper prompt → record        — fresh Agent verifies build-readiness (one-time)
   9. loom task start → done             — execute one Task at a time, fill acceptance evidence
   10. loom check                        — verify health, coverage, and drift
+
+Steps 3-6 are the shaping layers where project quality is decided. Run
+\`loom help <concept>\` for purpose and quality bar: shaping, design, capability, task, deliverable.
 
 When a new idea changes an existing decision:
   loom decision --json-file <decision.json>   — record what changed and affected tasks
@@ -142,6 +148,7 @@ Use \`--state-dir <outside-workspace-dir>\` on every command to keep LOOM state 
 
 Use \`loom <command> --help\` or \`loom help <topic>\` for canonical JSON payloads. Topics:
   record, decision, task-plan, task-update, task-block, task-done, keeper-record, eval-scaffold
+Conceptual guidance topics: shaping, design, capability, task, deliverable
 
 Use JSON files for structured writes so long content and shell quoting remain auditable.
 Task completion JSON includes evidence plus either acceptance_results[] (one per acceptance criterion,
@@ -190,11 +197,120 @@ const STRUCTURED_HELP = {
   },
 };
 
+const CONCEPT_HELP = {
+  shaping: `loom shaping — the order that makes a project resumable
+
+Shaping is everything before material execution. Each layer exists because a specific
+failure happens without it; skipping a layer is a decision, not a shortcut.
+
+  loom record           — preserves answers, assumptions, and open questions across resets
+  loom design add       — each document owns one consequential decision surface; without it
+                          PROJECT.md becomes an unresumable monolith (loom help design)
+  loom capability add   — injects researched professional judgment; without it output is
+                          generic (loom help capability)
+  loom deliverable add  — decomposes what "done" delivers so coverage is checkable
+  loom task plan        — restartable work at evidence granularity (loom help task)
+  loom project ready    — refuses while template residue, unclassified Tasks, or high-impact
+                          open questions remain, then a fresh Keeper verifies from disk
+
+Run loom context during shaping: the recommended action names the layer that is actually
+unfinished rather than reciting this list.`,
+
+  design: `loom design — documents that own consequential decisions
+
+A design document owns one decision surface a fresh Agent must understand and verify
+independently: a subsystem, an experience, a contract, a verification strategy, an
+operational procedure, or a research answer. PROJECT.md is only the map — putting the
+whole design inside it makes the project unresumable.
+
+Add one when a wrong decision there would be expensive to reverse, when two reasonable
+experts could decide differently, or when the surface must be verifiable on its own. A
+trivial project may need one document; a complex product may need many.
+
+Lifecycle:
+  loom design add <slug> --title <text> --kind <product|experience|system|contract|verification|operations|research>
+  → fill every section with project-specific decisions (template text fails loom project ready)
+  → link it from PROJECT.md's design document map
+  → Tasks reference it via implements, or carry a concrete design_exemption
+
+Quality bar: each section records a real decision with rationale and rejected
+alternatives — not a restatement of the section heading.`,
+
+  capability: `loom capability — researched professional judgment, not a summary
+
+A capability dossier compiles how an expert in ONE recognizable field thinks through
+THIS project's problems, as a decision tree with sources and counterexamples. It is the
+layer that turns a generic Agent answer into a professional one. Include a field only
+when its knowledge changes questions, design, implementation, risk, or verification —
+Tasks may declare capability_exemption, but skip deliberately, not by default.
+
+Lifecycle:
+  1. loom capability add <slug> --title <field>     — one dossier per field
+  2. loom capability research <slug> --field <text> — creates research/_guide.md
+     → add one .md per source: expert narratives, case studies, methodology,
+       failure accounts — not API docs or textbook summaries. One file is the
+       legal minimum; several distinct sources are what make the tree non-generic.
+  3. loom capability synthesize <slug>              — rejects nodes whose source does not
+       cite a research file, or that lack a counterexample
+  4. loom capability confirm <slug> --scenario <which expert situation applies> --source human
+     --source agent records a visibly provisional selection when the human is unavailable
+
+Tasks activate nodes via capability_hooks: [{ "node": "<slug>#C1", "at": "<decision point>",
+"must_produce": "<artifact>" }]. loom context injects that node's options, criteria,
+source, and counterexample at Task execution.
+
+Quality bar: each node is a decision a real expert reaches — entry condition, options,
+judgment criteria, a source naming actual research, and a counterexample naming when an
+expert would NOT walk this path.`,
+
+  task: `loom task — the restartable Work Map
+
+A Task is one verifiable unit of real work: completing it produces a piece of evidence
+you can point to. "Implement the feature" is too large; "add one field" is too small.
+
+Required shape (loom task plan --json-file <tasks.json>):
+  outcome          — the observable difference, not a summary of activity
+  acceptance       — [{ criterion (what must be true), verify_by (how to check), evidence }]
+  boundaries       — at least one thing this Task does NOT do
+  reads / touches  — exact paths, not categories
+  implements       — the design decision it realizes, or a concrete design_exemption
+  capability_hooks — decision-tree nodes it activates, or a capability_exemption
+  covers           — deliverable IDs it advances
+  depends_on       — prior Task IDs; empty only when there are no prerequisites
+
+Lifecycle: task plan → project ready → keeper → task next/start → update (progress) →
+done (one acceptance_results entry per criterion) or block (reason + recovery
+conditions) → reopen. Start and done refuse Tasks with unresolved classification and
+missing declared outputs.`,
+
+  deliverable: `loom deliverable — the delivery surface, decomposed
+
+A deliverable is one observable thing the project must produce: a module, feature,
+behavior, interface, artifact, operational outcome, or verification result. Tasks claim
+coverage via covers: [deliverable IDs]; loom deliverable coverage and loom check
+distinguish planned coverage from actually delivered (a covering Task is done).
+
+Lifecycle:
+  loom deliverable add <slug> --title <text> --kind <module|feature|behavior|interface|artifact|operational|verification|other>
+  → loom deliverable list      — inspect the surface
+  → loom deliverable coverage  — planned vs delivered, with uncovered items named`,
+};
+
+function conceptHelp(topic) {
+  const entry = CONCEPT_HELP[topic];
+  if (!entry) return null;
+  return entry;
+}
+
 function structuredHelp(topic) {
   if (['keeper', 'review', 'keeper-prompt'].includes(topic)) return reviewHelp();
   if (topic === 'keeper-record') return `${STRUCTURED_HELP[topic].usage}\n\nCanonical JSON payload:\n${JSON.stringify(STRUCTURED_HELP[topic].example, null, 2)}\n\nFor a revised pass, add closure_results: [{"gap":"<exact prior gap text>","evidence":"<observed closure proof>"}] for every prior gap. Minor gaps require fresh verification too.`;
   const entry = STRUCTURED_HELP[topic];
-  if (!entry) throw new Error(`Unknown help topic: ${topic}. Available topics: ${Object.keys(STRUCTURED_HELP).join(', ')}`);
+  if (!entry) {
+    const concept = conceptHelp(topic);
+    if (concept) return concept;
+    throw new Error(`Unknown help topic: ${topic}. Payload topics: ${Object.keys(STRUCTURED_HELP).join(', ')}. Concept topics: ${Object.keys(CONCEPT_HELP).join(', ')}`);
+  }
   return `${entry.usage}\n\nCanonical JSON payload:\n${JSON.stringify(entry.example, null, 2)}`;
 }
 
@@ -281,7 +397,8 @@ try {
       output(markReady());
       break;
     case 'design': {
-      if (subcommand === 'add') {
+      if (argv.includes('--help')) output(conceptHelp('design'));
+      else if (subcommand === 'add') {
         const slug = rest[0];
         const title = option('--title');
         const kind = option('--kind');
@@ -291,11 +408,13 @@ try {
       else if (subcommand === 'get') {
         if (!rest[0]) throw new Error('Usage: loom design get <slug>');
         output(getDesign(rest[0]));
-      } else throw new Error('Usage: loom design add|list|get');
+      } else if (!subcommand) output(conceptHelp('design'));
+      else throw new Error('Usage: loom design add|list|get');
       break;
     }
     case 'capability': {
-      if (subcommand === 'add') {
+      if (argv.includes('--help')) output(conceptHelp('capability'));
+      else if (subcommand === 'add') {
         const slug = rest[0];
         const title = option('--title');
         if (!slug) throw new Error('Usage: loom capability add <slug> --title <text>');
@@ -316,11 +435,13 @@ try {
       } else if (subcommand === 'status') {
         if (!rest[0]) throw new Error('Usage: loom capability status <slug>');
         output(getCapabilityStatus(rest[0]));
-      } else throw new Error('Usage: loom capability add|list|get|research|synthesize|confirm|status');
+      } else if (!subcommand) output(conceptHelp('capability'));
+      else throw new Error('Usage: loom capability add|list|get|research|synthesize|confirm|status');
       break;
     }
     case 'deliverable': {
-      if (subcommand === 'add') {
+      if (argv.includes('--help')) output(conceptHelp('deliverable'));
+      else if (subcommand === 'add') {
         const slug = rest[0];
         const title = option('--title');
         const kind = option('--kind');
@@ -328,6 +449,7 @@ try {
         output(addDeliverable(slug, { title, kind, notes: option('--notes') }));
       } else if (subcommand === 'list') output(listDeliverables());
       else if (subcommand === 'coverage') output(checkDeliverableCoverage());
+      else if (!subcommand) output(conceptHelp('deliverable'));
       else throw new Error('Usage: loom deliverable add|list|coverage');
       break;
     }
@@ -354,7 +476,8 @@ try {
       } else if (subcommand === 'done') {
         if (!rest[0]) throw new Error('Usage: loom task done <id> --json-file <evidence.json>');
         output(completeTask(rest[0], jsonFile()));
-      } else throw new Error('Usage: loom task plan|status|next|get|start|update|block|reopen|done');
+      } else if (!subcommand || argv.includes('--help')) output(conceptHelp('task'));
+      else throw new Error('Usage: loom task plan|status|next|get|start|update|block|reopen|done');
       break;
     }
     case 'review':

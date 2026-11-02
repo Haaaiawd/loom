@@ -890,6 +890,55 @@ test('deliverable coverage separates planned from delivered', () => {
   assert(!delivered.warnings.join('\n').includes('covered only by Tasks not yet done'), 'delivered coverage must clear the warning');
 });
 
+test('shaping guidance chains purpose, next steps, and the live frontier', () => {
+  const root = workspace();
+  const help = run(root, ['--help']);
+  assert(help.includes('unresumable monolith'), 'help must say what skipping design costs');
+  assert(help.includes('generic output'), 'help must say what skipping capabilities costs');
+  for (const topic of ['shaping', 'design', 'capability', 'task', 'deliverable']) {
+    assert(help.includes(topic), `help must name the ${topic} concept topic`);
+  }
+  assert(run(root, ['help', 'shaping']).includes('resumable'), 'shaping concept help missing');
+  assert(run(root, ['help', 'design']).includes('decision surface'), 'design concept help missing');
+  assert(run(root, ['help', 'capability']).includes('counterexample'), 'capability concept help missing');
+  assert(run(root, ['help', 'task']).includes('acceptance'), 'task concept help missing');
+  assert(run(root, ['help', 'deliverable']).includes('coverage'), 'deliverable concept help missing');
+  assert(run(root, ['capability']).includes('Lifecycle'), 'bare loom capability must route to concept help');
+  assert(run(root, ['design', '--help']).includes('decision surface'), 'loom design --help must route to concept help');
+  assert(run(root, ['task']).includes('Work Map'), 'bare loom task must route to concept help');
+  const initResult = JSON.parse(run(root, ['init']));
+  assert(initResult.next && initResult.next.includes('loom record'), 'init must chain to the shaping path');
+  const frontier1 = run(root, ['context']);
+  assert(frontier1.includes('Unfinished frontier'), 'context must name the shaping frontier');
+  assert(frontier1.includes('PROJECT.md is still a template'), 'frontier must catch template PROJECT.md');
+  assert(frontier1.includes('no design documents'), 'frontier must name missing design documents');
+  assert(frontier1.includes('no capability dossiers'), 'frontier must name missing capability dossiers');
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A guidance fixture proving the shaping frontier narrows as each layer lands.'), 'utf8');
+  const designResult = JSON.parse(run(root, ['design', 'add', 'guidance', '--title', 'Guidance fixture', '--kind', 'system']));
+  assert(designResult.next && designResult.next.includes('Fill every section'), 'design add must chain to filling the document');
+  const frontier2 = run(root, ['context']);
+  assert(frontier2.includes('design documents still contain template text'), 'frontier must catch template residue in design docs');
+  assert(frontier2.includes('no capability dossiers'), 'frontier must keep naming the capability layer');
+  writeFileSync(join(root, '.loom', 'design', 'guidance.md'), '# Guidance fixture\n\n## Responsibility\nChain the shaping lifecycle.\n', 'utf8');
+  const capabilityResult = JSON.parse(run(root, ['capability', 'add', 'agent-guidance', '--title', 'Agent guidance']));
+  assert(capabilityResult.next && capabilityResult.next.includes('loom capability research agent-guidance'), 'capability add must chain to research');
+  const frontier3 = run(root, ['context']);
+  assert(frontier3.includes('capability lifecycle unfinished'), 'frontier must name unfinished capability lifecycle');
+  assert(frontier3.includes('agent-guidance (researching)'), 'frontier must report the dossier state');
+  const researchDir = join(root, '.loom', 'capabilities', 'agent-guidance', 'research');
+  run(root, ['capability', 'research', 'agent-guidance', '--field', 'Agent-facing guidance design']);
+  writeFileSync(join(researchDir, 'guidance-study.md'), '# Guidance study\n\nSource: observed Agent behavior\n\nAgents skip layers whose purpose is never stated.\n', 'utf8');
+  writeFileSync(join(root, '.loom', 'capabilities', 'agent-guidance', 'capability.md'), '# Agent guidance\n\n## Field identity and boundary\nGuidance design.\n\n## Project scenario\nAgent-facing CLI.\n\n## Decision tree\n\n### C1: Choose guidance depth\n- entry_when: naming a next step\n- options:\n  - A: bare command name\n  - B: command plus why\n- decide_by: whether the Agent could infer the purpose\n- source: guidance-study.md\n- counterexample: an Agent that already knows the tool\n- output: guidance text\n\n## Stance\nPurpose before inventory.\n\n## Failure signals\nSkipped layers.\n\n## Relationships\nNone.\n', 'utf8');
+  const synthesizeResult = JSON.parse(run(root, ['capability', 'synthesize', 'agent-guidance']));
+  assert(synthesizeResult.next && synthesizeResult.next.includes('loom capability confirm agent-guidance'), 'synthesize must chain to confirm');
+  const confirmResult = JSON.parse(run(root, ['capability', 'confirm', 'agent-guidance', '--scenario', 'A fresh Agent shaping a project it did not design.', '--source', 'human']));
+  assert(confirmResult.next && confirmResult.next.includes('capability_hooks'), 'confirm must chain to capability_hooks');
+  const planResult = JSON.parse(run(root, ['task', 'plan', '--json-file', json(root, 'tasks.json', { tasks: [{ title: 'Guided work', outcome: 'A guided Task exists with executable status', done_when: ['Output exists'], boundaries: ['Test only'], reads: ['.loom/PROJECT.md'], touches: ['out.txt'], implements: '.loom/design/guidance.md#Responsibility', capability_hooks: [{ node: 'agent-guidance#C1' }] }] })]));
+  assert(planResult.next && planResult.next.includes('loom project ready'), 'task plan must chain to project ready');
+  const startResult = JSON.parse((() => { run(root, ['project', 'ready']); run(root, ['keeper', 'skip', '--reason', 'No second Agent is available in this fixture.']); return run(root, ['task', 'start', 'TASK-001']); })());
+  assert(startResult.next && startResult.next.includes('loom context'), 'task start must chain to context');
+});
+
 for (const root of roots) rmSync(root, { recursive: true, force: true });
 
 if (process.exitCode) {

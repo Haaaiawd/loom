@@ -67,6 +67,11 @@ be observed.
 
 ## Compile professional capability
 
+Design documents and capability dossiers are not ceremony between you and the Work Map. Design
+documents are where consequential decisions live so a fresh Agent can verify them; capability
+dossiers are where professional judgment lives so the output stops being generic. A project that
+skips either layer ships work that looks complete and is not.
+
 Identify capabilities at the level of established professional fields. Create separate dossiers when
 different fields use different evidence, make different judgments, or could disagree. A dossier is not
 a textbook summary or a costume labelled "expert". Its kernel is a conditional-branch decision tree
@@ -251,7 +256,9 @@ This project uses LOOM as Agent-only continuity infrastructure. Run \`loom conte
 project, after a context reset, before substantial work, and when the human gives feedback or a direction
 change. When a Task is active, the command restores its execution protocol, exact state, and declared
 context; rerun it before editing after any interruption. Keep project truth, design documents, professional
-capability dossiers, and Tasks current through the CLI, and never ask the human to operate LOOM. Do not
+capability dossiers, and Tasks current through the CLI, and never ask the human to operate LOOM. Design
+documents and capability dossiers are shaped before the Work Map and material execution, not after;
+the context output names which shaping layer is still unfinished. Do not
 rerun LOOM before every tool call: persist and restore at meaningful work boundaries. The installed
 \`loom\` command is the stable project-local invocation. If it is not on PATH in a source checkout, use
 the absolute path to that checkout's \`cli/bin/loom.js\`; do not guess a relative path from this project.`;

@@ -118,7 +118,12 @@ export function initProject(root = process.cwd()) {
   writeFileSync(paths.structure, STRUCTURE_TEMPLATE, 'utf8');
   writeFileSync(paths.decisions, '# Decision History\n\nCurrent truth belongs in PROJECT.md and linked design documents. This file preserves consequential superseding decisions.\n', 'utf8');
   if (paths.loom === join(paths.root, '.loom')) installAgentAnchor(paths.root);
-  return { initialized: true, root: paths.root, files: ['.loom/PROJECT.md', '.loom/STRUCTURE.md', '.loom/DECISIONS.md', '.loom/state.json', '.loom/tasks.json', '.loom/deliverables.json', '.loom/design/', '.loom/capabilities/'] };
+  return {
+    initialized: true,
+    root: paths.root,
+    files: ['.loom/PROJECT.md', '.loom/STRUCTURE.md', '.loom/DECISIONS.md', '.loom/state.json', '.loom/tasks.json', '.loom/deliverables.json', '.loom/design/', '.loom/capabilities/'],
+    next: 'Replace the template text in .loom/PROJECT.md and .loom/STRUCTURE.md with this project\u2019s truth, then shape the whole: loom record \u2192 loom design add \u2192 loom capability add \u2192 loom deliverable add \u2192 loom task plan. Run `loom help shaping` for what each layer buys you.',
+  };
 }
 
 function loomPathsForInit(root) {
@@ -266,7 +271,7 @@ export function recordUnderstanding(payload, root = findRoot()) {
   for (const decision of payload.decisions || []) appendDecision(paths.decisions, decision, state);
   state.project.updated_at = now();
   atomicJson(paths.state, state);
-  return state.understanding;
+  return { ...state.understanding, next: 'Keep shaping: split consequential decision surfaces into design documents (loom design add), map the professional fields that change this work into capability dossiers (loom capability add), then loom deliverable add and loom task plan. loom context names the current frontier.' };
 }
 
 function appendDecision(path, decision, state) {
@@ -286,7 +291,12 @@ export function createDesign(slug, options = {}, root = findRoot()) {
   const path = join(paths.design, `${slug}.md`);
   if (existsSync(path)) throw new Error(`Design document already exists: ${slug}`);
   writeFileSync(path, designTemplate({ title: options.title, kind: options.kind }), 'utf8');
-  return { slug, kind: options.kind, path: relative(paths.root, path).replaceAll('\\', '/') };
+  return {
+    slug,
+    kind: options.kind,
+    path: relative(paths.root, path).replaceAll('\\', '/'),
+    next: `Fill every section of .loom/design/${slug}.md with project-specific decisions — template text fails loom project ready. Add the other consequential surfaces, then shape capabilities: loom help capability.`,
+  };
 }
 
 export function listDesigns(root = findRoot()) {
@@ -314,7 +324,11 @@ export function createCapability(slug, options = {}, root = findRoot()) {
   const capabilityPath = join(dirPath, 'capability.md');
   writeFileSync(capabilityPath, CAPABILITY_TEMPLATE({ title: options.title }), 'utf8');
   atomicJson(join(dirPath, 'status.json'), { status: 'researching', title: options.title, field: options.field || '', scenario: '', confirmed_at: '', created_at: now() });
-  return { slug, path: relative(paths.root, capabilityPath).replaceAll('\\', '/') };
+  return {
+    slug,
+    path: relative(paths.root, capabilityPath).replaceAll('\\', '/'),
+    next: `Run loom capability research ${slug} --field <professional-field> to create the research guide, then add one .md per expert narrative, case study, or methodology source. loom help capability explains the quality bar.`,
+  };
 }
 
 export function listCapabilities(root = findRoot()) {
@@ -364,7 +378,7 @@ export function researchCapability(slug, options = {}, root = findRoot()) {
     field: options.field,
     research_dir: relative(paths.root, researchDir).replaceAll('\\', '/'),
     status: 'researching',
-    next: `Add .md files to research/ — one per expert narrative, case study, or methodology source. See research/_guide.md for what to write. Then run loom capability synthesize ${slug}.`,
+    next: `Add .md files to research/ — one per expert narrative, case study, or methodology source. See research/_guide.md for what to write. One file is the legal minimum; several distinct sources are what make the tree non-generic. Then run loom capability synthesize ${slug}.`,
   };
 }
 
@@ -404,7 +418,7 @@ export function synthesizeCapability(slug, root = findRoot()) {
   status.status = 'synthesized';
   status.updated_at = now();
   atomicJson(statusPath, status);
-  return { slug, status: 'synthesized', nodes: nodes.length, materials: materials.length };
+  return { slug, status: 'synthesized', nodes: nodes.length, materials: materials.length, next: `Run loom capability confirm ${slug} --scenario <which expert situation this project most resembles> --source human (or --source agent for a visibly provisional selection).` };
 }
 
 export function confirmCapability(slug, options = {}, root = findRoot()) {
@@ -435,7 +449,13 @@ export function confirmCapability(slug, options = {}, root = findRoot()) {
     const updated = content.replace(/## Project scenario\n[\s\S]*?\n## /, `${prefix}${blockquoteText}\n${options.scenario}\n${suffix}`);
     writeFileSync(capabilityPath, updated, 'utf8');
   }
-  return { slug, status: status.status, scenario: options.scenario, source: options.source };
+  return {
+    slug,
+    status: status.status,
+    scenario: options.scenario,
+    source: options.source,
+    next: `Tasks activate this dossier's nodes via capability_hooks: [{ "node": "${slug}#C1", "at": "<decision point>" }].${status.status === 'provisional' ? ' Status stays provisional until a human confirms.' : ''}`,
+  };
 }
 
 export function getCapabilityStatus(slug, root = findRoot()) {
@@ -563,7 +583,7 @@ export function importTasks(payload, root = findRoot()) {
     state.project.updated_at = now();
     atomicJson(paths.state, state);
   }
-  return taskSummary(taskStore.tasks);
+  return { ...taskSummary(taskStore.tasks), next: 'When PROJECT.md, design documents, capability dossiers, and the Work Map are stable, run loom project ready to freeze a digest for the one-time Keeper handoff. loom context names anything still unfinished.' };
 }
 
 export function taskSummary(tasks) {
@@ -736,7 +756,7 @@ export function startTask(id, root = findRoot()) {
   state.project.status = 'building';
   state.project.updated_at = now();
   atomicJson(paths.state, state);
-  return task;
+  return { ...task, next: 'Run loom context to load the execution protocol, every file in reads, and any capability_hooks decision nodes before editing.' };
 }
 
 export function completeTask(id, payload, root = findRoot()) {
@@ -947,7 +967,7 @@ export function compileContext(options = {}, root = findRoot()) {
       : state.project.status === 'complete'
         ? 'All Tasks are done. Run \`loom check\` to verify health. If new work arises, record the decision and update the Work Map.'
         : state.project.status === 'shaping'
-          ? 'Project is still shaping. Confirm the intended result, identify open questions, and build the Work Map before starting material work.'
+          ? shapingFrontier({ paths, state, taskStore, designs, capabilities })
           : blockedTasks.length
             ? 'No executable Task. Review the blocked Tasks listed above; reopen one when its recovery conditions are met with `loom task reopen <id> --reason <how they were met>`, or extend the Work Map.'
             : 'No executable Task. Create or update Tasks so the Work Map matches the project goal.';
@@ -988,9 +1008,34 @@ export function compileContext(options = {}, root = findRoot()) {
       if (hookBlocks.length) blocks.push(`## Capability decision points\n\nYou are at specific decision-tree nodes from professional capability dossiers. Use them to inform your judgment — each node carries options, criteria, a source, and a counterexample. If the evidence points somewhere the tree does not cover, trust the evidence and update the capability.\n\n${hookBlocks.join('\n\n')}`);
     }
   } else {
-    blocks.push(`## On-demand project context\n\n- Decision history: .loom/DECISIONS.md (read when correction or lineage matters)\n${designs.length ? designs.map((name) => `- Design: .loom/design/${name}`).join('\n') : '- No design documents yet; split the whole according to consequential systems and decisions.'}\n${capabilities.length ? capabilities.map((name) => `- Professional capability: .loom/capabilities/${name}`).join('\n') : '- No professional capability dossiers yet; create separate field dossiers only where expertise changes the work.'}`);
+    blocks.push(`## On-demand project context\n\n- Decision history: .loom/DECISIONS.md (read when correction or lineage matters)\n${designs.length ? designs.map((name) => `- Design: .loom/design/${name}`).join('\n') : '- No design documents yet; split the whole according to consequential systems and decisions.'}\n${capabilities.length ? capabilities.map((name) => `- Professional capability: .loom/capabilities/${name}`).join('\n') : '- No professional capability dossiers yet; create separate field dossiers only where expertise changes the work.'}
+- Guidance: loom help shaping | design | capability | task`);
   }
   return blocks.filter(Boolean).join('\n\n---\n\n');
+}
+
+function shapingFrontier({ paths, state, taskStore, designs, capabilities }) {
+  const gaps = [];
+  const project = readFileSync(paths.project, 'utf8');
+  if (project.includes('> This is the concise entry point') || project.length < 400) gaps.push('PROJECT.md is still a template — write the real intended result, boundaries, and document map');
+  if (!designs.length) gaps.push('no design documents — split the consequential decision surfaces with loom design add (loom help design explains what one owns)');
+  const unfinishedDesigns = designs.filter((name) => readFileSync(join(paths.design, name), 'utf8').includes('Describe the project-specific decision, mechanism, boundary, or evidence owned by this section.'));
+  if (unfinishedDesigns.length) gaps.push(`design documents still contain template text: ${unfinishedDesigns.join(', ')}`);
+  if (!capabilities.length) gaps.push('no capability dossiers — decide which professional fields change this work and add dossiers for them (loom help capability explains the lifecycle); skip deliberately, not by default');
+  else {
+    const unfinished = capabilities
+      .map((name) => {
+        const statusPath = join(paths.capabilities, name, 'status.json');
+        return existsSync(statusPath) ? `${name} (${readJson(statusPath, 'status.json').status || 'unknown'})` : null;
+      })
+      .filter((entry) => entry && !entry.endsWith('(confirmed)'));
+    if (unfinished.length) gaps.push(`capability lifecycle unfinished — continue research → synthesize → confirm for: ${unfinished.join(', ')}`);
+  }
+  const highOpen = state.understanding.unresolved.filter((item) => item.status === 'open' && item.impact === 'high');
+  if (highOpen.length) gaps.push(`high-impact questions still open: ${highOpen.map((item) => item.id).join(', ')}`);
+  if (!taskStore.tasks.length) gaps.push('the Work Map is empty — decompose the delivery surface (loom deliverable add) and plan Tasks (loom task plan --help)');
+  if (!gaps.length) return 'Shaping layers are present. If material uncertainty remains, keep clarifying; otherwise run loom project ready to freeze a digest for the one-time Keeper handoff.';
+  return `Project is still shaping. Unfinished frontier:\n${gaps.map((gap) => `  - ${gap}`).join('\n')}\nWork the frontier top-down, then run loom project ready.`;
 }
 
 function normalizeRef(paths, absolute) {
