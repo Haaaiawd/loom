@@ -144,12 +144,12 @@ writes use JSON files so long content remains auditable and shell quoting does n
 
 ```bash
 loom record --json-file understanding-update.json
-loom design add product --title "Product definition" --kind product
-loom design add local-analysis --title "Local analysis system" --kind system
-loom design add acceptance --title "Vertical-slice verification" --kind verification
 loom capability add ui-ux-design --title "UI/UX design"
 loom capability add behavioral-psychology --title "Behavioral psychology"
 loom capability confirm behavioral-psychology --scenario "<project-specific expert situation>" --source human
+loom design add product --title "Product definition" --kind product
+loom design add local-analysis --title "Local analysis system" --kind system
+loom design add acceptance --title "Vertical-slice verification" --kind verification
 loom task plan --json-file initial-work-map.json
 loom project ready
 ```

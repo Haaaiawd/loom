@@ -898,14 +898,16 @@ test('shaping guidance chains purpose, next steps, and the live frontier', () =>
   for (const topic of ['shaping', 'design', 'capability', 'task', 'deliverable']) {
     assert(help.includes(topic), `help must name the ${topic} concept topic`);
   }
+  assert(help.indexOf('loom capability add') < help.indexOf('loom design add'), 'capabilities must come before design in the shaping flow');
   assert(run(root, ['help', 'shaping']).includes('resumable'), 'shaping concept help missing');
+  assert(run(root, ['help', 'shaping']).includes('capability → design'), 'shaping concept help must state the capability-first order');
   assert(run(root, ['help', 'design']).includes('decision surface'), 'design concept help missing');
   assert(run(root, ['help', 'capability']).includes('counterexample'), 'capability concept help missing');
   assert(run(root, ['help', 'task']).includes('acceptance'), 'task concept help missing');
   assert(run(root, ['help', 'deliverable']).includes('coverage'), 'deliverable concept help missing');
   assert(run(root, ['capability']).includes('Lifecycle'), 'bare loom capability must route to concept help');
   assert(run(root, ['design', '--help']).includes('decision surface'), 'loom design --help must route to concept help');
-  assert(run(root, ['task']).includes('Work Map'), 'bare loom task must route to concept help');
+  assert(run(root, ['task']).includes('verifiable unit'), 'bare loom task must route to concept help');
   const initResult = JSON.parse(run(root, ['init']));
   assert(initResult.next && initResult.next.includes('loom record'), 'init must chain to the shaping path');
   const frontier1 = run(root, ['context']);
@@ -913,6 +915,7 @@ test('shaping guidance chains purpose, next steps, and the live frontier', () =>
   assert(frontier1.includes('PROJECT.md is still a template'), 'frontier must catch template PROJECT.md');
   assert(frontier1.includes('no design documents'), 'frontier must name missing design documents');
   assert(frontier1.includes('no capability dossiers'), 'frontier must name missing capability dossiers');
+  assert(frontier1.indexOf('no capability dossiers') < frontier1.indexOf('no design documents'), 'frontier must name capabilities before design');
   writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A guidance fixture proving the shaping frontier narrows as each layer lands.'), 'utf8');
   const designResult = JSON.parse(run(root, ['design', 'add', 'guidance', '--title', 'Guidance fixture', '--kind', 'system']));
   assert(designResult.next && designResult.next.includes('Fill every section'), 'design add must chain to filling the document');

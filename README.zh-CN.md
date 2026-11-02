@@ -112,12 +112,12 @@ Agent 将 `.loom/PROJECT.md`、设计文档和能力卷宗作为人类可读的�
 
 ```bash
 loom record --json-file understanding-update.json
-loom design add product --title "Product definition" --kind product
-loom design add local-analysis --title "Local analysis system" --kind system
-loom design add acceptance --title "Vertical-slice verification" --kind verification
 loom capability add ui-ux-design --title "UI/UX design"
 loom capability add behavioral-psychology --title "Behavioral psychology"
 loom capability confirm behavioral-psychology --scenario "<项目特定的专家情境>" --source human
+loom design add product --title "Product definition" --kind product
+loom design add local-analysis --title "Local analysis system" --kind system
+loom design add acceptance --title "Vertical-slice verification" --kind verification
 loom task plan --json-file initial-work-map.json
 loom project ready
 ```
