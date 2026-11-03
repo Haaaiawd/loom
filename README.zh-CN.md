@@ -159,6 +159,8 @@ loom task done TASK-001 --json-file evidence.json
 }
 ```
 
+当负责人中途改变方向或要求重新设计时，Agent 不再默默重新解释，而是开启一轮问询：`loom clarify start --reason` 暂停实质工作，在对话中成组提出关键问题，`loom clarify resolve` 记录答案，`loom clarify close` 在所有轮次问题被解决或显式跳过前拒绝关闭。随后答案逐级落入 `loom decision`、设计文档与任务。
+
 运行 `loom --help` 查看全部命令。所有结构化写入命令都通过命令级帮助给出可直接使用的标准 JSON，例如 `loom record --help` 和 `loom task done --help`；校验失败也会保留具体错误，并指向对应帮助。概念性引导——每个塑形层为什么存在、生命周期与质量标准——通过 `loom help <concept>`（`shaping`、`design`、`capability`、`task`、`deliverable`）提供；塑形命令输出还带 `next` 下一步提示，`loom context` 会指明当前未完成的塑形前沿。运行 `loom check` 检查结构健康度。`loom prompts` 会打印 LOOM 可能注入的全部认知消息：稳定协作核心、运行时协议、动态状态层、所有文档模板、Keeper 提示词、Eval 条件、裁判提示词，以及它们的组合顺序。详见[提示词与消息目录](docs/PROMPT_CATALOG.md)。
 
 ## LOOM 刻意删除了什么

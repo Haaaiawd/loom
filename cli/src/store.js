@@ -166,7 +166,14 @@ export function loadProject(root = findRoot()) {
   const deliverableStore = existsSync(paths.deliverables) ? readJson(paths.deliverables, 'deliverables.json') : { schema_version: SCHEMA_VERSION, deliverables: [] };
   validateState(state);
   validateTasks(taskStore.tasks);
+  ensureClarify(state);
   return { paths, state, taskStore, deliverableStore };
+}
+
+function ensureClarify(state) {
+  if (!state.clarify || typeof state.clarify !== 'object') state.clarify = { active: false, reason: '', started_at: '', closed_at: '', rounds: [] };
+  if (!Array.isArray(state.clarify.rounds)) state.clarify.rounds = [];
+  return state.clarify;
 }
 
 function validateState(state) {
@@ -934,6 +941,94 @@ export function skipKeeper(reason, root = findRoot()) {
   return state.keeper;
 }
 
+export function startClarify(options = {}, root = findRoot()) {
+  if (!options.reason || options.reason.length < 10) throw new Error('Opening a clarification round requires a concrete --reason (what changed or what is now unclear)');
+  const { paths, state } = loadProject(root);
+  const clarify = ensureClarify(state);
+  if (clarify.active) throw new Error(`A clarification round is already open: ${clarify.reason}`);
+  clarify.active = true;
+  clarify.reason = options.reason;
+  clarify.started_at = now();
+  clarify.closed_at = '';
+  clarify.rounds = [];
+  state.project.updated_at = now();
+  atomicJson(paths.state, state);
+  return { active: true, reason: clarify.reason, next: 'Pause material work and ask the human ONE batch of only material questions — answers that could change the result, boundary, design, or proof (typically two to seven). Then record the batch with loom clarify resolve --json-file <round.json>.' };
+}
+
+export function resolveClarify(payload, root = findRoot()) {
+  const { paths, state } = loadProject(root);
+  const clarify = ensureClarify(state);
+  if (!clarify.active) throw new Error('No clarification round is open. Start one with loom clarify start --reason <what changed>.');
+  const answered = [];
+  for (const item of payload.answers || []) {
+    if (item.id) {
+      const target = state.understanding.unresolved.find((q) => q.id === item.id);
+      if (!target) throw new Error(`Unknown unresolved id ${item.id}`);
+      if (!item.resolution && item.status !== 'skipped') throw new Error(`Answer for ${item.id} requires a resolution or skipped status`);
+      target.status = item.status === 'skipped' ? 'skipped' : 'resolved';
+      target.resolution = item.resolution || '';
+      target.resolved_at = now();
+      answered.push(item.id);
+    } else if (item.question && item.resolution) {
+      state.understanding.confirmed.push({ id: nextId(state.understanding.confirmed, 'F'), text: `${item.question} → ${item.resolution}`, source: 'clarification', at: now() });
+      answered.push(item.question);
+    } else {
+      throw new Error('Each answer needs {id, resolution|skipped} for a recorded question or {question, resolution} to record the answer as a fact');
+    }
+  }
+  for (const item of asObjects(payload.confirmed, 'text')) {
+    if (!item.text) throw new Error('Confirmed fact requires text');
+    state.understanding.confirmed.push({ id: nextId(state.understanding.confirmed, 'F'), text: item.text, source: item.source || 'clarification', at: now() });
+  }
+  for (const id of payload.retire_assumptions || []) {
+    const target = state.understanding.assumptions.find((a) => a.id === id);
+    if (!target) throw new Error(`Unknown assumption id ${id}`);
+    target.status = 'retired';
+  }
+  for (const decision of payload.decisions || []) appendDecision(paths.decisions, decision, state);
+  const roundNo = clarify.rounds.length + 1;
+  const newOpenIds = [];
+  for (const item of asObjects(payload.new_questions, 'question')) {
+    if (!item.question) throw new Error('New question requires question text');
+    const id = nextId(state.understanding.unresolved, 'Q');
+    state.understanding.unresolved.push({ id, question: item.question, recommendation: item.recommendation || '', impact: item.impact || 'medium', status: 'open', at: now(), clarify_round: roundNo });
+    newOpenIds.push(id);
+  }
+  clarify.rounds.push({ round: roundNo, answered, confirmed: (payload.confirmed || []).length, decisions: (payload.decisions || []).length, new_open: newOpenIds, at: now() });
+  state.project.updated_at = now();
+  atomicJson(paths.state, state);
+  const openRoundQs = state.understanding.unresolved.filter((q) => q.status === 'open' && q.clarify_round);
+  return {
+    round: roundNo,
+    rounds_recorded: clarify.rounds.length,
+    open_round_questions: openRoundQs.map((q) => `${q.id}: ${q.question}`),
+    next: openRoundQs.length
+      ? 'Material questions remain open — ask them in the next batch, then loom clarify resolve again.'
+      : 'Round recorded. If the direction materially changed, run loom decision for consequential changes, update the affected design documents and Tasks, then loom clarify close.',
+  };
+}
+
+export function closeClarify(root = findRoot()) {
+  const { paths, state } = loadProject(root);
+  const clarify = ensureClarify(state);
+  if (!clarify.active) throw new Error('No clarification round is open.');
+  if (!clarify.rounds.length) throw new Error('Closing requires at least one recorded round — run loom clarify resolve with real answers. Closing empty would silently drop the trigger.');
+  const openQs = state.understanding.unresolved.filter((q) => q.status === 'open' && q.clarify_round);
+  if (openQs.length) throw new Error(`Round questions still open: ${openQs.map((q) => `${q.id}: ${q.question}`).join(' | ')}. Resolve them or explicitly mark them skipped via loom clarify resolve.`);
+  clarify.active = false;
+  clarify.closed_at = now();
+  state.project.updated_at = now();
+  atomicJson(paths.state, state);
+  return { closed: true, rounds: clarify.rounds.length, next: 'Cascade the answers downward: update PROJECT.md, design documents, and Tasks to match the clarified direction; record loom decision for consequential changes (loom check flags affected done Tasks); then resume from loom context.' };
+}
+
+export function clarifyStatus(root = findRoot()) {
+  const { state } = loadProject(root);
+  const clarify = ensureClarify(state);
+  return { ...clarify, open_round_questions: state.understanding.unresolved.filter((q) => q.status === 'open' && q.clarify_round).map((q) => ({ id: q.id, question: q.question, recommendation: q.recommendation || '', impact: q.impact })) };
+}
+
 export function recordDecision(payload, root = findRoot()) {
   if (!payload || !payload.summary || payload.summary.length < 10) throw new Error('Decision requires --summary (what changed and why)');
   if (!payload.changes || !Array.isArray(payload.changes) || !payload.changes.length) throw new Error('Decision requires --changes (array of affected files or decisions)');
@@ -957,7 +1052,14 @@ export function compileContext(options = {}, root = findRoot()) {
   const blockedLine = blockedTasks.length
     ? `- Blocked: ${blockedTasks.map((item) => `${item.id} — ${item.block?.reason || 'no reason recorded'} (recover: ${(item.block?.recovery_conditions || []).join('; ') || 'not recorded'})`).join(' | ')}\n`
     : '';
-  const recommendation = state.project.status === 'ready_for_keeper'
+  const clarify = state.clarify || { active: false };
+  const openRoundQs = state.understanding.unresolved.filter((q) => q.status === 'open' && q.clarify_round);
+  const frontierBlock = openRoundQs.length
+    ? `\n  - Current frontier (ask now, each with your recommended answer):\n${openRoundQs.map((q) => `    - ${q.id}: ${q.question}${q.recommendation ? ` — recommended: ${q.recommendation}` : ''}`).join('\n')}`
+    : '';
+  const recommendation = clarify.active
+    ? `Clarification round OPEN: ${clarify.reason} (rounds recorded: ${clarify.rounds.length}). Pause material work — do not edit code or Tasks until the round closes. Look up every fact discoverable from the workspace yourself; ask the human only the decision questions in the current frontier, each carrying your recommended answer. Record the batch with \`loom clarify resolve --json-file\`, then \`loom clarify close\`.${frontierBlock}`
+    : state.project.status === 'ready_for_keeper'
     ? 'Keeper handoff pending. The host must open a fresh Agent without inherited conversation, provide the workspace and CLI paths, and ask it to run `loom keeper prompt`. Wait for `loom keeper record`, then resume `loom context`. See `loom review --help` for the complete handoff.'
     : ['needs_revision', 'blocked'].includes(state.keeper.status)
       ? 'Resolve the Keeper findings in the source documents and Tasks, run `loom project ready`, and obtain a fresh independent review. A changed digest does not prove findings are closed. See `loom review --help`.'
@@ -976,7 +1078,7 @@ export function compileContext(options = {}, root = findRoot()) {
     const statusPath = join(paths.capabilities, name, 'status.json');
     return existsSync(statusPath) ? `${name} (${readJson(statusPath, 'status.json').status || 'unknown'})` : `${name} (legacy)`;
   });
-  const statusBlock = `## Current LOOM state and recommended action\n\n- Project status: ${state.project.status}\n- Active task: ${summary.active || 'none'}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n${blockedLine}- Design documents: ${designs.length}\n- Capability dossiers: ${capabilityStates.length ? capabilityStates.join(', ') : 'none'}\n- Keeper status: ${state.keeper.status}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.loom/DECISIONS.md\` or the active Task evidence.`;
+  const statusBlock = `## Current LOOM state and recommended action\n\n- Project status: ${state.project.status}\n- Active task: ${summary.active || 'none'}\n- Work map: ${summary.total} total, ${summary.open} open, ${summary.done} done, ${summary.blocked} blocked\n${blockedLine}- Design documents: ${designs.length}\n- Capability dossiers: ${capabilityStates.length ? capabilityStates.join(', ') : 'none'}\n- Keeper status: ${state.keeper.status}\n- Clarification round: ${clarify.active ? `OPEN — ${clarify.reason} (${clarify.rounds.length} recorded)` : 'none'}\n\n**Recommended next action:** ${recommendation}\n\nThis is a recommendation, not a script. Use your judgment; if you choose differently, record the reason in \`.loom/DECISIONS.md\` or the active Task evidence.`;
   const blocks = [statusBlock, agentProtocol({ humanChannel: options.humanChannel || 'available' }), shapingContext({ state, taskSummary: summary, capabilityNames: capabilityStates, designNames: designs, forKeeper: Boolean(options.keeper) })];
   if (state.keeper.status === 'passed' && state.keeper.attempts.at(-1)?.review?.mode !== 'independent') {
     blocks.splice(1, 0, 'WARNING: The recorded Keeper pass has no independent review provenance. It is a legacy/unverified pass, not verified readiness. Prepare a fresh handoff before relying on it; see `loom review --help`.');

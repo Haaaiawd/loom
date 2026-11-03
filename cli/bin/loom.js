@@ -8,6 +8,8 @@ import {
   blockTask,
   checkProject,
   checkDeliverableCoverage,
+  clarifyStatus,
+  closeClarify,
   compileContext,
   completeTask,
   confirmCapability,
@@ -31,9 +33,11 @@ import {
   recordUnderstanding,
   reopenTask,
   researchCapability,
+  resolveClarify,
   scaffoldEval,
   synthesizeCapability,
   skipKeeper,
+  startClarify,
   startTask,
   taskSummary,
   updateTask,
@@ -96,6 +100,13 @@ Steps 3-6 are the shaping layers where project quality is decided. Run
 When a new idea changes an existing decision:
   loom decision --json-file <decision.json>   — record what changed and affected tasks
   then update the design document directly; loom check warns which done tasks need reopening.
+
+When the human changes direction, requests a redesign, or contradicts project truth:
+  loom clarify start --reason <what changed> — pause work, open an inquiry round
+  ask ONE batch of material questions in conversation, then:
+  loom clarify resolve --json-file <round.json> — record answers/decisions/new questions
+  loom clarify close                       — close once every round question is resolved
+  or skipped, then cascade the answers into design documents and Tasks.
 
 Start and resume
   loom init
@@ -197,6 +208,10 @@ const STRUCTURED_HELP = {
     usage: 'loom eval scaffold --json-file <scenario.json>',
     example: { id: 'EVAL-001', title: 'Ambiguous real project', brief: 'Identical brief for both conditions.', hidden_user_facts: ['Fact revealed by the same answer script'], human_channel: 'unavailable', success_criteria: ['Observable result'], context_reset_points: ['after-shaping', 'mid-task'], repetitions: 3 },
   },
+  'clarify-resolve': {
+    usage: 'loom clarify resolve --json-file <round.json>',
+    example: { answers: [{ id: 'Q-001', resolution: 'User confirmed the new direction' }, { question: 'Inline question', resolution: 'Answer recorded as a confirmed fact' }], confirmed: ['New confirmed fact'], retire_assumptions: ['A-001'], decisions: [{ title: 'Decision title', decision: 'Current decision.', rationale: 'Why it follows.', supersedes: [], affects: ['.loom/design/x.md'] }], new_questions: [{ question: 'Still open?', recommendation: 'Your recommended answer', impact: 'high' }] },
+  },
 };
 
 const CONCEPT_HELP = {
@@ -286,6 +301,7 @@ Do not rerun first-time Keeper just to review every implementation Task.`;
 
 function activeStructuredHelpTopic() {
   if (command === 'record' || command === 'decision') return command;
+  if (command === 'clarify' && subcommand === 'resolve') return 'clarify-resolve';
   if (command === 'task' && ['plan', 'update', 'block', 'done'].includes(subcommand)) return `task-${subcommand}`;
   if (command === 'keeper' && subcommand === 'record') return 'keeper-record';
   if (command === 'eval' && subcommand === 'scaffold') return 'eval-scaffold';
@@ -325,6 +341,15 @@ try {
     case 'record':
       output(subcommand === '--help' ? structuredHelp('record') : recordUnderstanding(jsonFile()));
       break;
+    case 'clarify': {
+      if (argv.includes('--help') && subcommand === 'resolve') output(structuredHelp('clarify-resolve'));
+      else if (subcommand === 'start') output(startClarify({ reason: option('--reason') }));
+      else if (subcommand === 'resolve') output(resolveClarify(jsonFile()));
+      else if (subcommand === 'close') output(closeClarify());
+      else if (!subcommand || subcommand === 'status' || argv.includes('--help')) output(clarifyStatus());
+      else throw new Error('Usage: loom clarify start|resolve|close|status');
+      break;
+    }
     case 'decision':
       output(subcommand === '--help' ? structuredHelp('decision') : recordDecision(jsonFile()));
       break;

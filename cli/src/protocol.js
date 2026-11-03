@@ -161,7 +161,40 @@ Evolution loop: when a new idea changes an existing decision, record what change
 directly — the current truth always lives in \`.loom/\`, not in versioned snapshots. If the change
 affects completed Tasks, \`loom check\` warns which done Tasks were marked affected; reopen them when
 the change invalidates prior work. Git history preserves old versions; LOOM does not duplicate version
-numbers. The project has one current truth at a time.`;
+numbers. The project has one current truth at a time.
+
+## Clarification rounds (frontier inquiry)
+
+When the human changes direction, requests a redesign, contradicts project truth, or a discovery
+overturns an accepted decision, pause material work and open a round: \`loom clarify start --reason
+<what changed>\`.
+
+Model the decision space as a tree. The **frontier** is every question whose prerequisites are
+already settled — what you can ask now without guessing at unheard answers. Ask the whole current
+frontier in ONE batch; a question that depends on another still-open question belongs to a later
+round. Each round typically carries a handful of questions — material ones only, no interrogation
+theater.
+
+Rules for the frontier:
+
+- **Facts are your job; decisions are the user's.** Inspect the workspace, code, and docs before
+  asking anything. Never ask for something you could look up. When the human's claim contradicts
+  the code, that contradiction is your next question.
+- **Every question carries your recommended answer** — a concrete default with one-line why, so
+  "yes" is cheap. Offering 2–4 options with the recommended one marked is even better.
+- **Go deep, not wide.** Chase the consequences of each answer ("if X, then what about Y?")
+  instead of skimming many shallow topics.
+- **Cover the branches that matter:** goal and success criteria, scope and non-goals, assumptions
+  and constraints, dependencies and ordering, edge cases and failure modes, alternatives rejected,
+  risk and reversibility.
+
+Record each answer batch with \`loom clarify resolve --json-file\` (answers, new facts, retired
+assumptions, decisions, new frontier questions with their recommendations). Recommendations persist
+on disk so a fresh Agent can resume the interrogation after a reset. \`loom clarify close\` refuses
+while any round question stays open — every question is answered or deliberately skipped. Then
+cascade: record \`loom decision\` for consequential changes, update design documents and Tasks,
+reopen disproved work, and resume. Small feedback that changes nothing consequential needs no
+round — fix it directly.`;
 
 export function agentProtocol(options = {}) {
   return `${AGENT_CORE}\n\n${environmentProtocol(options)}\n\n${RUNTIME_PROTOCOL}`;
@@ -239,7 +272,9 @@ When the human gives feedback, a fix suggestion, or a direction change, do not j
 code. First judge whether the feedback changes the project's design intent, Task scope, or acceptance
 conditions.
 
-- **Consequential feedback** (changes design, scope, boundaries, or what "done" means): record it with
+- **Consequential feedback** (changes design, scope, boundaries, or what "done" means): if the new
+  direction is not yet clear, open a clarification round first — \`loom clarify start --reason\`,
+  ask one batch of material questions, resolve, close — then record the settled change with
   \`loom decision --json-file\` before editing. Update the affected design document or Task. If a done Task
   is affected, \`loom check\` will warn — reopen it if the change invalidates prior evidence. Then edit
   code.
@@ -259,7 +294,9 @@ change. When a Task is active, the command restores its execution protocol, exac
 context; rerun it before editing after any interruption. Keep project truth, design documents, professional
 capability dossiers, and Tasks current through the CLI, and never ask the human to operate LOOM.
 Capability dossiers are shaped first, design documents are written informed by them, then the Work
-Map and material execution — the context output names which shaping layer is still unfinished. Do not
+Map and material execution — the context output names which shaping layer is still unfinished. When
+the human changes direction or requests a redesign, open a clarification round (\`loom clarify
+start\`) before editing; do not silently reinterpret. Do not
 rerun LOOM before every tool call: persist and restore at meaningful work boundaries. The installed
 \`loom\` command is the stable project-local invocation. If it is not on PATH in a source checkout, use
 the absolute path to that checkout's \`cli/bin/loom.js\`; do not guess a relative path from this project.`;

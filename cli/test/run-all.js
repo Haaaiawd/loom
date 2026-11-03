@@ -943,6 +943,45 @@ test('shaping guidance chains purpose, next steps, and the live frontier', () =>
   assert(startResult.next && startResult.next.includes('loom context'), 'task start must chain to context');
 });
 
+test('clarification rounds gate direction changes on recorded answers', () => {
+  const root = workspace();
+  run(root, ['init']);
+  writeFileSync(join(root, '.loom', 'PROJECT.md'), PROJ('A clarification fixture proving direction changes pass through bounded rounds with recorded answers.'), 'utf8');
+  assert(run(root, ['clarify', 'start'], 1).includes('concrete --reason'), 'start requires a concrete reason');
+  const started = JSON.parse(run(root, ['clarify', 'start', '--reason', 'The human asked to redesign the route']));
+  assert(started.active === true && started.next.includes('ONE batch'), 'start must open the round and demand one batch of material questions');
+  assert(run(root, ['clarify', 'start', '--reason', 'Another reason entirely'], 1).includes('already open'), 'double-open must be rejected');
+  const ctx = run(root, ['context']);
+  assert(ctx.includes('Clarification round OPEN'), 'context must surface the open round');
+  assert(ctx.includes('redesign the route'), 'context must name the trigger reason');
+  assert(ctx.includes('Pause material work'), 'context must pause material work during a round');
+  assert(run(root, ['clarify', 'close'], 1).includes('at least one recorded round'), 'empty close must be rejected');
+  json(root, 'round1.json', { answers: [{ question: 'Does the redesign change scope?', resolution: 'Yes — feature X is out' }], confirmed: ['Feature X is out of scope'], new_questions: [{ question: 'What replaces X?', recommendation: 'Keep X optional behind a flag', impact: 'high' }] });
+  const r1 = JSON.parse(run(root, ['clarify', 'resolve', '--json-file', 'round1.json']));
+  assert(r1.round === 1 && r1.open_round_questions.length === 1, 'resolve must record the batch and report still-open round questions');
+  assert(r1.next.includes('next batch'), 'resolve must chain another batch while questions stay open');
+  const frontierCtx = run(root, ['context']);
+  assert(frontierCtx.includes('Current frontier'), 'context must list the askable frontier while a round is open');
+  assert(frontierCtx.includes('recommended: Keep X optional behind a flag'), 'frontier must carry the recorded recommendation so a fresh Agent can resume the interrogation');
+  const blockedClose = run(root, ['clarify', 'close'], 1);
+  assert(blockedClose.includes('still open'), 'close must refuse while round questions stay open');
+  const qid = r1.open_round_questions[0].split(':')[0];
+  json(root, 'round2.json', { answers: [{ id: qid, status: 'skipped' }] });
+  const r2 = JSON.parse(run(root, ['clarify', 'resolve', '--json-file', 'round2.json']));
+  assert(r2.open_round_questions.length === 0, 'skipped answers must close their questions');
+  assert(r2.next.includes('loom decision'), 'resolve must chain the cascade into decisions and documents');
+  const closed = JSON.parse(run(root, ['clarify', 'close']));
+  assert(closed.closed === true && closed.next.includes('loom decision'), 'close must cascade into documents and Tasks');
+  const status = JSON.parse(run(root, ['clarify']));
+  assert(status.active === false && status.rounds.length === 2, 'status must report the closed round count');
+  const afterCtx = run(root, ['context']);
+  assert(afterCtx.includes('Clarification round: none'), 'context must clear the open-round state');
+  const state = JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8'));
+  const skippedQ = state.understanding.unresolved.find((q) => q.id === qid);
+  assert(skippedQ.status === 'skipped' && skippedQ.clarify_round === 1, 'round attribution must persist on disk');
+  assert(run(root, ['help', 'clarify-resolve']).includes('new_questions'), 'clarify-resolve must expose its canonical payload');
+});
+
 for (const root of roots) rmSync(root, { recursive: true, force: true });
 
 if (process.exitCode) {

@@ -193,6 +193,12 @@ Completion is deliberately explicit:
 }
 ```
 
+When the human changes direction or requests a redesign mid-project, the Agent opens a
+clarification round instead of silently reinterpreting: `loom clarify start --reason` pauses
+material work, one batch of material questions is asked in conversation, `loom clarify resolve`
+records the answers, and `loom clarify close` refuses until every round question is resolved or
+deliberately skipped. The answers then cascade into `loom decision`, design documents, and Tasks.
+
 Run `loom --help` for the complete command surface. Structured-write commands expose canonical payloads
 through command-specific help such as `loom record --help` and `loom task done --help`. Conceptual
 guidance — why each shaping artifact exists, its lifecycle, and its quality bar — is available through
