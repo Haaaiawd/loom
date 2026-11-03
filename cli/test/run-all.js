@@ -980,6 +980,8 @@ test('clarification rounds gate direction changes on recorded answers', () => {
   const skippedQ = state.understanding.unresolved.find((q) => q.id === qid);
   assert(skippedQ.status === 'skipped' && skippedQ.clarify_round === 1, 'round attribution must persist on disk');
   assert(run(root, ['help', 'clarify-resolve']).includes('new_questions'), 'clarify-resolve must expose its canonical payload');
+  assert(run(root, ['clarify', '--help']).includes('frontier'), 'loom clarify --help must land on concept guidance');
+  assert(run(root, ['help', 'clarify']).includes('direction changes'), 'loom help clarify must explain the trigger');
 });
 
 for (const root of roots) rmSync(root, { recursive: true, force: true });

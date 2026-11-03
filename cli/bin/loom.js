@@ -161,7 +161,7 @@ Use \`--state-dir <outside-workspace-dir>\` on every command to keep LOOM state 
 
 Use \`loom <command> --help\` or \`loom help <topic>\` for canonical JSON payloads. Topics:
   record, decision, task-plan, task-update, task-block, task-done, keeper-record, eval-scaffold
-Conceptual guidance topics: shaping, design, capability, task, deliverable
+Conceptual guidance topics: shaping, design, capability, task, deliverable, clarify
 
 Use JSON files for structured writes so long content and shell quoting remain auditable.
 Task completion JSON includes evidence plus either acceptance_results[] (one per acceptance criterion,
@@ -251,6 +251,14 @@ unclassified Tasks and missing declared outputs.`,
 One deliverable is one observable thing the project must produce. Tasks claim coverage
 via covers; loom deliverable coverage separates planned from delivered.
 Commands: loom deliverable add|list|coverage.`,
+
+  clarify: `loom clarify — frontier inquiry for direction changes
+
+Open when the human changes direction, requests a redesign, or contradicts project
+truth. Pause material work, ask the current frontier in one batch (each question with
+a recommended answer; look facts up, don't ask them), then loom clarify resolve
+records it and loom clarify close refuses while any round question stays open.
+Payload: loom clarify resolve --help. Small feedback needs no round — fix directly.`,
 };
 
 function conceptHelp(topic) {
@@ -343,10 +351,11 @@ try {
       break;
     case 'clarify': {
       if (argv.includes('--help') && subcommand === 'resolve') output(structuredHelp('clarify-resolve'));
+      else if (subcommand === '--help' || (argv.includes('--help') && !subcommand)) output(conceptHelp('clarify'));
       else if (subcommand === 'start') output(startClarify({ reason: option('--reason') }));
       else if (subcommand === 'resolve') output(resolveClarify(jsonFile()));
       else if (subcommand === 'close') output(closeClarify());
-      else if (!subcommand || subcommand === 'status' || argv.includes('--help')) output(clarifyStatus());
+      else if (!subcommand || subcommand === 'status') output(clarifyStatus());
       else throw new Error('Usage: loom clarify start|resolve|close|status');
       break;
     }
