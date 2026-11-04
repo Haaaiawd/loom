@@ -83,6 +83,12 @@ test('context teaches adaptive question judgment without a fixed questionnaire',
   assert(Object.keys(prompts.templates.design_documents).length === 7, 'design prompt inventory incomplete');
   assert(prompts.evaluation.blind_judge.includes('anonymized runs'), 'eval prompt inventory incomplete');
   assert(!context.includes('Capability Graph'), 'legacy ceremony leaked into v2 context');
+  assert(context.includes('loom context --lean'), 'full context must point repeat calls at lean mode');
+  const lean = run(root, ['context', '--lean']);
+  assert(!lean.includes('# LOOM runtime protocol'), 'lean mode must omit the static protocol');
+  assert(!lean.includes('# LOOM collaboration core'), 'lean mode must omit the collaboration core');
+  assert(lean.includes('Current LOOM state'), 'lean mode must keep the state header');
+  assert(lean.includes('Project whole'), 'lean mode must keep project truth');
 });
 
 test('unattended runs use an isolated sidecar without fabricating a human or polluting the workspace', () => {
