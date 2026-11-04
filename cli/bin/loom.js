@@ -110,8 +110,8 @@ When the human changes direction, requests a redesign, or contradicts project tr
 
 Start and resume
   loom init
-  loom context [--task TASK-001] [--keeper] [--lean] [--human-channel available|unavailable]
-                                        (--lean returns state + Task context only, no static protocol)
+  loom context [--task TASK-001] [--keeper] [--full] [--human-channel available|unavailable]
+                                        (default returns state + Task context; --full restores the complete protocol)
   loom check
   loom prompts
 
@@ -342,7 +342,7 @@ try {
       break;
     case 'context':
     case 'resume':
-      output(compileContext({ taskId: option('--task'), keeper: argv.includes('--keeper'), lean: argv.includes('--lean'), humanChannel: humanChannel || 'available' }));
+      output(compileContext({ taskId: option('--task'), keeper: argv.includes('--keeper'), full: argv.includes('--full'), humanChannel: humanChannel || 'available' }));
       break;
     case 'prompts':
       output(promptCatalog());

@@ -68,7 +68,7 @@ test('init creates one small, human-readable project skeleton', () => {
 test('context teaches adaptive question judgment without a fixed questionnaire', () => {
   const root = workspace();
   run(root, ['init']);
-  const context = run(root, ['context']);
+  const context = run(root, ['context', '--full']);
   assert(context.includes('uncertainty frontier'), 'uncertainty frontier missing');
   assert(context.includes('do not follow a fixed questionnaire'), 'adaptive questioning rule missing');
   assert(context.includes('The human talks naturally to you'), 'invisible CLI boundary missing');
@@ -83,12 +83,12 @@ test('context teaches adaptive question judgment without a fixed questionnaire',
   assert(Object.keys(prompts.templates.design_documents).length === 7, 'design prompt inventory incomplete');
   assert(prompts.evaluation.blind_judge.includes('anonymized runs'), 'eval prompt inventory incomplete');
   assert(!context.includes('Capability Graph'), 'legacy ceremony leaked into v2 context');
-  assert(context.includes('loom context --lean'), 'full context must point repeat calls at lean mode');
-  const lean = run(root, ['context', '--lean']);
-  assert(!lean.includes('# LOOM runtime protocol'), 'lean mode must omit the static protocol');
-  assert(!lean.includes('# LOOM collaboration core'), 'lean mode must omit the collaboration core');
-  assert(lean.includes('Current LOOM state'), 'lean mode must keep the state header');
-  assert(lean.includes('Project whole'), 'lean mode must keep project truth');
+  const lean = run(root, ['context']);
+  assert(lean.includes('loom context --full'), 'default lean output must point first-entry agents at --full');
+  assert(!lean.includes('# LOOM runtime protocol'), 'default context must omit the static protocol');
+  assert(!lean.includes('# LOOM collaboration core'), 'default context must omit the collaboration core');
+  assert(lean.includes('Current LOOM state'), 'default context must keep the state header');
+  assert(lean.includes('Project whole'), 'default context must keep project truth');
 });
 
 test('unattended runs use an isolated sidecar without fabricating a human or polluting the workspace', () => {
@@ -110,7 +110,7 @@ test('unattended runs use an isolated sidecar without fabricating a human or pol
     }],
   });
   run(root, ['task', 'plan', '--state-dir', sidecar, '--json-file', 'tasks.json']);
-  const context = run(root, ['context', '--task', 'TASK-001', '--state-dir', sidecar, '--human-channel', 'unavailable']);
+  const context = run(root, ['context', '--task', 'TASK-001', '--state-dir', sidecar, '--human-channel', 'unavailable', '--full']);
   assert(context.includes('Human response channel: unavailable'), 'unattended environment was not injected');
   assert(context.includes('Do not fabricate a user interaction'), 'unattended context may invent a user');
   assert(context.includes('never use web research as a substitute for user intent'), 'research boundary missing');
@@ -633,7 +633,7 @@ test('one-time Keeper handoff gates execution, supports revision, then disappear
   run(root, ['task', 'update', 'TASK-001', '--json-file', 'good-task-reads.json']);
   run(root, ['task', 'start', 'TASK-001']);
   assert(JSON.parse(readFileSync(join(root, '.loom', 'state.json'), 'utf8')).project.status === 'building', 'Task start should enter building state');
-  const context = run(root, ['context']);
+  const context = run(root, ['context', '--full']);
   assert(context.includes('## Active Task'), 'active Task missing from context');
   assert(context.includes('# LOOM active Task execution protocol'), 'active Task execution protocol missing');
   assert(context.includes('Inspect the current workspace and version-control state'), 'workspace recovery rule missing');
