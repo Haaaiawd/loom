@@ -336,7 +336,7 @@ ${forKeeper
 - active assumptions: ${assumptions.length}
 - open questions: ${open.length}
 - design documents: ${designNames.length ? designNames.join(', ') : 'none yet'}
-- professional capability dossiers: ${capabilityNames.length ? capabilityNames.join(', ') : 'none yet'}
+- professional capability dossiers: ${capabilityNames.length ? capabilityNames.join(', ') : 'none yet'} (quality bar: nodes need a source citation and a counterexample — counterexample-free branches are fixed steps in disguise)
 - work map: ${taskSummary.total} tasks (${taskSummary.done} done, ${taskSummary.open} open, ${taskSummary.blocked} blocked)
 - active task: ${taskSummary.active || 'none'}
 
