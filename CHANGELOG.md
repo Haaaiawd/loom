@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.3.0
+
+- Clarification rounds: `loom clarify start --reason` pauses material work when the human changes direction; answers and new frontier questions (each carrying a persisted recommendation) record through `loom clarify resolve --json-file`, and `loom clarify close` refuses until every question is resolved or deliberately skipped — then cascades into `loom decision`, document updates, and Task impact warnings.
+- Clarification guidance is wired into `loom --help`, `loom help clarify`, `loom clarify --help`, the runtime and execution protocols, the AGENTS.md anchor, and context recommendations; an open round becomes the top recommendation and lists current frontier questions with their recommendations.
+- `loom context` is lean by default: it returns the state header, shaping state, PROJECT.md, STRUCTURE.md, and active Task context without re-injecting the ~190-line static protocol (~1.4k tokens saved per repeat call). `loom context --full` restores the complete protocol; lean output points first-entry and post-reset Agents at it, and `--keeper` always stays full.
+- The capability quality bar (nodes need a source citation and a counterexample) is visible in the lean state block, not only in the full protocol.
+
 ## 2.2.0
 
 - Shaping-path guidance: `loom --help` now states what each shaping step buys and what skipping costs, and names conceptual help topics.
